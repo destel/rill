@@ -14,7 +14,6 @@ func TestMap(t *testing.T) {
 		expectValue(t, nil, Map(nil, 10, func(x int) int { return x }))
 
 		in := fromRange(0, 20)
-
 		out := Map(in, 5, func(x int) string {
 			// break the ordering
 			if x == 8 {
@@ -43,7 +42,6 @@ func TestMap(t *testing.T) {
 		var inProgress inProgressCounter
 
 		in := fromRange(0, 20)
-
 		out := Map(in, 10, func(x int) int {
 			inProgress.Inc()
 			defer inProgress.Dec()
@@ -52,8 +50,7 @@ func TestMap(t *testing.T) {
 			return x + 1
 		})
 
-		_ = ToSlice(out)
-
+		Drain(out)
 		expectValue(t, 10, inProgress.Max())
 	})
 }
@@ -63,7 +60,6 @@ func TestFilter(t *testing.T) {
 		expectValue(t, nil, Filter(nil, 10, func(x int) bool { return true }))
 
 		in := fromRange(0, 20)
-
 		out := Filter(in, 5, func(x int) bool {
 			// break the ordering
 			if x == 8 {
@@ -92,7 +88,6 @@ func TestFilter(t *testing.T) {
 		var inProgress inProgressCounter
 
 		in := fromRange(0, 20)
-
 		out := Filter(in, 10, func(x int) bool {
 			inProgress.Inc()
 			defer inProgress.Dec()
@@ -101,8 +96,7 @@ func TestFilter(t *testing.T) {
 			return x%2 == 0
 		})
 
-		_ = ToSlice(out)
-
+		Drain(out)
 		expectValue(t, 10, inProgress.Max())
 	})
 }
@@ -112,7 +106,6 @@ func TestFlatMap(t *testing.T) {
 		expectValue(t, nil, FlatMap(nil, 10, func(x int) <-chan string { return nil }))
 
 		in := fromRange(0, 20)
-
 		out := FlatMap(in, 5, func(x int) <-chan string {
 			// break the ordering
 			if x == 8 {
@@ -147,7 +140,6 @@ func TestFlatMap(t *testing.T) {
 		var inProgress inProgressCounter
 
 		in := fromRange(0, 20)
-
 		out := FlatMap(in, 10, func(x int) <-chan int {
 			inProgress.Inc()
 			defer inProgress.Dec()
@@ -156,8 +148,7 @@ func TestFlatMap(t *testing.T) {
 			return fromRange(10*x, 10*(x+1))
 		})
 
-		_ = ToSlice(out)
-
+		Drain(out)
 		expectValue(t, 10, inProgress.Max())
 	})
 }
@@ -215,7 +206,6 @@ func TestForEach(t *testing.T) {
 			var inProgress inProgressCounter
 
 			in := fromRange(0, 2*n)
-
 			ForEach(in, n, func(x int) bool {
 				inProgress.Inc()
 				defer inProgress.Dec()

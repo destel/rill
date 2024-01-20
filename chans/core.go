@@ -1,7 +1,6 @@
 package chans
 
 import (
-	"fmt"
 	"sync"
 	"sync/atomic"
 )
@@ -105,13 +104,11 @@ func ForEach[A any](in <-chan A, n int, f func(A) bool) {
 	earlyExit := int64(0)
 
 	for i := 0; i < n; i++ {
-		j := i
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
 			for a := range in {
-				fmt.Println("Goroutine", j, "got", a)
 				ok := f(a)
 				if !ok {
 					atomic.AddInt64(&earlyExit, 1)

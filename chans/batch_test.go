@@ -70,10 +70,7 @@ func TestUnbatch(t *testing.T) {
 	in := make(chan []int)
 	go func() {
 		defer close(in)
-		in <- []int{1, 2, 3}
-		in <- []int{4}
-		in <- []int{5, 6, 7, 8}
-		in <- []int{9, 10}
+		send(in, []int{1, 2, 3}, []int{4}, []int{5, 6, 7, 8}, []int{9, 10})
 	}()
 
 	out := Unbatch(in)
