@@ -86,8 +86,9 @@ func ForEach[A any](in <-chan A, n int, f func(A) bool) {
 	// In case of early exit some unconsumed items will be left in the 'in' channel.
 	// To avoid leaks we need to consume everything until channel is closed.
 	// On the other hand caller can close in, only after we return.
-	// So drain must happen only after we return. The order is:
+	// So drain also must happen only after we return. The correct order is:
 	// early exit -> caller closes 'in' -> drain 'in'
+	// That's why we're using non-blocking drain here.
 	defer DrainNB(in)
 
 	if n == 1 {
