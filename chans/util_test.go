@@ -16,6 +16,12 @@ func fromRange(start, end int) <-chan int {
 	return ch
 }
 
+func send[T any](ch chan<- T, items ...T) {
+	for _, item := range items {
+		ch <- item
+	}
+}
+
 func expectValue[A comparable](t *testing.T, expected A, actual A) {
 	t.Helper()
 	if expected != actual {
