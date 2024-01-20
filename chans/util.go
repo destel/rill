@@ -1,5 +1,24 @@
 package chans
 
+func Drain[A any](in <-chan A) {
+	for range in {
+	}
+}
+
+func DrainNB[A any](in <-chan A) {
+	for {
+		select {
+		case _, ok := <-in:
+			if !ok {
+				return
+			}
+		default:
+			go Drain(in)
+			return
+		}
+	}
+}
+
 func Buffer[A any](in <-chan A, n int) <-chan A {
 	out := make(chan A, n)
 

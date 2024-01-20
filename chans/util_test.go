@@ -40,8 +40,8 @@ func expectSlice[A comparable](t *testing.T, expected []A, actual []A) {
 
 type inProgressCounter struct {
 	mu      sync.Mutex
-	current int64
-	max     int64
+	current int
+	max     int
 }
 
 func (c *inProgressCounter) Inc() {
@@ -61,13 +61,13 @@ func (c *inProgressCounter) Dec() {
 	c.current--
 }
 
-func (c *inProgressCounter) Current() int64 {
+func (c *inProgressCounter) Current() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.current
 }
 
-func (c *inProgressCounter) Max() int64 {
+func (c *inProgressCounter) Max() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.max

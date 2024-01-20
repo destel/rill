@@ -1,7 +1,9 @@
 package chans
 
 import (
+	"fmt"
 	"sync"
+	"sync/atomic"
 )
 
 func loop[A any](in <-chan A, n int, f func(A)) *sync.WaitGroup {
@@ -72,4 +74,49 @@ func FlatMap[A, B any](in <-chan A, n int, f func(A) <-chan B) <-chan B {
 	}()
 
 	return out
+}
+
+// blocking
+// todo: explain that if false has been returned for item[i] that it's guranteed that function would have been called for all previous items
+func ForEach[A any](in <-chan A, n int, f func(A) bool) {
+	// In case of early exit some unconsumed items will be left in the 'in' channel.
+	// To avoid leaks we need to consume everything until channel is closed.
+	// On the other hand caller can close in, only after we return.
+	// So drain must happen only after we return. The order is:
+	// early exit -> caller closes 'in' -> drain 'in'
+	defer DrainNB(in)
+
+	if n == 1 {
+		for a := range in {
+			if !f(a) {
+				break
+			}
+		}
+
+		return
+	}
+
+	var wg sync.WaitGroup
+	earlyExit := int64(0)
+
+	for i := 0; i < n; i++ {
+		j := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for a := range in {
+				fmt.Println("Goroutine", j, "got", a)
+				ok := f(a)
+				if !ok {
+					atomic.AddInt64(&earlyExit, 1)
+					break
+				} else if atomic.LoadInt64(&earlyExit) > 0 {
+					break
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
 }
