@@ -11,6 +11,8 @@ import (
 
 func TestMap(t *testing.T) {
 	t.Run("correctness", func(t *testing.T) {
+		expectValue(t, nil, Map(nil, 10, func(x int) int { return x }))
+
 		in := fromRange(0, 20)
 
 		out := Map(in, 5, func(x int) string {
@@ -58,6 +60,8 @@ func TestMap(t *testing.T) {
 
 func TestFilter(t *testing.T) {
 	t.Run("correctness", func(t *testing.T) {
+		expectValue(t, nil, Filter(nil, 10, func(x int) bool { return true }))
+
 		in := fromRange(0, 20)
 
 		out := Filter(in, 5, func(x int) bool {
@@ -105,6 +109,8 @@ func TestFilter(t *testing.T) {
 
 func TestFlatMap(t *testing.T) {
 	t.Run("correctness", func(t *testing.T) {
+		expectValue(t, nil, FlatMap(nil, 10, func(x int) <-chan string { return nil }))
+
 		in := fromRange(0, 20)
 
 		out := FlatMap(in, 5, func(x int) <-chan string {

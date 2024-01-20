@@ -60,6 +60,10 @@ func Filter[A any](in <-chan A, n int, f func(A) bool) <-chan A {
 
 // todo: comment about deadlocks
 func FlatMap[A, B any](in <-chan A, n int, f func(A) <-chan B) <-chan B {
+	if in == nil {
+		return nil
+	}
+
 	out := make(chan B)
 
 	wg := loop(in, n, func(a A) {
