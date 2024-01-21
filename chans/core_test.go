@@ -7,15 +7,17 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/destel/rill/internal/th"
 )
 
 func TestMap(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		expectValue(t, nil, Map(nil, 10, func(x int) int { return x }))
+		th.ExpectValue(t, nil, Map(nil, 10, func(x int) int { return x }))
 	})
 
 	t.Run("correctness", func(t *testing.T) {
-		in := fromRange(0, 20)
+		in := th.FromRange(0, 20)
 		out := Map(in, 5, func(x int) string {
 			// break the ordering
 			if x == 8 {
@@ -37,13 +39,13 @@ func TestMap(t *testing.T) {
 		}
 
 		sort.Strings(outSlice)
-		expectSlice(t, expected, outSlice)
+		th.ExpectSlice(t, expected, outSlice)
 	})
 
 	t.Run("concurrency", func(t *testing.T) {
-		var inProgress inProgressCounter
+		var inProgress th.InProgressCounter
 
-		in := fromRange(0, 20)
+		in := th.FromRange(0, 20)
 		out := Map(in, 10, func(x int) int {
 			inProgress.Inc()
 			defer inProgress.Dec()
@@ -53,17 +55,17 @@ func TestMap(t *testing.T) {
 		})
 
 		Drain(out)
-		expectValue(t, 10, inProgress.Max())
+		th.ExpectValue(t, 10, inProgress.Max())
 	})
 }
 
 func TestFilter(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		expectValue(t, nil, Filter(nil, 10, func(x int) bool { return true }))
+		th.ExpectValue(t, nil, Filter(nil, 10, func(x int) bool { return true }))
 	})
 
 	t.Run("correctness", func(t *testing.T) {
-		in := fromRange(0, 20)
+		in := th.FromRange(0, 20)
 		out := Filter(in, 5, func(x int) bool {
 			// break the ordering
 			if x == 8 {
@@ -85,13 +87,13 @@ func TestFilter(t *testing.T) {
 		}
 
 		sort.Ints(outSlice)
-		expectSlice(t, expected, outSlice)
+		th.ExpectSlice(t, expected, outSlice)
 	})
 
 	t.Run("concurrency", func(t *testing.T) {
-		var inProgress inProgressCounter
+		var inProgress th.InProgressCounter
 
-		in := fromRange(0, 20)
+		in := th.FromRange(0, 20)
 		out := Filter(in, 10, func(x int) bool {
 			inProgress.Inc()
 			defer inProgress.Dec()
@@ -101,17 +103,17 @@ func TestFilter(t *testing.T) {
 		})
 
 		Drain(out)
-		expectValue(t, 10, inProgress.Max())
+		th.ExpectValue(t, 10, inProgress.Max())
 	})
 }
 
 func TestFlatMap(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		expectValue(t, nil, FlatMap(nil, 10, func(x int) <-chan string { return nil }))
+		th.ExpectValue(t, nil, FlatMap(nil, 10, func(x int) <-chan string { return nil }))
 	})
 
 	t.Run("correctness", func(t *testing.T) {
-		in := fromRange(0, 20)
+		in := th.FromRange(0, 20)
 		out := FlatMap(in, 5, func(x int) <-chan string {
 			// break the ordering
 			if x == 8 {
@@ -139,23 +141,23 @@ func TestFlatMap(t *testing.T) {
 		}
 
 		sort.Strings(outSlice)
-		expectSlice(t, expected, outSlice)
+		th.ExpectSlice(t, expected, outSlice)
 	})
 
 	t.Run("concurrency", func(t *testing.T) {
-		var inProgress inProgressCounter
+		var inProgress th.InProgressCounter
 
-		in := fromRange(0, 20)
+		in := th.FromRange(0, 20)
 		out := FlatMap(in, 10, func(x int) <-chan int {
 			inProgress.Inc()
 			defer inProgress.Dec()
 
 			time.Sleep(1 * time.Second)
-			return fromRange(10*x, 10*(x+1))
+			return th.FromRange(10*x, 10*(x+1))
 		})
 
 		Drain(out)
-		expectValue(t, 10, inProgress.Max())
+		th.ExpectValue(t, 10, inProgress.Max())
 	})
 }
 
@@ -164,13 +166,13 @@ func TestForEach(t *testing.T) {
 		t.Run(fmt.Sprintf("correctness n=%d", n), func(t *testing.T) {
 			sum := int64(0)
 
-			in := fromRange(0, 20)
+			in := th.FromRange(0, 20)
 			ForEach(in, n, func(x int) bool {
 				atomic.AddInt64(&sum, int64(x))
 				return true
 			})
 
-			expectValue(t, int64(19*20/2), sum)
+			th.ExpectValue(t, int64(19*20/2), sum)
 		})
 	}
 
@@ -179,7 +181,7 @@ func TestForEach(t *testing.T) {
 			var mu sync.Mutex
 			maxSeen := -1
 
-			in := fromRange(0, 100)
+			in := th.FromRange(0, 100)
 			ForEach(in, n, func(x int) bool {
 				mu.Lock()
 				if x > maxSeen {
@@ -209,9 +211,9 @@ func TestForEach(t *testing.T) {
 
 	testConcurrency := func(t *testing.T, n int) {
 		t.Run(fmt.Sprintf("concurrency n=%d", n), func(t *testing.T) {
-			var inProgress inProgressCounter
+			var inProgress th.InProgressCounter
 
-			in := fromRange(0, 2*n)
+			in := th.FromRange(0, 2*n)
 			ForEach(in, n, func(x int) bool {
 				inProgress.Inc()
 				defer inProgress.Dec()
@@ -220,7 +222,7 @@ func TestForEach(t *testing.T) {
 				return true
 			})
 
-			expectValue(t, n, inProgress.Max())
+			th.ExpectValue(t, n, inProgress.Max())
 		})
 	}
 

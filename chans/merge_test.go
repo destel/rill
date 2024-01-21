@@ -5,11 +5,13 @@ import (
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/destel/rill/internal/th"
 )
 
 func TestMerge(t *testing.T) {
 	t.Run("empty list", func(t *testing.T) {
-		expectValue(t, nil, Merge[string]())
+		th.ExpectValue(t, nil, Merge[string]())
 	})
 
 	testCorrectness := func(t *testing.T, cnt int) {
@@ -17,7 +19,7 @@ func TestMerge(t *testing.T) {
 			ins := make([]<-chan int, cnt)
 
 			for i := 0; i < cnt; i++ {
-				ins[i] = fromRange(i*10, (i+1)*10)
+				ins[i] = th.FromRange(i*10, (i+1)*10)
 			}
 
 			if cnt > 0 {
@@ -43,7 +45,7 @@ func TestMerge(t *testing.T) {
 			}
 
 			sort.Ints(outSlice)
-			expectSlice(t, expected, outSlice)
+			th.ExpectSlice(t, expected, outSlice)
 		})
 
 	}
@@ -54,7 +56,7 @@ func TestMerge(t *testing.T) {
 
 			// cnt-1 normal channels
 			for i := 0; i < cnt-1; i++ {
-				ins[i] = fromRange(i*10, (i+1)*10)
+				ins[i] = th.FromRange(i*10, (i+1)*10)
 			}
 
 			// single nil channel that should make the whole thing to hang
@@ -86,7 +88,7 @@ func TestMerge(t *testing.T) {
 			}
 
 			sort.Ints(outSlice)
-			expectSlice(t, expected, outSlice)
+			th.ExpectSlice(t, expected, outSlice)
 		})
 	}
 
@@ -104,12 +106,12 @@ func TestMerge(t *testing.T) {
 func TestSplit2(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
 		outT, outF := Split2(nil, func(x int) bool { return true })
-		expectValue(t, nil, outT)
-		expectValue(t, nil, outF)
+		th.ExpectValue(t, nil, outT)
+		th.ExpectValue(t, nil, outF)
 	})
 
 	t.Run("correctness", func(t *testing.T) {
-		in := fromRange(0, 20)
+		in := th.FromRange(0, 20)
 		outT, outF := Split2(in, func(x int) bool {
 			return x%2 == 0
 		})
@@ -133,8 +135,8 @@ func TestSplit2(t *testing.T) {
 			}
 		}
 
-		expectSlice(t, expectedT, outTslice)
-		expectSlice(t, expectedF, outFslice)
+		th.ExpectSlice(t, expectedT, outTslice)
+		th.ExpectSlice(t, expectedF, outFslice)
 	})
 
 }
