@@ -11,7 +11,7 @@ import (
 
 func TestMerge(t *testing.T) {
 	t.Run("empty list", func(t *testing.T) {
-		th.ExpectValue(t, nil, Merge[string]())
+		th.ExpectValue(t, Merge[string](), nil)
 	})
 
 	testCorrectness := func(t *testing.T, cnt int) {
@@ -46,7 +46,7 @@ func TestMerge(t *testing.T) {
 			}
 
 			sort.Ints(outSlice)
-			th.ExpectSlice(t, expected, outSlice)
+			th.ExpectSlice(t, outSlice, expected)
 		})
 
 	}
@@ -89,7 +89,7 @@ func TestMerge(t *testing.T) {
 			}
 
 			sort.Ints(outSlice)
-			th.ExpectSlice(t, expected, outSlice)
+			th.ExpectSlice(t, outSlice, expected)
 		})
 	}
 
@@ -107,8 +107,8 @@ func TestMerge(t *testing.T) {
 func TestSplit2(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
 		outT, outF := Split2(nil, func(x int) bool { return true })
-		th.ExpectValue(t, nil, outT)
-		th.ExpectValue(t, nil, outF)
+		th.ExpectValue(t, outT, nil)
+		th.ExpectValue(t, outF, nil)
 	})
 
 	t.Run("correctness", func(t *testing.T) {
@@ -125,8 +125,8 @@ func TestSplit2(t *testing.T) {
 		outTslice := ToSlice(outT)
 		outFslice := ToSlice(outF)
 
-		th.ExpectSlice(t, []int{0, 2, 4, 6, 8, 10, 12, 14, 16, 18}, outTslice)
-		th.ExpectSlice(t, []int{1, 3, 5, 7, 9, 11, 13, 15, 17, 19}, outFslice)
+		th.ExpectSlice(t, outTslice, []int{0, 2, 4, 6, 8, 10, 12, 14, 16, 18})
+		th.ExpectSlice(t, outFslice, []int{1, 3, 5, 7, 9, 11, 13, 15, 17, 19})
 	})
 
 }

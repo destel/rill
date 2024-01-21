@@ -20,8 +20,8 @@ func TestMap(t *testing.T) {
 		sort.Strings(outSlice)
 		sort.Strings(errSlice)
 
-		th.ExpectSlice(t, []string{"00", "01", "02", "03", "04", "05", "06", "07", "08", "09"}, outSlice)
-		th.ExpectSlice(t, []string{}, errSlice)
+		th.ExpectSlice(t, outSlice, []string{"00", "01", "02", "03", "04", "05", "06", "07", "08", "09"})
+		th.ExpectSlice(t, errSlice, []string{})
 	})
 
 	t.Run("errors", func(t *testing.T) {
@@ -52,8 +52,8 @@ func TestMap(t *testing.T) {
 		sort.Strings(outSlice)
 		sort.Strings(errSlice)
 
-		th.ExpectSlice(t, []string{"00", "01", "02", "05", "06", "08", "09"}, outSlice)
-		th.ExpectSlice(t, []string{"err1", "err2", "err3"}, errSlice)
+		th.ExpectSlice(t, outSlice, []string{"00", "01", "02", "05", "06", "08", "09"})
+		th.ExpectSlice(t, errSlice, []string{"err1", "err2", "err3"})
 	})
 }
 
@@ -69,8 +69,8 @@ func TestFilter(t *testing.T) {
 		sort.Ints(outSlice)
 		sort.Strings(errSlice)
 
-		th.ExpectSlice(t, []int{0, 2, 4, 6, 8}, outSlice)
-		th.ExpectSlice(t, []string{}, errSlice)
+		th.ExpectSlice(t, outSlice, []int{0, 2, 4, 6, 8})
+		th.ExpectSlice(t, errSlice, []string{})
 	})
 
 	t.Run("errors", func(t *testing.T) {
@@ -101,8 +101,8 @@ func TestFilter(t *testing.T) {
 		sort.Ints(outSlice)
 		sort.Strings(errSlice)
 
-		th.ExpectSlice(t, []int{0, 1, 2, 5, 6, 8, 9}, outSlice)
-		th.ExpectSlice(t, []string{"err1", "err2", "err3"}, errSlice)
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 5, 6, 8, 9})
+		th.ExpectSlice(t, errSlice, []string{"err1", "err2", "err3"})
 	})
 }
 
@@ -121,8 +121,8 @@ func TestFlatMap(t *testing.T) {
 		sort.Strings(outSlice)
 		sort.Strings(errSlice)
 
-		th.ExpectSlice(t, []string{"00A", "00B", "01A", "01B", "02A", "02B", "03A", "03B", "04A", "04B", "05A", "05B", "06A", "06B", "07A", "07B", "08A", "08B", "09A", "09B"}, outSlice)
-		th.ExpectSlice(t, []string{}, errSlice)
+		th.ExpectSlice(t, outSlice, []string{"00A", "00B", "01A", "01B", "02A", "02B", "03A", "03B", "04A", "04B", "05A", "05B", "06A", "06B", "07A", "07B", "08A", "08B", "09A", "09B"})
+		th.ExpectSlice(t, errSlice, []string{})
 	})
 
 	t.Run("errors", func(t *testing.T) {
@@ -152,8 +152,8 @@ func TestFlatMap(t *testing.T) {
 		sort.Strings(outSlice)
 		sort.Strings(errSlice)
 
-		th.ExpectSlice(t, []string{"00A", "00B", "01A", "01B", "02A", "02B", "05A", "05B", "06A", "06B", "07A", "07B", "08A", "08B", "09A", "09B"}, outSlice)
-		th.ExpectSlice(t, []string{"err1", "err2"}, errSlice)
+		th.ExpectSlice(t, outSlice, []string{"00A", "00B", "01A", "01B", "02A", "02B", "05A", "05B", "06A", "06B", "07A", "07B", "08A", "08B", "09A", "09B"})
+		th.ExpectSlice(t, errSlice, []string{"err1", "err2"})
 	})
 
 }

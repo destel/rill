@@ -10,7 +10,7 @@ import (
 func TestBatch(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
 		var nilChan chan []string
-		th.ExpectValue(t, nil, Batch(nilChan, 10, 10*time.Second))
+		th.ExpectValue(t, Batch(nilChan, 10, 10*time.Second), nil)
 	})
 
 	t.Run("fast", func(t *testing.T) {
@@ -23,10 +23,10 @@ func TestBatch(t *testing.T) {
 		out := Batch(in, 4, 500*time.Millisecond)
 
 		outSlice := ToSlice(out)
-		th.ExpectValue(t, 3, len(outSlice))
-		th.ExpectSlice(t, []int{1, 2, 3, 4}, outSlice[0])
-		th.ExpectSlice(t, []int{5, 6, 7, 8}, outSlice[1])
-		th.ExpectSlice(t, []int{9, 10}, outSlice[2])
+		th.ExpectValue(t, len(outSlice), 3)
+		th.ExpectSlice(t, outSlice[0], []int{1, 2, 3, 4})
+		th.ExpectSlice(t, outSlice[1], []int{5, 6, 7, 8})
+		th.ExpectSlice(t, outSlice[2], []int{9, 10})
 	})
 
 	t.Run("slow", func(t *testing.T) {
@@ -41,11 +41,11 @@ func TestBatch(t *testing.T) {
 		out := Batch(in, 4, 500*time.Millisecond)
 
 		outSlice := ToSlice(out)
-		th.ExpectValue(t, 4, len(outSlice))
-		th.ExpectSlice(t, []int{1, 2, 3, 4}, outSlice[0])
-		th.ExpectSlice(t, []int{5}, outSlice[1])
-		th.ExpectSlice(t, []int{6, 7, 8, 9}, outSlice[2])
-		th.ExpectSlice(t, []int{10}, outSlice[3])
+		th.ExpectValue(t, len(outSlice), 4)
+		th.ExpectSlice(t, outSlice[0], []int{1, 2, 3, 4})
+		th.ExpectSlice(t, outSlice[1], []int{5})
+		th.ExpectSlice(t, outSlice[2], []int{6, 7, 8, 9})
+		th.ExpectSlice(t, outSlice[3], []int{10})
 	})
 
 	t.Run("slow w/o timeout", func(t *testing.T) {
@@ -60,17 +60,17 @@ func TestBatch(t *testing.T) {
 		out := Batch(in, 4, 0)
 
 		outSlice := ToSlice(out)
-		th.ExpectValue(t, 3, len(outSlice))
-		th.ExpectSlice(t, []int{1, 2, 3, 4}, outSlice[0])
-		th.ExpectSlice(t, []int{5, 6, 7, 8}, outSlice[1])
-		th.ExpectSlice(t, []int{9, 10}, outSlice[2])
+		th.ExpectValue(t, len(outSlice), 3)
+		th.ExpectSlice(t, outSlice[0], []int{1, 2, 3, 4})
+		th.ExpectSlice(t, outSlice[1], []int{5, 6, 7, 8})
+		th.ExpectSlice(t, outSlice[2], []int{9, 10})
 	})
 }
 
 func TestUnbatch(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
 		var nilChan chan []string
-		th.ExpectValue(t, nil, Unbatch(nilChan))
+		th.ExpectValue(t, Unbatch(nilChan), nil)
 	})
 
 	t.Run("normal", func(t *testing.T) {
@@ -83,6 +83,6 @@ func TestUnbatch(t *testing.T) {
 		out := Unbatch(in)
 		outSlice := ToSlice(out)
 
-		th.ExpectSlice(t, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, outSlice)
+		th.ExpectSlice(t, outSlice, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 	})
 }

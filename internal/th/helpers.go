@@ -22,14 +22,14 @@ func Send[T any](ch chan<- T, items ...T) {
 	}
 }
 
-func ExpectValue[A comparable](t *testing.T, expected A, actual A) {
+func ExpectValue[A comparable](t *testing.T, actual A, expected A) {
 	t.Helper()
 	if expected != actual {
 		t.Errorf("expected %v, got %v", expected, actual)
 	}
 }
 
-func ExpectSlice[A comparable](t *testing.T, expected []A, actual []A) {
+func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 	t.Helper()
 	if len(expected) != len(actual) {
 		t.Errorf("expected %v, got %v", expected, actual)
@@ -44,7 +44,7 @@ func ExpectSlice[A comparable](t *testing.T, expected []A, actual []A) {
 	}
 }
 
-func ExpectError(t *testing.T, expected error, actual error) {
+func ExpectError(t *testing.T, actual error, expected error) {
 	t.Helper()
 	if actual == nil {
 		t.Errorf("expected error '%v'", expected)
