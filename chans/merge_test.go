@@ -99,5 +99,42 @@ func TestMerge(t *testing.T) {
 	testNilHang(t, 3)
 	testNilHang(t, 5)
 	testNilHang(t, 10)
+}
+
+func TestSplit2(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		outT, outF := Split2(nil, func(x int) bool { return true })
+		expectValue(t, nil, outT)
+		expectValue(t, nil, outF)
+	})
+
+	t.Run("correctness", func(t *testing.T) {
+		in := fromRange(0, 20)
+		outT, outF := Split2(in, func(x int) bool {
+			return x%2 == 0
+		})
+
+		// Buffer the channels to avoid deadlocks
+		// Without is we can't call ToSlice(outT) and ToSlice(outF) sequentially
+		outT = Buffer(outT, 20)
+		outF = Buffer(outF, 20)
+
+		outTslice := ToSlice(outT)
+		outFslice := ToSlice(outF)
+
+		var expectedT []int
+		var expectedF []int
+
+		for i := 0; i < 20; i++ {
+			if i%2 == 0 {
+				expectedT = append(expectedT, i)
+			} else {
+				expectedF = append(expectedF, i)
+			}
+		}
+
+		expectSlice(t, expectedT, outTslice)
+		expectSlice(t, expectedF, outFslice)
+	})
 
 }

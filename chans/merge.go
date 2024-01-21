@@ -1,6 +1,9 @@
 package chans
 
-import "sync"
+import (
+	"fmt"
+	"sync"
+)
 
 func fastMerge[A any](ins []<-chan A) <-chan A {
 	// len(ins) must be between 2 and 5
@@ -84,4 +87,32 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 	default:
 		return slowMerge(ins)
 	}
+}
+
+// todo: not sure if this is a good idea
+// todo: introduce concurrency here?
+func Split2[A any](in <-chan A, f func(A) bool) (outTrue <-chan A, outFalse <-chan A) {
+	if in == nil {
+		return nil, nil
+	}
+
+	outT := make(chan A)
+	outF := make(chan A)
+
+	go func() {
+		defer close(outT)
+		defer close(outF)
+
+		for a := range in {
+			fmt.Println("split2", a)
+
+			if f(a) {
+				outT <- a
+			} else {
+				outF <- a
+			}
+		}
+	}()
+
+	return outT, outF
 }
