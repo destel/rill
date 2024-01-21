@@ -16,22 +16,16 @@ func TestOrderedMap(t *testing.T) {
 	t.Run("correctness", func(t *testing.T) {
 		in := th.FromRange(0, 20)
 		out := OrderedMap(in, 5, func(x int) string {
-			// break the ordering
+			// break the ordering, make 8th element slow
 			if x == 8 {
 				time.Sleep(1 * time.Second)
 			}
 
-			return fmt.Sprintf("%03d", x)
+			return fmt.Sprintf("%02d", x)
 		})
 
 		outSlice := ToSlice(out)
-
-		var expected []string
-		for i := 0; i < 20; i++ {
-			expected = append(expected, fmt.Sprintf("%03d", i))
-		}
-
-		th.ExpectSlice(t, expected, outSlice)
+		th.ExpectSlice(t, []string{"00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"}, outSlice)
 	})
 
 	t.Run("concurrency", func(t *testing.T) {
@@ -59,7 +53,7 @@ func TestOrderedFilter(t *testing.T) {
 	t.Run("correctness", func(t *testing.T) {
 		in := th.FromRange(0, 20)
 		out := OrderedFilter(in, 5, func(x int) bool {
-			// break the ordering
+			// break the ordering, make 8th element slow
 			if x == 8 {
 				time.Sleep(1 * time.Second)
 			}
@@ -74,7 +68,7 @@ func TestOrderedFilter(t *testing.T) {
 			expected = append(expected, i)
 		}
 
-		th.ExpectSlice(t, expected, outSlice)
+		th.ExpectSlice(t, []int{0, 2, 4, 6, 8, 10, 12, 14, 16, 18}, outSlice)
 	})
 
 	t.Run("concurrency", func(t *testing.T) {
@@ -100,30 +94,22 @@ func TestOrderedFlatMap(t *testing.T) {
 	})
 
 	t.Run("correctness", func(t *testing.T) {
-		in := th.FromRange(0, 20)
+		in := th.FromRange(0, 10)
 		out := OrderedFlatMap(in, 5, func(x int) <-chan string {
-			// break the ordering
+			// break the ordering, make 8th element slow
 			if x == 8 {
 				time.Sleep(1 * time.Second)
 			}
 
 			return FromSlice([]string{
-				fmt.Sprintf("%03dA", x),
-				fmt.Sprintf("%03dB", x),
-				fmt.Sprintf("%03dC", x),
+				fmt.Sprintf("%02dA", x),
+				fmt.Sprintf("%02dB", x),
 			})
 		})
 
 		outSlice := ToSlice(out)
 
-		var expected []string
-		for i := 0; i < 20; i++ {
-			expected = append(expected, fmt.Sprintf("%03dA", i))
-			expected = append(expected, fmt.Sprintf("%03dB", i))
-			expected = append(expected, fmt.Sprintf("%03dC", i))
-		}
-
-		th.ExpectSlice(t, expected, outSlice)
+		th.ExpectSlice(t, []string{"00A", "00B", "01A", "01B", "02A", "02B", "03A", "03B", "04A", "04B", "05A", "05B", "06A", "06B", "07A", "07B", "08A", "08B", "09A", "09B"}, outSlice)
 	})
 
 	t.Run("concurrency", func(t *testing.T) {

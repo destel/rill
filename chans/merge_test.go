@@ -18,13 +18,14 @@ func TestMerge(t *testing.T) {
 		t.Run(fmt.Sprintf("correctness %d", cnt), func(t *testing.T) {
 			ins := make([]<-chan int, cnt)
 
+			// each channel has 10 elements
 			for i := 0; i < cnt; i++ {
 				ins[i] = th.FromRange(i*10, (i+1)*10)
 			}
 
 			if cnt > 0 {
 				ins[0] = Map(ins[0], 1, func(x int) int {
-					// break the ordering
+					// break the ordering: make 8th element of the first channel slow
 					if x == 8 {
 						time.Sleep(1 * time.Second)
 					}
@@ -117,26 +118,15 @@ func TestSplit2(t *testing.T) {
 		})
 
 		// Buffer the channels to avoid deadlocks
-		// Without is we can't call ToSlice(outT) and ToSlice(outF) sequentially
+		// Without it, we'd have to call ToSlice(outT) and ToSlice(outF) concurrently
 		outT = Buffer(outT, 20)
 		outF = Buffer(outF, 20)
 
 		outTslice := ToSlice(outT)
 		outFslice := ToSlice(outF)
 
-		var expectedT []int
-		var expectedF []int
-
-		for i := 0; i < 20; i++ {
-			if i%2 == 0 {
-				expectedT = append(expectedT, i)
-			} else {
-				expectedF = append(expectedF, i)
-			}
-		}
-
-		th.ExpectSlice(t, expectedT, outTslice)
-		th.ExpectSlice(t, expectedF, outFslice)
+		th.ExpectSlice(t, []int{0, 2, 4, 6, 8, 10, 12, 14, 16, 18}, outTslice)
+		th.ExpectSlice(t, []int{1, 3, 5, 7, 9, 11, 13, 15, 17, 19}, outFslice)
 	})
 
 }

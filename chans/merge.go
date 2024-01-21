@@ -1,7 +1,6 @@
 package chans
 
 import (
-	"fmt"
 	"sync"
 )
 
@@ -104,8 +103,6 @@ func Split2[A any](in <-chan A, f func(A) bool) (outTrue <-chan A, outFalse <-ch
 		defer close(outF)
 
 		for a := range in {
-			fmt.Println("split2", a)
-
 			if f(a) {
 				outT <- a
 			} else {
