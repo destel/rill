@@ -13,22 +13,20 @@ func FromSlice[A any](slice []A) <-chan Try[A] {
 	return out
 }
 
+// todo: do early exit or no? what are use cases?
 func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 	var res []A
-	var err error
+
+	defer chans.DrainNB(in)
 
 	for x := range in {
-		if x.Error != nil {
-			if err == nil {
-				err = x.Error
-			}
-			continue
+		if err := x.Error; err != nil {
+			return res, err
 		}
-
 		res = append(res, x.V)
 	}
 
-	return res, err
+	return res, nil
 }
 
 func Wrap[A any](in <-chan A, err error, asyncErrs <-chan error) <-chan Try[A] {
