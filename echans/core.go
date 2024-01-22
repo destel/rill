@@ -1,6 +1,10 @@
 package echans
 
-import "github.com/destel/rill/chans"
+import (
+	"sync"
+
+	"github.com/destel/rill/chans"
+)
 
 type Try[A any] struct {
 	V     A
@@ -49,4 +53,29 @@ func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan 
 
 		return f(a.V)
 	})
+}
+
+// todo: add handle errors func
+
+func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
+	var retErr error
+	var once sync.Once
+
+	chans.ForEach(in, n, func(a Try[A]) bool {
+		err := a.Error
+		if err == nil {
+			err = f(a.V)
+		}
+
+		if err != nil {
+			once.Do(func() {
+				retErr = err
+			})
+			return false // early exit
+		}
+
+		return true
+	})
+
+	return retErr
 }

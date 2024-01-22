@@ -3,14 +3,32 @@ package th
 
 import (
 	"testing"
+	"time"
 )
 
+// todo: rename
 func FromRange(start, end int) <-chan int {
 	ch := make(chan int)
 	go func() {
 		defer close(ch)
 		for i := start; i < end; i++ {
 			ch <- i
+		}
+	}()
+	return ch
+}
+
+// Infinite generate infinite sequence of integers. It stops when stop channel is closed.
+func InfiniteChan(stop <-chan struct{}) <-chan int {
+	ch := make(chan int)
+	go func() {
+		defer close(ch)
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			case ch <- i:
+			}
 		}
 	}()
 	return ch
@@ -60,5 +78,21 @@ func ExpectNoError(t *testing.T, actual error) {
 	t.Helper()
 	if actual != nil {
 		t.Errorf("unexpected error '%v'", actual)
+	}
+}
+
+func NotHang(t *testing.T, waitFor time.Duration, f func()) {
+	t.Helper()
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		f()
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(waitFor):
+		t.Errorf("test hanged")
 	}
 }

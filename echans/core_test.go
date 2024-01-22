@@ -3,8 +3,11 @@ package echans
 import (
 	"fmt"
 	"sort"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/destel/rill/chans"
 	"github.com/destel/rill/internal/th"
 )
 
@@ -156,4 +159,58 @@ func TestFlatMap(t *testing.T) {
 		th.ExpectSlice(t, errSlice, []string{"err1", "err2"})
 	})
 
+}
+
+func TestForEach(t *testing.T) {
+	t.Run("no errors", func(t *testing.T) {
+		sum := int64(0)
+
+		in := Wrap(th.FromRange(0, 10), nil, nil)
+
+		err := ForEach(in, 3, func(x int) error {
+			atomic.AddInt64(&sum, int64(x))
+			return nil
+		})
+
+		th.ExpectNoError(t, err)
+		th.ExpectValue(t, sum, int64(9*10/2))
+	})
+
+	t.Run("error in input", func(t *testing.T) {
+		th.NotHang(t, 10*time.Second, func() {
+			done := make(chan struct{})
+			defer close(done)
+
+			in := Wrap(th.InfiniteChan(done), nil, nil)
+			in = putErrorAt(in, fmt.Errorf("err"), 100)
+
+			defer chans.DrainNB(in)
+
+			// For each must react on error and do early exit
+			err := ForEach(in, 3, func(x int) error {
+				return nil
+			})
+
+			th.ExpectError(t, err, fmt.Errorf("err"))
+		})
+	})
+
+	t.Run("error in func", func(t *testing.T) {
+		th.NotHang(t, 10*time.Second, func() {
+			done := make(chan struct{})
+			defer close(done)
+
+			in := Wrap(th.InfiniteChan(done), nil, nil)
+
+			// For each must react on error and do early exit
+			err := ForEach(in, 3, func(x int) error {
+				if x == 100 {
+					return fmt.Errorf("err")
+				}
+				return nil
+			})
+
+			th.ExpectError(t, err, fmt.Errorf("err"))
+		})
+	})
 }
