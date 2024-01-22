@@ -6,7 +6,6 @@ import (
 	"time"
 )
 
-// todo: rename
 func FromRange(start, end int) <-chan int {
 	ch := make(chan int)
 	go func() {
@@ -18,7 +17,7 @@ func FromRange(start, end int) <-chan int {
 	return ch
 }
 
-// Infinite generate infinite sequence of integers. It stops when stop channel is closed.
+// Infinite generate infinite sequence of natural numbers. It stops when stop channel is closed.
 func InfiniteChan(stop <-chan struct{}) <-chan int {
 	ch := make(chan int)
 	go func() {
@@ -59,6 +58,18 @@ func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 			t.Errorf("expected %v, got %v", expected, actual)
 			return
 		}
+	}
+}
+
+func ExpectClosed[A any](t *testing.T, ch <-chan A, waitFor time.Duration) {
+	t.Helper()
+	select {
+	case x, ok := <-ch:
+		if ok {
+			t.Errorf("expected channel to be closed, but got %v", x)
+		}
+	case <-time.After(waitFor):
+		t.Errorf("channel was not closed after %v", waitFor)
 	}
 }
 

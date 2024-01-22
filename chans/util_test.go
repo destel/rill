@@ -8,60 +8,34 @@ import (
 )
 
 func TestDrainNB(t *testing.T) {
-	// run subtest with 10s timeout
-	runSubtest := func(t *testing.T, name string, f func(t *testing.T)) {
-		t.Run(name, func(t *testing.T) {
-			done := make(chan struct{})
-			go func() {
-				defer close(done)
-				f(t)
-			}()
+	t.Run("close before drain", func(t *testing.T) {
+		th.NotHang(t, 10*time.Second, func() {
+			in := make(chan int, 2)
+			in <- 1
+			in <- 2
+			close(in)
 
-			select {
-			case <-done:
-			case <-time.After(10 * time.Second):
-				t.Errorf("test hanged")
-			}
+			DrainNB(in)
+
+			th.ExpectClosed(t, in, 1*time.Second)
 		})
-	}
-
-	expectEmptyAndClosed := func(t *testing.T, in <-chan int) {
-		t.Helper()
-
-		select {
-		case _, ok := <-in:
-			if ok {
-				t.Errorf("got unexpected item")
-			}
-		case <-time.After(1 * time.Second):
-			t.Errorf("was not closed after 1s")
-		}
-	}
-
-	runSubtest(t, "close before drain", func(t *testing.T) {
-		in := make(chan int, 2)
-		in <- 1
-		in <- 2
-		close(in)
-
-		DrainNB(in)
-
-		expectEmptyAndClosed(t, in)
 	})
 
-	runSubtest(t, "close after drain", func(t *testing.T) {
-		in := make(chan int, 2)
-		in <- 1
-		in <- 2
+	t.Run("close after drain", func(t *testing.T) {
+		th.NotHang(t, 10*time.Second, func() {
+			in := make(chan int, 2)
+			in <- 1
+			in <- 2
 
-		DrainNB(in)
+			DrainNB(in)
 
-		in <- 3
-		in <- 4
-		in <- 5
-		close(in)
+			in <- 3
+			in <- 4
+			in <- 5
+			close(in)
 
-		expectEmptyAndClosed(t, in)
+			th.ExpectClosed(t, in, 1*time.Second)
+		})
 	})
 }
 
