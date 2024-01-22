@@ -3,7 +3,6 @@ package chans
 import (
 	"fmt"
 	"sort"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -160,34 +159,21 @@ func TestForEach(t *testing.T) {
 
 	testEarlyExit := func(t *testing.T, n int) {
 		t.Run(fmt.Sprintf("early exit n=%d", n), func(t *testing.T) {
-			var mu sync.Mutex
-			maxSeen := -1
+			th.NotHang(t, 10*time.Second, func() {
+				done := make(chan struct{})
+				defer close(done)
 
-			in := th.FromRange(0, 100)
-			ForEach(in, n, func(x int) bool {
-				mu.Lock()
-				if x > maxSeen {
-					maxSeen = x
-				}
-				mu.Unlock()
+				in := th.InfiniteChan(done)
 
-				if x == 20 {
-					// this triggers early exit
-					return false
-				} else if x > 20 {
-					// all items after 20 are slow,
-					// to give the early exit a good chance to trigger
-					time.Sleep(1 * time.Second)
-				}
+				defer DrainNB(in)
 
-				return true
+				ForEach(in, n, func(x int) bool {
+					if x == 100 {
+						return false
+					}
+					return true
+				})
 			})
-
-			// Theoretically we can see up to n values greater than or equal to 20,
-			// since there are n concurrent goroutines.
-			if !(maxSeen >= 20 && maxSeen < 20+n) {
-				t.Errorf("expected maxSeen to be in [20, 20+n), got %d", maxSeen)
-			}
 		})
 	}
 

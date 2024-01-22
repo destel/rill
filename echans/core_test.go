@@ -186,7 +186,6 @@ func TestForEach(t *testing.T) {
 
 			defer chans.DrainNB(in)
 
-			// For each must react on error and do early exit
 			err := ForEach(in, 3, func(x int) error {
 				return nil
 			})
@@ -202,7 +201,6 @@ func TestForEach(t *testing.T) {
 
 			in := Wrap(th.InfiniteChan(done), nil, nil)
 
-			// For each must react on error and do early exit
 			err := ForEach(in, 3, func(x int) error {
 				if x == 100 {
 					return fmt.Errorf("err")
@@ -212,5 +210,19 @@ func TestForEach(t *testing.T) {
 
 			th.ExpectError(t, err, fmt.Errorf("err"))
 		})
+	})
+
+	t.Run("first error is returned", func(t *testing.T) {
+		in := Wrap(th.FromRange(0, 100), nil, nil)
+
+		in = putErrorAt(in, fmt.Errorf("err1"), 10)
+		in = putErrorAt(in, fmt.Errorf("err2"), 20)
+		in = putErrorAt(in, fmt.Errorf("err3"), 30)
+
+		err := ForEach(in, 1, func(x int) error {
+			return nil
+		})
+
+		th.ExpectError(t, err, fmt.Errorf("err1"))
 	})
 }

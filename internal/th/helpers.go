@@ -76,7 +76,7 @@ func ExpectClosed[A any](t *testing.T, ch <-chan A, waitFor time.Duration) {
 func ExpectError(t *testing.T, actual error, expected error) {
 	t.Helper()
 	if actual == nil {
-		t.Errorf("expected error '%v'", expected)
+		t.Errorf("expected error '%v', got nil", expected)
 		return
 	}
 
