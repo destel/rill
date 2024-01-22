@@ -20,7 +20,8 @@ func DrainNB[A any](in <-chan A) {
 }
 
 func Buffer[A any](in <-chan A, n int) <-chan A {
-	out := make(chan A, n)
+	// we use n+1 since 1 additional is held on the stack (x variable)
+	out := make(chan A, n-1)
 
 	go func() {
 		defer close(out)
