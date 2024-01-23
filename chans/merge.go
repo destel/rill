@@ -89,8 +89,8 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 }
 
 // todo: not sure if this is a good idea
-// todo: introduce concurrency here?
-func Split2[A any](in <-chan A, f func(A) bool) (outTrue <-chan A, outFalse <-chan A) {
+// todo: add ordered version
+func Split2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A, outFalse <-chan A) {
 	if in == nil {
 		return nil, nil
 	}
@@ -98,17 +98,27 @@ func Split2[A any](in <-chan A, f func(A) bool) (outTrue <-chan A, outFalse <-ch
 	outT := make(chan A)
 	outF := make(chan A)
 
-	go func() {
-		defer close(outT)
-		defer close(outF)
+	var wg sync.WaitGroup
 
-		for a := range in {
-			if f(a) {
-				outT <- a
-			} else {
-				outF <- a
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for a := range in {
+				if f(a) {
+					outT <- a
+				} else {
+					outF <- a
+				}
 			}
-		}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(outT)
+		close(outF)
 	}()
 
 	return outT, outF
