@@ -55,7 +55,21 @@ func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan 
 	})
 }
 
-// todo: add handle errors func
+// todo: simplify?
+func HandleErrors[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
+	return chans.MapAndFilter(in, n, func(a Try[A]) (Try[A], bool) {
+		if a.Error == nil {
+			return a, true
+		}
+
+		err := f(a.Error)
+		if err == nil {
+			return a, false // error handled, filter out
+		}
+
+		return Try[A]{Error: err}, true // error replaced by f(a.Error)
+	})
+}
 
 func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 	var retErr error

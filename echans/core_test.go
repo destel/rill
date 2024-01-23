@@ -161,6 +161,49 @@ func TestFlatMap(t *testing.T) {
 
 }
 
+func TestHandleErrors(t *testing.T) {
+	t.Run("no errors", func(t *testing.T) {
+		in := Wrap(th.FromRange(0, 10), nil, nil)
+
+		out := HandleErrors(in, 3, func(err error) error {
+			return fmt.Errorf("replaced: %w", err)
+		})
+
+		outSlice, err := ToSlice(out)
+		th.ExpectNoError(t, err)
+
+		sort.Ints(outSlice)
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+	})
+
+	t.Run("errors", func(t *testing.T) {
+		in := Wrap(th.FromRange(0, 10), nil, nil)
+		in = putErrorAt(in, fmt.Errorf("err1"), 3)
+		in = putErrorAt(in, fmt.Errorf("err2"), 5)
+		in = putErrorAt(in, fmt.Errorf("err3"), 6)
+
+		out := HandleErrors(in, 3, func(err error) error {
+			if err.Error() == "err1" {
+				return nil // handle
+			}
+			if err.Error() == "err2" {
+				return err // keep as is
+			}
+
+			return fmt.Errorf("replaced: %w", err) // replace
+		})
+
+		outSlice, errSlice := toSliceAndErrors(out)
+		sort.Ints(outSlice)
+		sort.Strings(errSlice)
+
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 4, 7, 8, 9})
+		th.ExpectSlice(t, errSlice, []string{"err2", "replaced: err3"})
+
+	})
+
+}
+
 func TestForEach(t *testing.T) {
 	t.Run("no errors", func(t *testing.T) {
 		sum := int64(0)
