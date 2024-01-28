@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 )
 
-func loop[A any, B any](in <-chan A, toClose chan<- B, n int, f func(A)) {
+func loop[A, B any](in <-chan A, toClose chan<- B, n int, f func(A)) {
 	if n == 1 {
 		go func() {
 			if toClose != nil {

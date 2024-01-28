@@ -5,62 +5,87 @@ import (
 )
 
 type orderedValue[A any] struct {
-	Value A
-	Index int
+	Value        A
+	CanWrite     chan struct{}
+	NextCanWrite chan struct{}
 }
 
-// 'f' function must consist of three steps:
-// 1. Calculate the output value. This step is executed immediately and concurrently.
-// 2. waitMyTurn() must be called to ensure that the output values are sent in the correct order
-// 3. Send/write the output value somewhere.
-func orderedLoop[A any](in <-chan A, n int, f func(a A, waitMyTurn func())) *sync.WaitGroup {
+var canWritePool sync.Pool
+
+func makeCanWriteChan() chan struct{} {
+	ch := canWritePool.Get()
+	if ch == nil {
+		return make(chan struct{}, 1)
+	}
+	return ch.(chan struct{})
+}
+
+func releaseCanWriteChan(ch chan struct{}) {
+	canWritePool.Put(ch)
+}
+
+// High level idea:
+// Items can be processed in any order, but the output must be in the same order as the input.
+// Once item is written to the output, it signals the next item that it can also be written.
+// This is done using "canWrite" channel that each item has. Also, each item holds a reference
+// to the next item's "canWrite" channel.
+//
+// Item's "canWrite" channel is passed to user's function "f". Typical "f" function looks like this:
+// - Do some calculation
+// - Read from "canWrite" channel exactly once. This step is required. Otherwise, behavior is undefined.
+// - Write result of the calculation somewhere. This step is optional.
+func orderedLoop[A, B any](in <-chan A, toClose chan<- B, n int, f func(a A, canWrite <-chan struct{})) {
+	if n == 1 {
+		canWrite := makeCanWriteChan()
+		close(canWrite)
+
+		go func() {
+			if toClose != nil {
+				defer close(toClose)
+			}
+
+			for a := range in {
+				f(a, canWrite)
+			}
+		}()
+		return
+	}
+
 	orderedIn := make(chan orderedValue[A])
+
 	go func() {
 		defer close(orderedIn)
-		i := 0
-		for x := range in {
-			orderedIn <- orderedValue[A]{x, i}
-			i++
+
+		var canWrite, nextCanWrite chan struct{}
+		nextCanWrite = makeCanWriteChan()
+		nextCanWrite <- struct{}{} // first item can be written immediately
+
+		for a := range in {
+			canWrite, nextCanWrite = nextCanWrite, makeCanWriteChan()
+			orderedIn <- orderedValue[A]{a, canWrite, nextCanWrite}
 		}
 	}()
 
-	nextIndex := 0
-
-	mu := new(sync.Mutex)
-	inProgress := make(map[int]*sync.Cond, n)
 	var wg sync.WaitGroup
-
 	for i := 0; i < n; i++ {
-		cond := sync.NewCond(mu)
-
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-
 			for a := range orderedIn {
-				waitMyTurn := func() {
-					mu.Lock()
-					inProgress[a.Index] = cond
+				f(a.Value, a.CanWrite)
 
-					for nextIndex != a.Index {
-						cond.Wait() // wait for our turn
-					}
-				}
-
-				f(a.Value, waitMyTurn)
-
-				nextIndex++
-				if otherCond, ok := inProgress[nextIndex]; ok {
-					otherCond.Signal()
-				}
-
-				delete(inProgress, a.Index)
-				mu.Unlock()
+				releaseCanWriteChan(a.CanWrite)
+				a.NextCanWrite <- struct{}{}
 			}
 		}()
 	}
 
-	return &wg
+	if toClose != nil {
+		go func() {
+			wg.Wait()
+			close(toClose)
+		}()
+	}
 }
 
 func OrderedMapAndFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
@@ -69,20 +94,13 @@ func OrderedMapAndFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-ch
 	}
 
 	out := make(chan B)
-	wg := orderedLoop(in, n, func(a A, waitMyTurn func()) {
+	orderedLoop(in, out, n, func(a A, canWrite <-chan struct{}) {
 		y, keep := f(a)
-
-		waitMyTurn()
-
+		<-canWrite
 		if keep {
 			out <- y
 		}
 	})
-
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
 
 	return out
 }
@@ -106,18 +124,13 @@ func OrderedFlatMap[A, B any](in <-chan A, n int, f func(A) <-chan B) <-chan B {
 	}
 
 	out := make(chan B)
-	wg := orderedLoop(in, n, func(a A, waitMyTurn func()) {
+	orderedLoop(in, out, n, func(a A, canWrite <-chan struct{}) {
 		bb := f(a)
-		waitMyTurn()
+		<-canWrite
 		for b := range bb {
 			out <- b
 		}
 	})
-
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
 
 	return out
 }
