@@ -134,3 +134,33 @@ func OrderedFlatMap[A, B any](in <-chan A, n int, f func(A) <-chan B) <-chan B {
 
 	return out
 }
+
+// todo: not sure if this is a good idea
+// todo: add ordered version
+func OrderedSplit2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A, outFalse <-chan A) {
+	if in == nil {
+		return nil, nil
+	}
+
+	done := make(chan struct{})
+	outT := make(chan A)
+	outF := make(chan A)
+
+	orderedLoop(in, done, n, func(x A, canWrite <-chan struct{}) {
+		t := f(x)
+		<-canWrite
+		if t {
+			outT <- x
+		} else {
+			outF <- x
+		}
+	})
+
+	go func() {
+		<-done
+		close(outT)
+		close(outF)
+	}()
+
+	return outT, outF
+}
