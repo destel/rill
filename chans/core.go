@@ -5,7 +5,20 @@ import (
 	"sync/atomic"
 )
 
-func loop[A any](in <-chan A, n int, f func(A)) *sync.WaitGroup {
+func loop[A any, B any](in <-chan A, toClose chan<- B, n int, f func(A)) {
+	if n == 1 {
+		go func() {
+			if toClose != nil {
+				defer close(toClose)
+			}
+
+			for a := range in {
+				f(a)
+			}
+		}()
+		return
+	}
+
 	var wg sync.WaitGroup
 
 	for i := 0; i < n; i++ {
@@ -20,7 +33,12 @@ func loop[A any](in <-chan A, n int, f func(A)) *sync.WaitGroup {
 		}()
 	}
 
-	return &wg
+	if toClose != nil {
+		go func() {
+			wg.Wait()
+			close(toClose)
+		}()
+	}
 }
 
 func MapAndFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
@@ -30,17 +48,12 @@ func MapAndFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
 
 	out := make(chan B)
 
-	wg := loop(in, n, func(x A) {
+	loop(in, out, n, func(x A) {
 		y, keep := f(x)
 		if keep {
 			out <- y
 		}
 	})
-
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
 
 	return out
 }
@@ -65,16 +78,11 @@ func FlatMap[A, B any](in <-chan A, n int, f func(A) <-chan B) <-chan B {
 
 	out := make(chan B)
 
-	wg := loop(in, n, func(a A) {
+	loop(in, out, n, func(a A) {
 		for b := range f(a) {
 			out <- b
 		}
 	})
-
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
 
 	return out
 }

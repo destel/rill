@@ -95,28 +95,20 @@ func Split2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A, outFal
 		return nil, nil
 	}
 
+	done := make(chan struct{})
 	outT := make(chan A)
 	outF := make(chan A)
 
-	var wg sync.WaitGroup
-
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			for a := range in {
-				if f(a) {
-					outT <- a
-				} else {
-					outF <- a
-				}
-			}
-		}()
-	}
+	loop(in, done, n, func(x A) {
+		if f(x) {
+			outT <- x
+		} else {
+			outF <- x
+		}
+	})
 
 	go func() {
-		wg.Wait()
+		<-done
 		close(outT)
 		close(outF)
 	}()
