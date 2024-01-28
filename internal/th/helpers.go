@@ -2,6 +2,7 @@
 package th
 
 import (
+	"sort"
 	"testing"
 	"time"
 )
@@ -58,6 +59,36 @@ func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 			t.Errorf("expected %v, got %v", expected, actual)
 			return
 		}
+	}
+}
+
+type ordered interface {
+	~int | ~string
+}
+
+func IsSorted[A ordered](s []A) bool {
+	return sort.SliceIsSorted(s, func(i, j int) bool {
+		return s[i] < s[j]
+	})
+}
+
+func Sort[A ordered](s []A) {
+	sort.Slice(s, func(i, j int) bool {
+		return s[i] < s[j]
+	})
+}
+
+func ExpectSorted[A ordered](t *testing.T, s []A) {
+	t.Helper()
+	if !IsSorted(s) {
+		t.Errorf("expected sorted slice")
+	}
+}
+
+func ExpectUnsorted[A ordered](t *testing.T, s []A) {
+	t.Helper()
+	if IsSorted(s) {
+		t.Errorf("expected unsorted slice")
 	}
 }
 
