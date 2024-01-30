@@ -9,7 +9,7 @@ import (
 
 func TestDrainNB(t *testing.T) {
 	t.Run("close before drain", func(t *testing.T) {
-		th.NotHang(t, 10*time.Second, func() {
+		th.ExpectNotHang(t, 10*time.Second, func() {
 			in := make(chan int, 2)
 			in <- 1
 			in <- 2
@@ -17,12 +17,12 @@ func TestDrainNB(t *testing.T) {
 
 			DrainNB(in)
 
-			th.ExpectClosed(t, in, 1*time.Second)
+			th.ExpectClosedChan(t, in, 1*time.Second)
 		})
 	})
 
 	t.Run("close after drain", func(t *testing.T) {
-		th.NotHang(t, 10*time.Second, func() {
+		th.ExpectNotHang(t, 10*time.Second, func() {
 			in := make(chan int, 2)
 			in <- 1
 			in <- 2
@@ -34,7 +34,7 @@ func TestDrainNB(t *testing.T) {
 			in <- 5
 			close(in)
 
-			th.ExpectClosed(t, in, 1*time.Second)
+			th.ExpectClosedChan(t, in, 1*time.Second)
 		})
 	})
 }

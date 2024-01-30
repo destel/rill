@@ -149,10 +149,10 @@ func TestSplit2(t *testing.T) {
 
 			th.DoConcurrently(
 				func() {
-					th.ExpectChansOrdering(t, ord, outT)
+					th.ExpectChanOrdering(t, ord, outT)
 				},
 				func() {
-					th.ExpectChansOrdering(t, ord, outF)
+					th.ExpectChanOrdering(t, ord, outF)
 				},
 			)
 		})

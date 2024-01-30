@@ -74,7 +74,7 @@ func TestMap(t *testing.T) {
 				return x
 			})
 
-			th.ExpectChansOrdering(t, ord, out)
+			th.ExpectChanOrdering(t, ord, out)
 		})
 
 	}
@@ -138,7 +138,7 @@ func TestFilter(t *testing.T) {
 				return x%2 == 0
 			})
 
-			th.ExpectChansOrdering(t, ord, out)
+			th.ExpectChanOrdering(t, ord, out)
 		})
 	}
 }
@@ -209,7 +209,7 @@ func TestFlatMap(t *testing.T) {
 				})
 			})
 
-			th.ExpectChansOrdering(t, ord, out)
+			th.ExpectChanOrdering(t, ord, out)
 		})
 	}
 }
@@ -230,7 +230,7 @@ func TestForEach(t *testing.T) {
 		})
 
 		t.Run(testname("early_exit", false, n), func(t *testing.T) {
-			th.NotHang(t, 10*time.Second, func() {
+			th.ExpectNotHang(t, 10*time.Second, func() {
 				done := make(chan struct{})
 				defer close(done)
 

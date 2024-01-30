@@ -44,7 +44,7 @@ func Sort[A ordered](s []A) {
 	})
 }
 
-func ToErrorMessages(in <-chan error) <-chan string {
+func ErrChanToMessages(in <-chan error) <-chan string {
 	out := make(chan string)
 
 	go func() {

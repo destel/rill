@@ -47,8 +47,7 @@ func isSortedChan[A ordered](ch <-chan A) bool {
 	return sorted
 }
 
-// todo: rename
-func ExpectChansOrdering[A ordered](t *testing.T, expectSorted bool, ch <-chan A) {
+func ExpectChanOrdering[A ordered](t *testing.T, expectSorted bool, ch <-chan A) {
 	t.Helper()
 	if expectSorted && !isSortedChan(ch) {
 		t.Errorf("expected sorted channel")
@@ -60,7 +59,7 @@ func ExpectChansOrdering[A ordered](t *testing.T, expectSorted bool, ch <-chan A
 	}
 }
 
-func ExpectClosed[A any](t *testing.T, ch <-chan A, waitFor time.Duration) {
+func ExpectClosedChan[A any](t *testing.T, ch <-chan A, waitFor time.Duration) {
 	t.Helper()
 	select {
 	case x, ok := <-ch:
@@ -92,7 +91,7 @@ func ExpectNoError(t *testing.T, err error) {
 }
 
 // todo: rename to Expect*
-func NotHang(t *testing.T, waitFor time.Duration, f func()) {
+func ExpectNotHang(t *testing.T, waitFor time.Duration, f func()) {
 	t.Helper()
 	done := make(chan struct{})
 

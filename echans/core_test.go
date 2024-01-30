@@ -96,8 +96,8 @@ func TestMap(t *testing.T) {
 			values, errs := Unwrap(out)
 
 			th.DoConcurrently(
-				func() { th.ExpectChansOrdering(t, ord, values) },
-				func() { th.ExpectChansOrdering(t, ord, th.ToErrorMessages(errs)) },
+				func() { th.ExpectChanOrdering(t, ord, values) },
+				func() { th.ExpectChanOrdering(t, ord, th.ErrChanToMessages(errs)) },
 			)
 		})
 
@@ -183,8 +183,8 @@ func TestFilter(t *testing.T) {
 			values, errs := Unwrap(out)
 
 			th.DoConcurrently(
-				func() { th.ExpectChansOrdering(t, ord, values) },
-				func() { th.ExpectChansOrdering(t, ord, th.ToErrorMessages(errs)) },
+				func() { th.ExpectChanOrdering(t, ord, values) },
+				func() { th.ExpectChanOrdering(t, ord, th.ErrChanToMessages(errs)) },
 			)
 		})
 
@@ -273,8 +273,8 @@ func TestFlatMap(t *testing.T) {
 			values, errs := Unwrap(out)
 
 			th.DoConcurrently(
-				func() { th.ExpectChansOrdering(t, ord, values) },
-				func() { th.ExpectChansOrdering(t, ord, th.ToErrorMessages(errs)) },
+				func() { th.ExpectChanOrdering(t, ord, values) },
+				func() { th.ExpectChanOrdering(t, ord, th.ErrChanToMessages(errs)) },
 			)
 		})
 
@@ -362,8 +362,8 @@ func TestCatch(t *testing.T) {
 			values, errs := Unwrap(out)
 
 			th.DoConcurrently(
-				func() { th.ExpectChansOrdering(t, ord, values) },
-				func() { th.ExpectChansOrdering(t, ord, th.ToErrorMessages(errs)) },
+				func() { th.ExpectChanOrdering(t, ord, values) },
+				func() { th.ExpectChanOrdering(t, ord, th.ErrChanToMessages(errs)) },
 			)
 		})
 
@@ -386,7 +386,7 @@ func TestForEach(t *testing.T) {
 	})
 
 	t.Run("error in input", func(t *testing.T) {
-		th.NotHang(t, 10*time.Second, func() {
+		th.ExpectNotHang(t, 10*time.Second, func() {
 			done := make(chan struct{})
 			defer close(done)
 
@@ -404,7 +404,7 @@ func TestForEach(t *testing.T) {
 	})
 
 	t.Run("error in func", func(t *testing.T) {
-		th.NotHang(t, 10*time.Second, func() {
+		th.ExpectNotHang(t, 10*time.Second, func() {
 			done := make(chan struct{})
 			defer close(done)
 
