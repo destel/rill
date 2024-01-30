@@ -13,10 +13,10 @@ func Batch[A any](in <-chan A, n int, timeout time.Duration) <-chan []A {
 	out := make(chan []A)
 
 	switch {
-	case timeout < 0:
-		panic(fmt.Errorf("negative timeout: %v", timeout))
-
 	case timeout == 0:
+		panic(fmt.Errorf("zero timeout: %v", timeout))
+
+	case timeout < 0:
 		// infinite timeout
 		go func() {
 			defer close(out)

@@ -57,7 +57,7 @@ func TestBatch(t *testing.T) {
 			th.Send(in, 6, 7, 8, 9, 10)
 		}()
 
-		out := Batch(in, 4, 0)
+		out := Batch(in, 4, -1)
 
 		outSlice := ToSlice(out)
 		th.ExpectValue(t, len(outSlice), 3)
