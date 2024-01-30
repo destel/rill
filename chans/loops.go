@@ -1,8 +1,42 @@
 package chans
 
-import (
-	"sync"
-)
+import "sync"
+
+func loop[A, B any](in <-chan A, toClose chan<- B, n int, f func(A)) {
+	if n == 1 {
+		go func() {
+			if toClose != nil {
+				defer close(toClose)
+			}
+
+			for a := range in {
+				f(a)
+			}
+		}()
+		return
+	}
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			for a := range in {
+				f(a)
+			}
+			return
+		}()
+	}
+
+	if toClose != nil {
+		go func() {
+			wg.Wait()
+			close(toClose)
+		}()
+	}
+}
 
 type orderedValue[A any] struct {
 	Value        A
@@ -86,81 +120,4 @@ func orderedLoop[A, B any](in <-chan A, toClose chan<- B, n int, f func(a A, can
 			close(toClose)
 		}()
 	}
-}
-
-func OrderedMapAndFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
-	if in == nil {
-		return nil
-	}
-
-	out := make(chan B)
-	orderedLoop(in, out, n, func(a A, canWrite <-chan struct{}) {
-		y, keep := f(a)
-		<-canWrite
-		if keep {
-			out <- y
-		}
-	})
-
-	return out
-}
-
-func OrderedMap[A, B any](in <-chan A, n int, f func(A) B) <-chan B {
-	return OrderedMapAndFilter(in, n, func(a A) (B, bool) {
-		return f(a), true
-	})
-}
-
-func OrderedFilter[A any](in <-chan A, n int, f func(A) bool) <-chan A {
-	return OrderedMapAndFilter(in, n, func(a A) (A, bool) {
-		return a, f(a)
-	})
-}
-
-// todo: deadlocks comment
-func OrderedFlatMap[A, B any](in <-chan A, n int, f func(A) <-chan B) <-chan B {
-	if in == nil {
-		return nil
-	}
-
-	out := make(chan B)
-	orderedLoop(in, out, n, func(a A, canWrite <-chan struct{}) {
-		bb := f(a)
-		<-canWrite
-		for b := range bb {
-			out <- b
-		}
-	})
-
-	return out
-}
-
-// todo: not sure if this is a good idea
-// todo: add ordered version
-func OrderedSplit2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A, outFalse <-chan A) {
-	if in == nil {
-		return nil, nil
-	}
-
-	done := make(chan struct{})
-	outT := make(chan A)
-	outF := make(chan A)
-
-	orderedLoop(in, done, n, func(x A, canWrite <-chan struct{}) {
-		t := f(x)
-		<-canWrite
-		if t {
-			outT <- x
-		} else {
-			outF <- x
-		}
-	})
-
-	go func() {
-		<-done
-		close(outT)
-		close(outF)
-	}()
-
-	return outT, outF
 }

@@ -88,8 +88,6 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 	}
 }
 
-// todo: not sure if this is a good idea
-// todo: add ordered version
 func Split2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A, outFalse <-chan A) {
 	if in == nil {
 		return nil, nil
@@ -101,6 +99,34 @@ func Split2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A, outFal
 
 	loop(in, done, n, func(x A) {
 		if f(x) {
+			outT <- x
+		} else {
+			outF <- x
+		}
+	})
+
+	go func() {
+		<-done
+		close(outT)
+		close(outF)
+	}()
+
+	return outT, outF
+}
+
+func OrderedSplit2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A, outFalse <-chan A) {
+	if in == nil {
+		return nil, nil
+	}
+
+	done := make(chan struct{})
+	outT := make(chan A)
+	outF := make(chan A)
+
+	orderedLoop(in, done, n, func(x A, canWrite <-chan struct{}) {
+		t := f(x)
+		<-canWrite
+		if t {
 			outT <- x
 		} else {
 			outF <- x
