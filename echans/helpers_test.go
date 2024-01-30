@@ -16,21 +16,16 @@ func toSliceAndErrors[A any](in <-chan Try[A]) ([]A, []string) {
 	return values, errors
 }
 
-// putErrorAt replaces item at index with an error
-func putErrorAt[A any](in <-chan Try[A], err error, index int) <-chan Try[A] {
+func replaceWithError[A comparable](in <-chan Try[A], value A, err error) <-chan Try[A] {
 	out := make(chan Try[A])
 
 	go func() {
 		defer close(out)
-		i := -1
 
 		for x := range in {
-			i++
-			if i == index {
-				out <- Try[A]{Error: err}
-				continue
+			if x.Error == nil && x.V == value {
+				x.Error = err
 			}
-
 			out <- x
 		}
 	}()

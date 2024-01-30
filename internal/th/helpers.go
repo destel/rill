@@ -1,10 +1,8 @@
-// Package th provides basic test helpers.
 package th
 
 import (
 	"sort"
-	"testing"
-	"time"
+	"sync"
 )
 
 func FromRange(start, end int) <-chan int {
@@ -40,101 +38,36 @@ func Send[T any](ch chan<- T, items ...T) {
 	}
 }
 
-func ExpectValue[A comparable](t *testing.T, actual A, expected A) {
-	t.Helper()
-	if expected != actual {
-		t.Errorf("expected %v, got %v", expected, actual)
-	}
-}
-
-func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
-	t.Helper()
-	if len(expected) != len(actual) {
-		t.Errorf("expected %v, got %v", expected, actual)
-		return
-	}
-
-	for i := range expected {
-		if expected[i] != actual[i] {
-			t.Errorf("expected %v, got %v", expected, actual)
-			return
-		}
-	}
-}
-
-type ordered interface {
-	~int | ~string
-}
-
-func IsSorted[A ordered](s []A) bool {
-	return sort.SliceIsSorted(s, func(i, j int) bool {
-		return s[i] < s[j]
-	})
-}
-
 func Sort[A ordered](s []A) {
 	sort.Slice(s, func(i, j int) bool {
 		return s[i] < s[j]
 	})
 }
 
-func ExpectSorted[A ordered](t *testing.T, s []A) {
-	t.Helper()
-	if !IsSorted(s) {
-		t.Errorf("expected sorted slice")
-	}
-}
-
-func ExpectUnsorted[A ordered](t *testing.T, s []A) {
-	t.Helper()
-	if IsSorted(s) {
-		t.Errorf("expected unsorted slice")
-	}
-}
-
-func ExpectClosed[A any](t *testing.T, ch <-chan A, waitFor time.Duration) {
-	t.Helper()
-	select {
-	case x, ok := <-ch:
-		if ok {
-			t.Errorf("expected channel to be closed, but got %v", x)
-		}
-	case <-time.After(waitFor):
-		t.Errorf("channel was not closed after %v", waitFor)
-	}
-}
-
-func ExpectError(t *testing.T, actual error, expected error) {
-	t.Helper()
-	if actual == nil {
-		t.Errorf("expected error '%v', got nil", expected)
-		return
-	}
-
-	if expected.Error() != actual.Error() {
-		t.Errorf("expected error '%v', got '%v'", expected, actual)
-	}
-}
-
-func ExpectNoError(t *testing.T, actual error) {
-	t.Helper()
-	if actual != nil {
-		t.Errorf("unexpected error '%v'", actual)
-	}
-}
-
-func NotHang(t *testing.T, waitFor time.Duration, f func()) {
-	t.Helper()
-	done := make(chan struct{})
+func ToErrorMessages(in <-chan error) <-chan string {
+	out := make(chan string)
 
 	go func() {
-		defer close(done)
-		f()
+		defer close(out)
+		for x := range in {
+			out <- x.Error()
+		}
 	}()
 
-	select {
-	case <-done:
-	case <-time.After(waitFor):
-		t.Errorf("test hanged")
+	return out
+}
+
+func DoConcurrently(ff ...func()) {
+	var wg sync.WaitGroup
+
+	for _, f := range ff {
+		f1 := f
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			f1()
+		}()
 	}
+
+	wg.Wait()
 }

@@ -21,11 +21,11 @@ func TestToFromSlice(t *testing.T) {
 		s := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 		in := FromSlice(s)
 
-		in = putErrorAt(in, fmt.Errorf("err1"), 4)
-		in = putErrorAt(in, fmt.Errorf("err2"), 8)
+		in = replaceWithError(in, 4, fmt.Errorf("err1"))
+		in = replaceWithError(in, 8, fmt.Errorf("err2"))
 
 		s1, err := ToSlice(in)
-		th.ExpectError(t, err, fmt.Errorf("err1"))
+		th.ExpectError(t, err, "err1")
 		th.ExpectSlice(t, s1, []int{0, 1, 2, 3})
 	})
 }

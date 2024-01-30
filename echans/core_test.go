@@ -11,197 +11,363 @@ import (
 	"github.com/destel/rill/internal/th"
 )
 
+func testname(name string, ordered bool) string {
+	if ordered {
+		return fmt.Sprintf("%s ordered", name)
+	} else {
+		return name
+	}
+}
+
+func doMap[A, B any](ord bool, in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
+	if ord {
+		return OrderedMap(in, n, f)
+	}
+	return Map(in, n, f)
+}
+
 func TestMap(t *testing.T) {
-	t.Run("no errors", func(t *testing.T) {
-		in := Wrap(th.FromRange(0, 10), nil, nil)
+	for _, ord := range []bool{false, true} {
 
-		out := Map(in, 3, func(x int) (string, error) {
-			return fmt.Sprintf("%02d", x), nil
-		})
+		t.Run(testname("no_errors", ord), func(t *testing.T) {
+			in := Wrap(th.FromRange(0, 20), nil, nil)
 
-		outSlice, errSlice := toSliceAndErrors(out)
-		sort.Strings(outSlice)
-		sort.Strings(errSlice)
+			out := doMap(ord, in, 5, func(x int) (string, error) {
+				return fmt.Sprintf("%03d", x), nil
+			})
 
-		th.ExpectSlice(t, outSlice, []string{"00", "01", "02", "03", "04", "05", "06", "07", "08", "09"})
-		th.ExpectSlice(t, errSlice, []string{})
-	})
+			outSlice, errSlice := toSliceAndErrors(out)
 
-	t.Run("errors", func(t *testing.T) {
-		in := Wrap(th.FromRange(0, 10), nil, nil)
-
-		stage1 := Map(in, 5, func(x int) (int, error) {
-			if x == 3 {
-				return 0, fmt.Errorf("err1")
-			}
-			if x == 4 {
-				return 0, fmt.Errorf("err2")
+			expected := make([]string, 0, 20)
+			for i := 0; i < 20; i++ {
+				expected = append(expected, fmt.Sprintf("%03d", i))
 			}
 
-			return x, nil
+			th.Sort(outSlice)
+			th.Sort(errSlice)
+
+			th.ExpectSlice(t, outSlice, expected)
+			th.ExpectSlice(t, errSlice, []string{})
 		})
 
-		stage2 := Map(stage1, 5, func(x int) (string, error) {
-			if x == 7 {
-				return "", fmt.Errorf("err3")
+		t.Run(testname("errors", ord), func(t *testing.T) {
+			in := Wrap(th.FromRange(0, 20), nil, nil)
+			in = replaceWithError(in, 15, fmt.Errorf("err15"))
+
+			out := doMap(ord, in, 5, func(x int) (string, error) {
+				if x == 5 {
+					return "", fmt.Errorf("err05")
+				}
+				if x == 6 {
+					return "", fmt.Errorf("err06")
+				}
+
+				return fmt.Sprintf("%03d", x), nil
+			})
+
+			outSlice, errSlice := toSliceAndErrors(out)
+
+			expected := make([]string, 0, 20)
+			for i := 0; i < 20; i++ {
+				if i == 5 || i == 6 || i == 15 {
+					continue
+				}
+				expected = append(expected, fmt.Sprintf("%03d", i))
 			}
 
-			return fmt.Sprintf("%02d", x), nil
+			sort.Strings(outSlice)
+			sort.Strings(errSlice)
+
+			th.ExpectSlice(t, outSlice, expected)
+			th.ExpectSlice(t, errSlice, []string{"err05", "err06", "err15"})
 		})
 
-		out := stage2
+		t.Run(testname("ordering", ord), func(t *testing.T) {
+			in := Wrap(th.FromRange(0, 10000), nil, nil)
 
-		outSlice, errSlice := toSliceAndErrors(out)
-		sort.Strings(outSlice)
-		sort.Strings(errSlice)
+			out := doMap(ord, in, 50, func(x int) (int, error) {
+				if x%2 == 0 {
+					return x, fmt.Errorf("err%06d", x)
+				}
 
-		th.ExpectSlice(t, outSlice, []string{"00", "01", "02", "05", "06", "08", "09"})
-		th.ExpectSlice(t, errSlice, []string{"err1", "err2", "err3"})
-	})
+				return x, nil
+			})
+
+			values, errs := Unwrap(out)
+
+			th.DoConcurrently(
+				func() { th.ExpectChansOrdering(t, ord, values) },
+				func() { th.ExpectChansOrdering(t, ord, th.ToErrorMessages(errs)) },
+			)
+		})
+
+	}
+}
+
+func doFilter(ord bool, in <-chan Try[int], n int, f func(int) (bool, error)) <-chan Try[int] {
+	if ord {
+		return OrderedFilter(in, n, f)
+	}
+	return Filter(in, n, f)
 }
 
 func TestFilter(t *testing.T) {
-	t.Run("no errors", func(t *testing.T) {
-		in := Wrap(th.FromRange(0, 10), nil, nil)
+	for _, ord := range []bool{false, true} {
 
-		out := Filter(in, 3, func(x int) (bool, error) {
-			return x%2 == 0, nil
-		})
+		t.Run(testname("no_errors", ord), func(t *testing.T) {
+			in := Wrap(th.FromRange(0, 20), nil, nil)
 
-		outSlice, errSlice := toSliceAndErrors(out)
-		sort.Ints(outSlice)
-		sort.Strings(errSlice)
+			out := doFilter(ord, in, 5, func(x int) (bool, error) {
+				return x%2 == 0, nil
+			})
 
-		th.ExpectSlice(t, outSlice, []int{0, 2, 4, 6, 8})
-		th.ExpectSlice(t, errSlice, []string{})
-	})
+			outSlice, errSlice := toSliceAndErrors(out)
 
-	t.Run("errors", func(t *testing.T) {
-		in := Wrap(th.FromRange(0, 10), nil, nil)
-
-		stage1 := Filter(in, 5, func(x int) (bool, error) {
-			if x == 3 {
-				return false, fmt.Errorf("err1")
-			}
-			if x == 4 {
-				return false, fmt.Errorf("err2")
+			expected := make([]int, 0, 20)
+			for i := 0; i < 20; i++ {
+				if i%2 == 0 {
+					expected = append(expected, i)
+				}
 			}
 
-			return true, nil
+			th.Sort(outSlice)
+			th.Sort(errSlice)
+
+			th.ExpectSlice(t, outSlice, expected)
+			th.ExpectSlice(t, errSlice, []string{})
 		})
 
-		stage2 := Filter(stage1, 5, func(x int) (bool, error) {
-			if x == 7 {
-				return false, fmt.Errorf("err3")
+		t.Run(testname("errors", ord), func(t *testing.T) {
+			in := Wrap(th.FromRange(0, 20), nil, nil)
+			in = replaceWithError(in, 15, fmt.Errorf("err15"))
+
+			out := doFilter(ord, in, 5, func(x int) (bool, error) {
+				if x == 5 {
+					return false, fmt.Errorf("err05")
+				}
+				if x == 6 {
+					return true, fmt.Errorf("err06")
+				}
+
+				return x%2 == 0, nil
+			})
+
+			outSlice, errSlice := toSliceAndErrors(out)
+
+			expected := make([]int, 0, 20)
+			for i := 0; i < 20; i++ {
+				if i%2 == 1 || i == 5 || i == 6 || i == 15 {
+					continue
+				}
+				expected = append(expected, i)
 			}
 
-			return true, nil
+			th.Sort(outSlice)
+			th.Sort(errSlice)
+
+			th.ExpectSlice(t, outSlice, expected)
+			th.ExpectSlice(t, errSlice, []string{"err05", "err06", "err15"})
 		})
 
-		out := stage2
+		t.Run(testname("ordering", ord), func(t *testing.T) {
+			in := Wrap(th.FromRange(0, 10000), nil, nil)
 
-		outSlice, errSlice := toSliceAndErrors(out)
-		sort.Ints(outSlice)
-		sort.Strings(errSlice)
+			out := doFilter(ord, in, 50, func(x int) (bool, error) {
+				if x%2 == 0 {
+					return false, fmt.Errorf("err%06d", x)
+				}
 
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 5, 6, 8, 9})
-		th.ExpectSlice(t, errSlice, []string{"err1", "err2", "err3"})
-	})
+				return true, nil
+			})
+
+			values, errs := Unwrap(out)
+
+			th.DoConcurrently(
+				func() { th.ExpectChansOrdering(t, ord, values) },
+				func() { th.ExpectChansOrdering(t, ord, th.ToErrorMessages(errs)) },
+			)
+		})
+
+	}
+}
+
+func doFlatMap[A, B any](ord bool, in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
+	if ord {
+		return OrderedFlatMap(in, n, f)
+	}
+	return FlatMap(in, n, f)
 }
 
 func TestFlatMap(t *testing.T) {
-	t.Run("no errors", func(t *testing.T) {
-		in := Wrap(th.FromRange(0, 10), nil, nil)
+	for _, ord := range []bool{false, true} {
 
-		out := FlatMap(in, 3, func(x int) <-chan Try[string] {
-			return FromSlice([]string{
-				fmt.Sprintf("%02dA", x),
-				fmt.Sprintf("%02dB", x),
+		t.Run(testname("no_errors", ord), func(t *testing.T) {
+			in := Wrap(th.FromRange(0, 20), nil, nil)
+
+			out := doFlatMap(ord, in, 5, func(x int) <-chan Try[string] {
+				return FromSlice([]string{
+					fmt.Sprintf("%03dA", x),
+					fmt.Sprintf("%03dB", x),
+				})
 			})
-		})
 
-		outSlice, errSlice := toSliceAndErrors(out)
-		sort.Strings(outSlice)
-		sort.Strings(errSlice)
+			outSlice, errSlice := toSliceAndErrors(out)
 
-		th.ExpectSlice(t, outSlice, []string{"00A", "00B", "01A", "01B", "02A", "02B", "03A", "03B", "04A", "04B", "05A", "05B", "06A", "06B", "07A", "07B", "08A", "08B", "09A", "09B"})
-		th.ExpectSlice(t, errSlice, []string{})
-	})
-
-	t.Run("errors", func(t *testing.T) {
-		in := Wrap(th.FromRange(0, 10), nil, nil)
-
-		stage1 := Map(in, 5, func(x int) (int, error) {
-			if x == 3 {
-				return 0, fmt.Errorf("err1")
-			}
-			if x == 4 {
-				return 0, fmt.Errorf("err2")
+			expected := make([]string, 0, 20*2)
+			for i := 0; i < 20; i++ {
+				expected = append(expected, fmt.Sprintf("%03dA", i), fmt.Sprintf("%03dB", i))
 			}
 
-			return x, nil
+			th.Sort(outSlice)
+			th.Sort(errSlice)
+
+			th.ExpectSlice(t, outSlice, expected)
+			th.ExpectSlice(t, errSlice, []string{})
 		})
 
-		stage2 := FlatMap(stage1, 5, func(x int) <-chan Try[string] {
-			return FromSlice([]string{
-				fmt.Sprintf("%02dA", x),
-				fmt.Sprintf("%02dB", x),
+		t.Run(testname("errors", ord), func(t *testing.T) {
+			in := Wrap(th.FromRange(0, 20), nil, nil)
+			in = replaceWithError(in, 5, fmt.Errorf("err05"))
+			in = replaceWithError(in, 15, fmt.Errorf("err15"))
+
+			out := doFlatMap(ord, in, 5, func(x int) <-chan Try[string] {
+				return FromSlice([]string{
+					fmt.Sprintf("%03dA", x),
+					fmt.Sprintf("%03dB", x),
+				})
 			})
+
+			outSlice, errSlice := toSliceAndErrors(out)
+
+			expected := make([]string, 0, 20*2)
+			for i := 0; i < 20; i++ {
+				if i == 5 || i == 15 {
+					continue
+				}
+				expected = append(expected, fmt.Sprintf("%03dA", i), fmt.Sprintf("%03dB", i))
+			}
+
+			sort.Strings(outSlice)
+			sort.Strings(errSlice)
+
+			th.ExpectSlice(t, outSlice, expected)
+			th.ExpectSlice(t, errSlice, []string{"err05", "err15"})
 		})
 
-		out := stage2
+		t.Run(testname("ordering", ord), func(t *testing.T) {
+			in := Wrap(th.FromRange(0, 10000), nil, nil)
+			in = OrderedMap(in, 1, func(x int) (int, error) {
+				if x%2 == 0 {
+					return x, fmt.Errorf("err%06d", x)
+				}
+				return x, nil
+			})
 
-		outSlice, errSlice := toSliceAndErrors(out)
-		sort.Strings(outSlice)
-		sort.Strings(errSlice)
+			out := doFlatMap(ord, in, 50, func(x int) <-chan Try[string] {
+				return FromSlice([]string{
+					fmt.Sprintf("%06dA", x),
+					fmt.Sprintf("%06dB", x),
+				})
+			})
 
-		th.ExpectSlice(t, outSlice, []string{"00A", "00B", "01A", "01B", "02A", "02B", "05A", "05B", "06A", "06B", "07A", "07B", "08A", "08B", "09A", "09B"})
-		th.ExpectSlice(t, errSlice, []string{"err1", "err2"})
-	})
+			values, errs := Unwrap(out)
 
+			th.DoConcurrently(
+				func() { th.ExpectChansOrdering(t, ord, values) },
+				func() { th.ExpectChansOrdering(t, ord, th.ToErrorMessages(errs)) },
+			)
+		})
+
+	}
 }
 
-func TestHandleErrors(t *testing.T) {
-	t.Run("no errors", func(t *testing.T) {
-		in := Wrap(th.FromRange(0, 10), nil, nil)
+func doCatch(ord bool, in <-chan Try[int], n int, f func(error) error) <-chan Try[int] {
+	if ord {
+		return OrderedCatch(in, n, f)
+	}
+	return Catch(in, n, f)
+}
 
-		out := HandleErrors(in, 3, func(err error) error {
-			return fmt.Errorf("replaced: %w", err)
-		})
+func TestCatch(t *testing.T) {
+	for _, ord := range []bool{false, true} {
 
-		outSlice, err := ToSlice(out)
-		th.ExpectNoError(t, err)
+		t.Run(testname("no_errors", ord), func(t *testing.T) {
+			in := Wrap(th.FromRange(0, 20), nil, nil)
 
-		sort.Ints(outSlice)
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
-	})
+			out := doCatch(ord, in, 5, func(err error) error {
+				return fmt.Errorf("%w wrapped", err)
+			})
 
-	t.Run("errors", func(t *testing.T) {
-		in := Wrap(th.FromRange(0, 10), nil, nil)
-		in = putErrorAt(in, fmt.Errorf("err1"), 3)
-		in = putErrorAt(in, fmt.Errorf("err2"), 5)
-		in = putErrorAt(in, fmt.Errorf("err3"), 6)
+			outSlice, errSlice := toSliceAndErrors(out)
 
-		out := HandleErrors(in, 3, func(err error) error {
-			if err.Error() == "err1" {
-				return nil // handle
-			}
-			if err.Error() == "err2" {
-				return err // keep as is
+			expected := make([]int, 0, 20)
+			for i := 0; i < 20; i++ {
+				expected = append(expected, i)
 			}
 
-			return fmt.Errorf("replaced: %w", err) // replace
+			th.Sort(outSlice)
+			th.Sort(errSlice)
+
+			th.ExpectSlice(t, outSlice, expected)
+			th.ExpectSlice(t, errSlice, []string{})
 		})
 
-		outSlice, errSlice := toSliceAndErrors(out)
-		sort.Ints(outSlice)
-		sort.Strings(errSlice)
+		t.Run(testname("errors", ord), func(t *testing.T) {
+			in := Wrap(th.FromRange(0, 20), nil, nil)
+			in = replaceWithError(in, 5, fmt.Errorf("err05"))
+			in = replaceWithError(in, 12, fmt.Errorf("err12"))
+			in = replaceWithError(in, 15, fmt.Errorf("err15"))
 
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 4, 7, 8, 9})
-		th.ExpectSlice(t, errSlice, []string{"err2", "replaced: err3"})
+			out := doCatch(ord, in, 5, func(err error) error {
+				if err.Error() == "err05" {
+					return nil // handled
+				}
+				if err.Error() == "err12" {
+					return fmt.Errorf("err12 wrapped") // handled
+				}
 
-	})
+				return err // leave as is
+			})
 
+			outSlice, errSlice := toSliceAndErrors(out)
+
+			expected := make([]int, 0, 20)
+			for i := 0; i < 20; i++ {
+				if i == 5 || i == 12 || i == 15 {
+					continue
+				}
+				expected = append(expected, i)
+			}
+
+			th.Sort(outSlice)
+			th.Sort(errSlice)
+
+			th.ExpectSlice(t, outSlice, expected)
+			th.ExpectSlice(t, errSlice, []string{"err12 wrapped", "err15"})
+		})
+
+		t.Run(testname("ordering", ord), func(t *testing.T) {
+			in := Wrap(th.FromRange(0, 10000), nil, nil)
+			in = OrderedMap(in, 1, func(x int) (int, error) {
+				if x%2 == 0 {
+					return x, fmt.Errorf("err%06d", x)
+				}
+				return x, nil
+			})
+
+			out := doCatch(ord, in, 50, func(err error) error {
+				return fmt.Errorf("%w wrapped", err)
+			})
+
+			values, errs := Unwrap(out)
+
+			th.DoConcurrently(
+				func() { th.ExpectChansOrdering(t, ord, values) },
+				func() { th.ExpectChansOrdering(t, ord, th.ToErrorMessages(errs)) },
+			)
+		})
+
+	}
 }
 
 func TestForEach(t *testing.T) {
@@ -225,7 +391,7 @@ func TestForEach(t *testing.T) {
 			defer close(done)
 
 			in := Wrap(th.InfiniteChan(done), nil, nil)
-			in = putErrorAt(in, fmt.Errorf("err"), 100)
+			in = replaceWithError(in, 100, fmt.Errorf("err1"))
 
 			defer chans.DrainNB(in)
 
@@ -233,7 +399,7 @@ func TestForEach(t *testing.T) {
 				return nil
 			})
 
-			th.ExpectError(t, err, fmt.Errorf("err"))
+			th.ExpectError(t, err, "err1")
 		})
 	})
 
@@ -246,26 +412,26 @@ func TestForEach(t *testing.T) {
 
 			err := ForEach(in, 3, func(x int) error {
 				if x == 100 {
-					return fmt.Errorf("err")
+					return fmt.Errorf("err1")
 				}
 				return nil
 			})
 
-			th.ExpectError(t, err, fmt.Errorf("err"))
+			th.ExpectError(t, err, "err1")
 		})
 	})
 
-	t.Run("first error is returned", func(t *testing.T) {
+	t.Run("first error is returned when n=1", func(t *testing.T) {
 		in := Wrap(th.FromRange(0, 100), nil, nil)
 
-		in = putErrorAt(in, fmt.Errorf("err1"), 10)
-		in = putErrorAt(in, fmt.Errorf("err2"), 20)
-		in = putErrorAt(in, fmt.Errorf("err3"), 30)
+		in = replaceWithError(in, 10, fmt.Errorf("err1"))
+		in = replaceWithError(in, 20, fmt.Errorf("err2"))
+		in = replaceWithError(in, 30, fmt.Errorf("err3"))
 
 		err := ForEach(in, 1, func(x int) error {
 			return nil
 		})
 
-		th.ExpectError(t, err, fmt.Errorf("err1"))
+		th.ExpectError(t, err, "err1")
 	})
 }
