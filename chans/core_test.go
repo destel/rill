@@ -36,20 +36,10 @@ func TestMap(t *testing.T) {
 			t.Run(testname("correctness", ord, n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
 				out := doMap(ord, in, n, func(x int) string {
-					// break the ordering, make 8th element slow
-					if x == 8 {
-						time.Sleep(1 * time.Second)
-					}
-
 					return fmt.Sprintf("%03d", x)
 				})
 
 				outSlice := ToSlice(out)
-				if ord || n == 1 {
-					th.ExpectSorted(t, outSlice)
-				} else {
-					th.ExpectUnsorted(t, outSlice)
-				}
 
 				expected := make([]string, 0, 20)
 				for i := 0; i < 20; i++ {
@@ -75,8 +65,18 @@ func TestMap(t *testing.T) {
 				Drain(out)
 				th.ExpectValue(t, inProgress.Max(), n)
 			})
-
 		}
+
+		t.Run(testname("ordering", ord, 0), func(t *testing.T) {
+			in := th.FromRange(0, 10000)
+
+			out := doMap(ord, in, 50, func(x int) int {
+				return x
+			})
+
+			th.ExpectChansOrdering(t, ord, out)
+		})
+
 	}
 }
 
@@ -99,20 +99,10 @@ func TestFilter(t *testing.T) {
 			t.Run(testname("correctness", ord, n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
 				out := doFilter(ord, in, n, func(x int) bool {
-					// break the ordering, make 8th element slow
-					if x == 8 {
-						time.Sleep(1 * time.Second)
-					}
-
 					return x%2 == 0
 				})
 
 				outSlice := ToSlice(out)
-				if ord || n == 1 {
-					th.ExpectSorted(t, outSlice)
-				} else {
-					th.ExpectUnsorted(t, outSlice)
-				}
 
 				expected := make([]int, 0, 20)
 				for i := 0; i < 20; i += 2 {
@@ -140,6 +130,16 @@ func TestFilter(t *testing.T) {
 			})
 
 		}
+
+		t.Run(testname("ordering", ord, 0), func(t *testing.T) {
+			in := th.FromRange(0, 10000)
+
+			out := doFilter(ord, in, 50, func(x int) bool {
+				return x%2 == 0
+			})
+
+			th.ExpectChansOrdering(t, ord, out)
+		})
 	}
 }
 
@@ -162,11 +162,6 @@ func TestFlatMap(t *testing.T) {
 			t.Run(testname("correctness", ord, n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
 				out := doFlatMap(ord, in, n, func(x int) <-chan string {
-					// break the ordering, make 8th element slow
-					if x == 8 {
-						time.Sleep(1 * time.Second)
-					}
-
 					return FromSlice([]string{
 						fmt.Sprintf("%03dA", x),
 						fmt.Sprintf("%03dB", x),
@@ -175,11 +170,6 @@ func TestFlatMap(t *testing.T) {
 				})
 
 				outSlice := ToSlice(out)
-				if ord || n == 1 {
-					th.ExpectSorted(t, outSlice)
-				} else {
-					th.ExpectUnsorted(t, outSlice)
-				}
 
 				expected := make([]string, 0, 20)
 				for i := 0; i < 20; i++ {
@@ -207,6 +197,20 @@ func TestFlatMap(t *testing.T) {
 			})
 
 		}
+
+		t.Run(testname("ordering", ord, 0), func(t *testing.T) {
+			in := th.FromRange(0, 10000)
+
+			out := doFlatMap(ord, in, 50, func(x int) <-chan string {
+				return FromSlice([]string{
+					fmt.Sprintf("%06dA", x),
+					fmt.Sprintf("%06dB", x),
+					fmt.Sprintf("%06dC", x),
+				})
+			})
+
+			th.ExpectChansOrdering(t, ord, out)
+		})
 	}
 }
 
@@ -259,4 +263,19 @@ func TestForEach(t *testing.T) {
 		})
 
 	}
+
+	t.Run("ordering when n=1", func(t *testing.T) {
+		in := th.FromRange(0, 10000)
+
+		prev := -1
+		ForEach(in, 1, func(x int) bool {
+			if x < prev {
+				t.Errorf("expected ordered processing")
+				return false
+			}
+			prev = x
+			return true
+		})
+	})
+
 }

@@ -434,4 +434,19 @@ func TestForEach(t *testing.T) {
 
 		th.ExpectError(t, err, "err1")
 	})
+
+	t.Run("ordering when n=1", func(t *testing.T) {
+		in := Wrap(th.FromRange(0, 10000), nil, nil)
+
+		prev := -1
+		err := ForEach(in, 1, func(x int) error {
+			if x < prev {
+				return fmt.Errorf("expected ordered processing")
+			}
+			prev = x
+			return nil
+		})
+
+		th.ExpectNoError(t, err)
+	})
 }

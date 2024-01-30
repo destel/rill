@@ -95,31 +95,11 @@ func TestSplit2(t *testing.T) {
 			t.Run(testname("correctness", ord, n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
 				outT, outF := doSplit2(ord, in, n, func(x int) bool {
-					if x == 8 || x == 9 {
-						time.Sleep(1 * time.Second) // break the ordering
-					}
-
 					return x%3 == 0
 				})
 
-				// Buffer the channels to avoid deadlocks
-				outT = Buffer(outT, 20)
-				outF = Buffer(outF, 20)
-
-				outTslice := ToSlice(outT)
-				outFslice := ToSlice(outF)
-
-				if ord || n == 1 {
-					th.ExpectSorted(t, outTslice)
-					th.ExpectSorted(t, outFslice)
-				} else {
-					th.ExpectUnsorted(t, outTslice)
-					th.ExpectUnsorted(t, outFslice)
-				}
-
 				expectedT := make([]int, 0, 20)
 				expectedF := make([]int, 0, 20)
-
 				for i := 0; i < 20; i++ {
 					if i%3 == 0 {
 						expectedT = append(expectedT, i)
@@ -128,11 +108,18 @@ func TestSplit2(t *testing.T) {
 					}
 				}
 
-				th.Sort(outTslice)
-				th.Sort(outFslice)
-
-				th.ExpectSlice(t, outTslice, expectedT)
-				th.ExpectSlice(t, outFslice, expectedF)
+				th.DoConcurrently(
+					func() {
+						outSlice := ToSlice(outT)
+						th.Sort(outSlice)
+						th.ExpectSlice(t, outSlice, expectedT)
+					},
+					func() {
+						outSlice := ToSlice(outF)
+						th.Sort(outSlice)
+						th.ExpectSlice(t, outSlice, expectedF)
+					},
+				)
 			})
 
 			t.Run(testname("concurrency", ord, n), func(t *testing.T) {
@@ -152,5 +139,22 @@ func TestSplit2(t *testing.T) {
 			})
 
 		}
+
+		t.Run(testname("ordering", ord, 0), func(t *testing.T) {
+			in := th.FromRange(0, 10000)
+
+			outT, outF := doSplit2(ord, in, 50, func(x int) bool {
+				return x%2 == 0
+			})
+
+			th.DoConcurrently(
+				func() {
+					th.ExpectChansOrdering(t, ord, outT)
+				},
+				func() {
+					th.ExpectChansOrdering(t, ord, outF)
+				},
+			)
+		})
 	}
 }

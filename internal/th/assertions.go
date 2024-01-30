@@ -2,7 +2,6 @@
 package th
 
 import (
-	"sort"
 	"testing"
 	"time"
 )
@@ -33,28 +32,6 @@ type ordered interface {
 	~int | ~string
 }
 
-func isSorted[A ordered](s []A) bool {
-	return sort.SliceIsSorted(s, func(i, j int) bool {
-		return s[i] < s[j]
-	})
-}
-
-// Deprecated
-func ExpectSorted[A ordered](t *testing.T, s []A) {
-	t.Helper()
-	if !isSorted(s) {
-		t.Errorf("expected sorted slice")
-	}
-}
-
-// Deprecated
-func ExpectUnsorted[A ordered](t *testing.T, s []A) {
-	t.Helper()
-	if isSorted(s) {
-		t.Errorf("expected unsorted slice")
-	}
-}
-
 func isSortedChan[A ordered](ch <-chan A) bool {
 	prev, ok := <-ch
 	if !ok {
@@ -70,6 +47,7 @@ func isSortedChan[A ordered](ch <-chan A) bool {
 	return sorted
 }
 
+// todo: rename
 func ExpectChansOrdering[A ordered](t *testing.T, expectSorted bool, ch <-chan A) {
 	t.Helper()
 	if expectSorted && !isSortedChan(ch) {
