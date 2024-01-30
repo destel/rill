@@ -8,6 +8,10 @@ type Try[A any] struct {
 }
 
 func Wrap[A any](values <-chan A, err error) <-chan Try[A] {
+	if values == nil && err == nil {
+		return nil
+	}
+
 	wrappedValues := chans.Map(values, 1, func(x A) Try[A] {
 		return Try[A]{V: x}
 	})
@@ -29,6 +33,10 @@ func Wrap[A any](values <-chan A, err error) <-chan Try[A] {
 }
 
 func WrapAsync[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
+	if values == nil && errs == nil {
+		return nil
+	}
+
 	wrappedValues := chans.Map(values, 1, func(x A) Try[A] {
 		return Try[A]{V: x}
 	})

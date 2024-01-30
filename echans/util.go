@@ -2,6 +2,18 @@ package echans
 
 import "github.com/destel/rill/chans"
 
+func Drain[A any](in <-chan A) {
+	chans.Drain(in)
+}
+
+func DrainNB[A any](in <-chan A) {
+	chans.DrainNB(in)
+}
+
+func Buffer[A any](in <-chan A, n int) <-chan A {
+	return chans.Buffer(in, n)
+}
+
 func FromSlice[A any](slice []A) <-chan Try[A] {
 	out := make(chan Try[A])
 	go func() {
