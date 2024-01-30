@@ -6,11 +6,6 @@ import (
 	"github.com/destel/rill/chans"
 )
 
-type Try[A any] struct {
-	V     A
-	Error error
-}
-
 func MapAndFilter[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
 	return chans.MapAndFilter(in, n, func(a Try[A]) (Try[B], bool) {
 		if a.Error != nil {

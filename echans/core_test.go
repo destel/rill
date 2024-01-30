@@ -30,7 +30,7 @@ func TestMap(t *testing.T) {
 	for _, ord := range []bool{false, true} {
 
 		t.Run(testname("no_errors", ord), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 20), nil, nil)
+			in := Wrap(th.FromRange(0, 20), nil)
 
 			out := doMap(ord, in, 5, func(x int) (string, error) {
 				return fmt.Sprintf("%03d", x), nil
@@ -51,7 +51,7 @@ func TestMap(t *testing.T) {
 		})
 
 		t.Run(testname("errors", ord), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 20), nil, nil)
+			in := Wrap(th.FromRange(0, 20), nil)
 			in = replaceWithError(in, 15, fmt.Errorf("err15"))
 
 			out := doMap(ord, in, 5, func(x int) (string, error) {
@@ -83,7 +83,7 @@ func TestMap(t *testing.T) {
 		})
 
 		t.Run(testname("ordering", ord), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 10000), nil, nil)
+			in := Wrap(th.FromRange(0, 10000), nil)
 
 			out := doMap(ord, in, 50, func(x int) (int, error) {
 				if x%2 == 0 {
@@ -115,7 +115,7 @@ func TestFilter(t *testing.T) {
 	for _, ord := range []bool{false, true} {
 
 		t.Run(testname("no_errors", ord), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 20), nil, nil)
+			in := Wrap(th.FromRange(0, 20), nil)
 
 			out := doFilter(ord, in, 5, func(x int) (bool, error) {
 				return x%2 == 0, nil
@@ -138,7 +138,7 @@ func TestFilter(t *testing.T) {
 		})
 
 		t.Run(testname("errors", ord), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 20), nil, nil)
+			in := Wrap(th.FromRange(0, 20), nil)
 			in = replaceWithError(in, 15, fmt.Errorf("err15"))
 
 			out := doFilter(ord, in, 5, func(x int) (bool, error) {
@@ -170,7 +170,7 @@ func TestFilter(t *testing.T) {
 		})
 
 		t.Run(testname("ordering", ord), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 10000), nil, nil)
+			in := Wrap(th.FromRange(0, 10000), nil)
 
 			out := doFilter(ord, in, 50, func(x int) (bool, error) {
 				if x%2 == 0 {
@@ -202,7 +202,7 @@ func TestFlatMap(t *testing.T) {
 	for _, ord := range []bool{false, true} {
 
 		t.Run(testname("no_errors", ord), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 20), nil, nil)
+			in := Wrap(th.FromRange(0, 20), nil)
 
 			out := doFlatMap(ord, in, 5, func(x int) <-chan Try[string] {
 				return FromSlice([]string{
@@ -226,7 +226,7 @@ func TestFlatMap(t *testing.T) {
 		})
 
 		t.Run(testname("errors", ord), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 20), nil, nil)
+			in := Wrap(th.FromRange(0, 20), nil)
 			in = replaceWithError(in, 5, fmt.Errorf("err05"))
 			in = replaceWithError(in, 15, fmt.Errorf("err15"))
 
@@ -255,7 +255,7 @@ func TestFlatMap(t *testing.T) {
 		})
 
 		t.Run(testname("ordering", ord), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 10000), nil, nil)
+			in := Wrap(th.FromRange(0, 10000), nil)
 			in = OrderedMap(in, 1, func(x int) (int, error) {
 				if x%2 == 0 {
 					return x, fmt.Errorf("err%06d", x)
@@ -292,7 +292,7 @@ func TestCatch(t *testing.T) {
 	for _, ord := range []bool{false, true} {
 
 		t.Run(testname("no_errors", ord), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 20), nil, nil)
+			in := Wrap(th.FromRange(0, 20), nil)
 
 			out := doCatch(ord, in, 5, func(err error) error {
 				return fmt.Errorf("%w wrapped", err)
@@ -313,7 +313,7 @@ func TestCatch(t *testing.T) {
 		})
 
 		t.Run(testname("errors", ord), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 20), nil, nil)
+			in := Wrap(th.FromRange(0, 20), nil)
 			in = replaceWithError(in, 5, fmt.Errorf("err05"))
 			in = replaceWithError(in, 12, fmt.Errorf("err12"))
 			in = replaceWithError(in, 15, fmt.Errorf("err15"))
@@ -347,7 +347,7 @@ func TestCatch(t *testing.T) {
 		})
 
 		t.Run(testname("ordering", ord), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 10000), nil, nil)
+			in := Wrap(th.FromRange(0, 10000), nil)
 			in = OrderedMap(in, 1, func(x int) (int, error) {
 				if x%2 == 0 {
 					return x, fmt.Errorf("err%06d", x)
@@ -374,7 +374,7 @@ func TestForEach(t *testing.T) {
 	t.Run("no errors", func(t *testing.T) {
 		sum := int64(0)
 
-		in := Wrap(th.FromRange(0, 10), nil, nil)
+		in := Wrap(th.FromRange(0, 10), nil)
 
 		err := ForEach(in, 3, func(x int) error {
 			atomic.AddInt64(&sum, int64(x))
@@ -390,7 +390,7 @@ func TestForEach(t *testing.T) {
 			done := make(chan struct{})
 			defer close(done)
 
-			in := Wrap(th.InfiniteChan(done), nil, nil)
+			in := Wrap(th.InfiniteChan(done), nil)
 			in = replaceWithError(in, 100, fmt.Errorf("err1"))
 
 			defer chans.DrainNB(in)
@@ -408,7 +408,7 @@ func TestForEach(t *testing.T) {
 			done := make(chan struct{})
 			defer close(done)
 
-			in := Wrap(th.InfiniteChan(done), nil, nil)
+			in := Wrap(th.InfiniteChan(done), nil)
 
 			err := ForEach(in, 3, func(x int) error {
 				if x == 100 {
@@ -422,7 +422,7 @@ func TestForEach(t *testing.T) {
 	})
 
 	t.Run("first error is returned when n=1", func(t *testing.T) {
-		in := Wrap(th.FromRange(0, 100), nil, nil)
+		in := Wrap(th.FromRange(0, 100), nil)
 
 		in = replaceWithError(in, 10, fmt.Errorf("err1"))
 		in = replaceWithError(in, 20, fmt.Errorf("err2"))
@@ -436,7 +436,7 @@ func TestForEach(t *testing.T) {
 	})
 
 	t.Run("ordering when n=1", func(t *testing.T) {
-		in := Wrap(th.FromRange(0, 10000), nil, nil)
+		in := Wrap(th.FromRange(0, 10000), nil)
 
 		prev := -1
 		err := ForEach(in, 1, func(x int) error {
