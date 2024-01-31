@@ -10,11 +10,16 @@ import (
 )
 
 func testname(name string, ordered bool, n int) string {
+	res := name
 	if ordered {
-		return fmt.Sprintf("%s_ordered_%d", name, n)
-	} else {
-		return fmt.Sprintf("%s_%d", name, n)
+		res = res + "_ordered"
+	} else if name == "ordering" {
+		res = res + "_unordered"
 	}
+	if n > 0 {
+		res = res + "_" + fmt.Sprint(n)
+	}
+	return res
 }
 
 func doMap[A, B any](ord bool, in <-chan A, n int, f func(A) B) <-chan B {
@@ -41,13 +46,13 @@ func TestMap(t *testing.T) {
 
 				outSlice := ToSlice(out)
 
-				expected := make([]string, 0, 20)
+				expectedSlice := make([]string, 0, 20)
 				for i := 0; i < 20; i++ {
-					expected = append(expected, fmt.Sprintf("%03d", i))
+					expectedSlice = append(expectedSlice, fmt.Sprintf("%03d", i))
 				}
 
 				th.Sort(outSlice)
-				th.ExpectSlice(t, outSlice, expected)
+				th.ExpectSlice(t, outSlice, expectedSlice)
 			})
 
 			t.Run(testname("concurrency", ord, n), func(t *testing.T) {
@@ -74,7 +79,13 @@ func TestMap(t *testing.T) {
 				return x
 			})
 
-			th.ExpectChanOrdering(t, ord, out)
+			outSlice := ToSlice(out)
+
+			if ord {
+				th.ExpectSorted(t, outSlice)
+			} else {
+				th.ExpectUnsorted(t, outSlice)
+			}
 		})
 
 	}
@@ -104,13 +115,13 @@ func TestFilter(t *testing.T) {
 
 				outSlice := ToSlice(out)
 
-				expected := make([]int, 0, 20)
+				expectedSlice := make([]int, 0, 20)
 				for i := 0; i < 20; i += 2 {
-					expected = append(expected, i)
+					expectedSlice = append(expectedSlice, i)
 				}
 
 				th.Sort(outSlice)
-				th.ExpectSlice(t, outSlice, expected)
+				th.ExpectSlice(t, outSlice, expectedSlice)
 			})
 
 			t.Run(testname("concurrency", ord, n), func(t *testing.T) {
@@ -138,7 +149,13 @@ func TestFilter(t *testing.T) {
 				return x%2 == 0
 			})
 
-			th.ExpectChanOrdering(t, ord, out)
+			outSlice := ToSlice(out)
+
+			if ord {
+				th.ExpectSorted(t, outSlice)
+			} else {
+				th.ExpectUnsorted(t, outSlice)
+			}
 		})
 	}
 }
@@ -171,13 +188,13 @@ func TestFlatMap(t *testing.T) {
 
 				outSlice := ToSlice(out)
 
-				expected := make([]string, 0, 20)
+				expectedSlice := make([]string, 0, 20)
 				for i := 0; i < 20; i++ {
-					expected = append(expected, fmt.Sprintf("%03dA", i), fmt.Sprintf("%03dB", i), fmt.Sprintf("%03dC", i))
+					expectedSlice = append(expectedSlice, fmt.Sprintf("%03dA", i), fmt.Sprintf("%03dB", i), fmt.Sprintf("%03dC", i))
 				}
 
 				th.Sort(outSlice)
-				th.ExpectSlice(t, outSlice, expected)
+				th.ExpectSlice(t, outSlice, expectedSlice)
 			})
 
 			t.Run(testname("concurrency", ord, n), func(t *testing.T) {
@@ -209,7 +226,13 @@ func TestFlatMap(t *testing.T) {
 				})
 			})
 
-			th.ExpectChanOrdering(t, ord, out)
+			outSlice := ToSlice(out)
+
+			if ord {
+				th.ExpectSorted(t, outSlice)
+			} else {
+				th.ExpectUnsorted(t, outSlice)
+			}
 		})
 	}
 }
@@ -235,8 +258,6 @@ func TestForEach(t *testing.T) {
 				defer close(done)
 
 				in := th.InfiniteChan(done)
-
-				defer DrainNB(in)
 
 				ForEach(in, n, func(x int) bool {
 					if x == 100 {
@@ -264,7 +285,7 @@ func TestForEach(t *testing.T) {
 
 	}
 
-	t.Run("ordering when n=1", func(t *testing.T) {
+	t.Run("ordering_1", func(t *testing.T) {
 		in := th.FromRange(0, 10000)
 
 		prev := -1
@@ -278,4 +299,31 @@ func TestForEach(t *testing.T) {
 		})
 	})
 
+}
+
+// Compare ordered and unordered map in a single threaded scenario
+func BenchmarkCompareMaps(b *testing.B) {
+	b.Run("unordered", func(b *testing.B) {
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			in := th.FromRange(0, 10000)
+			out := Map(in, 1, func(x int) int {
+				return x
+			})
+			Drain(out)
+		}
+	})
+
+	b.Run("ordered", func(b *testing.B) {
+		b.ReportAllocs()
+
+		for i := 0; i < b.N; i++ {
+			in := th.FromRange(0, 10000)
+			out := OrderedMap(in, 1, func(x int) int {
+				return x
+			})
+			Drain(out)
+		}
+	})
 }

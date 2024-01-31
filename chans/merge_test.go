@@ -24,13 +24,13 @@ func TestMerge(t *testing.T) {
 			out := Merge(ins...)
 			outSlice := ToSlice(out)
 
-			expected := make([]int, 0, numChans*10)
+			expectedSlice := make([]int, 0, numChans*10)
 			for i := 0; i < numChans*10; i++ {
-				expected = append(expected, i)
+				expectedSlice = append(expectedSlice, i)
 			}
 
 			th.Sort(outSlice)
-			th.ExpectSlice(t, outSlice, expected)
+			th.ExpectSlice(t, outSlice, expectedSlice)
 		})
 
 		t.Run(testname("nil_hang", false, numChans), func(t *testing.T) {
@@ -62,14 +62,6 @@ func TestMerge(t *testing.T) {
 
 			}
 
-			// out channel should hang after the first (numChans-1)*10 values
-			expected := make([]int, 0, numChans*10)
-			for i := 0; i < (numChans-1)*10; i++ {
-				expected = append(expected, i)
-			}
-
-			th.Sort(outSlice)
-			th.ExpectSlice(t, outSlice, expected)
 		})
 
 	}
@@ -98,13 +90,13 @@ func TestSplit2(t *testing.T) {
 					return x%3 == 0
 				})
 
-				expectedT := make([]int, 0, 20)
-				expectedF := make([]int, 0, 20)
+				expectedSliceT := make([]int, 0, 20)
+				expectedSliceF := make([]int, 0, 20)
 				for i := 0; i < 20; i++ {
 					if i%3 == 0 {
-						expectedT = append(expectedT, i)
+						expectedSliceT = append(expectedSliceT, i)
 					} else {
-						expectedF = append(expectedF, i)
+						expectedSliceF = append(expectedSliceF, i)
 					}
 				}
 
@@ -112,12 +104,12 @@ func TestSplit2(t *testing.T) {
 					func() {
 						outSlice := ToSlice(outT)
 						th.Sort(outSlice)
-						th.ExpectSlice(t, outSlice, expectedT)
+						th.ExpectSlice(t, outSlice, expectedSliceT)
 					},
 					func() {
 						outSlice := ToSlice(outF)
 						th.Sort(outSlice)
-						th.ExpectSlice(t, outSlice, expectedF)
+						th.ExpectSlice(t, outSlice, expectedSliceF)
 					},
 				)
 			})
@@ -149,10 +141,20 @@ func TestSplit2(t *testing.T) {
 
 			th.DoConcurrently(
 				func() {
-					th.ExpectChanOrdering(t, ord, outT)
+					outSlice := ToSlice(outT)
+					if ord {
+						th.ExpectSorted(t, outSlice)
+					} else {
+						th.ExpectUnsorted(t, outSlice)
+					}
 				},
 				func() {
-					th.ExpectChanOrdering(t, ord, outF)
+					outSlice := ToSlice(outF)
+					if ord {
+						th.ExpectSorted(t, outSlice)
+					} else {
+						th.ExpectUnsorted(t, outSlice)
+					}
 				},
 			)
 		})

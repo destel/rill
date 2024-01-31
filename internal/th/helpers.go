@@ -44,19 +44,6 @@ func Sort[A ordered](s []A) {
 	})
 }
 
-func ErrChanToMessages(in <-chan error) <-chan string {
-	out := make(chan string)
-
-	go func() {
-		defer close(out)
-		for x := range in {
-			out <- x.Error()
-		}
-	}()
-
-	return out
-}
-
 func DoConcurrently(ff ...func()) {
 	var wg sync.WaitGroup
 
