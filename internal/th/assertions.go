@@ -2,6 +2,7 @@
 package th
 
 import (
+	"sort"
 	"testing"
 	"time"
 )
@@ -47,15 +48,23 @@ func isSortedChan[A ordered](ch <-chan A) bool {
 	return sorted
 }
 
-func ExpectChanOrdering[A ordered](t *testing.T, expectSorted bool, ch <-chan A) {
+func ExpectSorted[T ordered](t *testing.T, arr []T) {
 	t.Helper()
-	if expectSorted && !isSortedChan(ch) {
-		t.Errorf("expected sorted channel")
-		return
+	isSorted := sort.SliceIsSorted(arr, func(i, j int) bool {
+		return arr[i] <= arr[j]
+	})
+	if !isSorted {
+		t.Errorf("expected sorted slice")
 	}
-	if !expectSorted && isSortedChan(ch) {
-		t.Errorf("expected unsorted channel")
-		return
+}
+
+func ExpectUnsorted[T ordered](t *testing.T, arr []T) {
+	t.Helper()
+	isSorted := sort.SliceIsSorted(arr, func(i, j int) bool {
+		return arr[i] <= arr[j]
+	})
+	if isSorted {
+		t.Errorf("expected unsorted slice")
 	}
 }
 
@@ -90,7 +99,6 @@ func ExpectNoError(t *testing.T, err error) {
 	}
 }
 
-// todo: rename to Expect*
 func ExpectNotHang(t *testing.T, waitFor time.Duration, f func()) {
 	t.Helper()
 	done := make(chan struct{})

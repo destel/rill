@@ -14,7 +14,7 @@ func Batch[A any](in <-chan A, n int, timeout time.Duration) <-chan []A {
 
 	switch {
 	case timeout == 0:
-		panic(fmt.Errorf("zero timeout: %v", timeout))
+		panic(fmt.Errorf("zero timeout is not supported yet"))
 
 	case timeout < 0:
 		// infinite timeout
