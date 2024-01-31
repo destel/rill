@@ -1,10 +1,5 @@
 package chans
 
-import (
-	"sync"
-	"sync/atomic"
-)
-
 func MapAndFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
 	if in == nil {
 		return nil
@@ -99,14 +94,6 @@ func OrderedFlatMap[A, B any](in <-chan A, n int, f func(A) <-chan B) <-chan B {
 // blocking
 // todo: explain that if false has been returned for item[i] that it's guranteed that function would have been called for all previous items
 func ForEach[A any](in <-chan A, n int, f func(A) bool) {
-	// In case of early exit some unconsumed items will be left in the 'in' channel.
-	// To avoid leaks we need to consume everything until channel is closed.
-	// On the other hand caller can close in, only after we return.
-	// So drain also must happen only after we return. The correct order is:
-	// early exit -> caller closes 'in' -> drain 'in'
-	// That's why we're using non-blocking drain here.
-	defer DrainNB(in)
-
 	if n == 1 {
 		for a := range in {
 			if !f(a) {
@@ -117,25 +104,14 @@ func ForEach[A any](in <-chan A, n int, f func(A) bool) {
 		return
 	}
 
-	var wg sync.WaitGroup
-	earlyExit := int64(0)
+	in, doBreak := breakable(in)
+	done := make(chan struct{})
 
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	loop(in, done, n, func(a A) {
+		if !f(a) {
+			doBreak()
+		}
+	})
 
-			for a := range in {
-				ok := f(a)
-				if !ok {
-					atomic.AddInt64(&earlyExit, 1)
-					break
-				} else if atomic.LoadInt64(&earlyExit) > 0 {
-					break
-				}
-			}
-		}()
-	}
-
-	wg.Wait()
+	<-done
 }

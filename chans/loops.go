@@ -1,6 +1,8 @@
 package chans
 
-import "sync"
+import (
+	"sync"
+)
 
 func loop[A, B any](in <-chan A, toClose chan<- B, n int, f func(A)) {
 	if n == 1 {
@@ -120,4 +122,42 @@ func orderedLoop[A, B any](in <-chan A, toClose chan<- B, n int, f func(a A, can
 			close(toClose)
 		}()
 	}
+}
+
+// todo: make this public?
+func breakable[A any](in <-chan A) (res <-chan A, doBreak func()) {
+	if in == nil {
+		return nil, func() {}
+	}
+
+	breakCalled := make(chan struct{})
+
+	var once sync.Once
+	breakFunc := func() {
+		once.Do(func() {
+			close(breakCalled)
+		})
+	}
+
+	out := make(chan A)
+	go func() {
+		defer Drain(in) // discard unconsumed items
+
+		for {
+			select {
+			case <-breakCalled:
+				close(out)
+				return
+
+			case x, ok := <-in:
+				if !ok {
+					close(out)
+					return
+				}
+				out <- x
+			}
+		}
+	}()
+
+	return out, breakFunc
 }
