@@ -100,18 +100,18 @@ func TestSplit2(t *testing.T) {
 					}
 				}
 
+				var outSliceT, outSliceF []int
+
 				th.DoConcurrently(
-					func() {
-						outSlice := ToSlice(outT)
-						th.Sort(outSlice)
-						th.ExpectSlice(t, outSlice, expectedSliceT)
-					},
-					func() {
-						outSlice := ToSlice(outF)
-						th.Sort(outSlice)
-						th.ExpectSlice(t, outSlice, expectedSliceF)
-					},
+					func() { outSliceT = ToSlice(outT) },
+					func() { outSliceF = ToSlice(outF) },
 				)
+
+				th.Sort(outSliceT)
+				th.Sort(outSliceF)
+
+				th.ExpectSlice(t, outSliceT, expectedSliceT)
+				th.ExpectSlice(t, outSliceF, expectedSliceF)
 			})
 
 			t.Run(testname("concurrency", ord, n), func(t *testing.T) {
@@ -139,24 +139,20 @@ func TestSplit2(t *testing.T) {
 				return x%2 == 0
 			})
 
+			var outSliceT, outSliceF []int
+
 			th.DoConcurrently(
-				func() {
-					outSlice := ToSlice(outT)
-					if ord {
-						th.ExpectSorted(t, outSlice)
-					} else {
-						th.ExpectUnsorted(t, outSlice)
-					}
-				},
-				func() {
-					outSlice := ToSlice(outF)
-					if ord {
-						th.ExpectSorted(t, outSlice)
-					} else {
-						th.ExpectUnsorted(t, outSlice)
-					}
-				},
+				func() { outSliceT = ToSlice(outT) },
+				func() { outSliceF = ToSlice(outF) },
 			)
+
+			if ord {
+				th.ExpectSorted(t, outSliceT)
+				th.ExpectSorted(t, outSliceF)
+			} else {
+				th.ExpectUnsorted(t, outSliceT)
+				th.ExpectUnsorted(t, outSliceF)
+			}
 		})
 	}
 }
