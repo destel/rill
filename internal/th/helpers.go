@@ -3,6 +3,7 @@ package th
 import (
 	"sort"
 	"sync"
+	"testing"
 )
 
 func FromRange(start, end int) <-chan int {
@@ -57,4 +58,14 @@ func DoConcurrently(ff ...func()) {
 	}
 
 	wg.Wait()
+}
+
+func TestBothOrderings(t *testing.T, f func(t *testing.T, ord bool)) {
+	t.Run("unordered", func(t *testing.T) {
+		f(t, false)
+	})
+
+	t.Run("ordered", func(t *testing.T) {
+		f(t, true)
+	})
 }

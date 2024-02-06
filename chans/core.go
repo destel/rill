@@ -1,5 +1,7 @@
 package chans
 
+import "github.com/destel/rill/internal/common"
+
 func MapAndFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
 	if in == nil {
 		return nil
@@ -7,7 +9,7 @@ func MapAndFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
 
 	out := make(chan B)
 
-	loop(in, out, n, func(x A) {
+	common.Loop(in, out, n, func(x A) {
 		y, keep := f(x)
 		if keep {
 			out <- y
@@ -23,7 +25,7 @@ func OrderedMapAndFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-ch
 	}
 
 	out := make(chan B)
-	orderedLoop(in, out, n, func(a A, canWrite <-chan struct{}) {
+	common.OrderedLoop(in, out, n, func(a A, canWrite <-chan struct{}) {
 		y, keep := f(a)
 		<-canWrite
 		if keep {
@@ -65,7 +67,7 @@ func FlatMap[A, B any](in <-chan A, n int, f func(A) <-chan B) <-chan B {
 
 	out := make(chan B)
 
-	loop(in, out, n, func(a A) {
+	common.Loop(in, out, n, func(a A) {
 		for b := range f(a) {
 			out <- b
 		}
@@ -80,7 +82,7 @@ func OrderedFlatMap[A, B any](in <-chan A, n int, f func(A) <-chan B) <-chan B {
 	}
 
 	out := make(chan B)
-	orderedLoop(in, out, n, func(a A, canWrite <-chan struct{}) {
+	common.OrderedLoop(in, out, n, func(a A, canWrite <-chan struct{}) {
 		bb := f(a)
 		<-canWrite
 		for b := range bb {
@@ -104,12 +106,12 @@ func ForEach[A any](in <-chan A, n int, f func(A) bool) {
 		return
 	}
 
-	in, doBreak := breakable(in)
+	in, earlyExit := common.Break(in)
 	done := make(chan struct{})
 
-	loop(in, done, n, func(a A) {
+	common.Loop(in, done, n, func(a A) {
 		if !f(a) {
-			doBreak()
+			earlyExit()
 		}
 	})
 

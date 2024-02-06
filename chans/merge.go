@@ -2,6 +2,8 @@ package chans
 
 import (
 	"sync"
+
+	"github.com/destel/rill/internal/common"
 )
 
 func fastMerge[A any](ins []<-chan A) <-chan A {
@@ -97,7 +99,7 @@ func Split2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A, outFal
 	outT := make(chan A)
 	outF := make(chan A)
 
-	loop(in, done, n, func(x A) {
+	common.Loop(in, done, n, func(x A) {
 		if f(x) {
 			outT <- x
 		} else {
@@ -123,7 +125,7 @@ func OrderedSplit2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A,
 	outT := make(chan A)
 	outF := make(chan A)
 
-	orderedLoop(in, done, n, func(x A, canWrite <-chan struct{}) {
+	common.OrderedLoop(in, done, n, func(x A, canWrite <-chan struct{}) {
 		t := f(x)
 		<-canWrite
 		if t {

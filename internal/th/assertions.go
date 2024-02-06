@@ -114,3 +114,13 @@ func ExpectNotHang(t *testing.T, waitFor time.Duration, f func()) {
 		t.Errorf("test hanged")
 	}
 }
+
+func ExpectNotPanic(t *testing.T, f func()) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("unexpected panic: %v", r)
+		}
+	}()
+	f()
+}
