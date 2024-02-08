@@ -1,7 +1,7 @@
 package common
 
 import (
-	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,17 +34,15 @@ func TestLoops(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
 
 		for _, n := range []int{1, 5} {
-			t.Run(fmt.Sprint("correctness_", n), func(t *testing.T) {
+			t.Run(th.Name("correctness", n), func(t *testing.T) {
 				in := th.FromRange(0, 50)
 				out := make(chan int)
 
-				go func() {
-					universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
-						res := x + 1000
-						<-canWrite
-						out <- res
-					})
-				}()
+				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
+					res := x + 1000
+					<-canWrite
+					out <- res
+				})
 
 				outSlice := toSlice(out)
 
@@ -57,48 +55,55 @@ func TestLoops(t *testing.T) {
 				th.ExpectSlice(t, outSlice, expectedOutSlice)
 			})
 
-			t.Run(fmt.Sprint("concurrency_", n), func(t *testing.T) {
+			t.Run(th.Name("concurrency", n), func(t *testing.T) {
 				in := th.FromRange(0, 2*n)
 				out := make(chan int)
 
 				var inProgress th.InProgressCounter
 
-				go func() {
-					OrderedLoop(in, out, n, func(x int, canWrite <-chan struct{}) {
-						inProgress.Inc()
-						time.Sleep(1 * time.Second)
-						res := x + 1000
-						inProgress.Dec()
+				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
+					inProgress.Inc()
+					time.Sleep(1 * time.Second)
+					res := x + 1000
+					inProgress.Dec()
 
-						<-canWrite
-						out <- res
-					})
-				}()
+					<-canWrite
+					out <- res
+				})
 
 				drain(out)
 
 				th.ExpectValue(t, inProgress.Max(), n)
 			})
 
-			t.Run(fmt.Sprint("ordering_", n), func(t *testing.T) {
+			t.Run(th.Name("ordering", n), func(t *testing.T) {
 				// use huge channel to minimize the chance of accidental ordering
 				in := th.FromRange(0, 20000)
-				out := make(chan int)
+				done := make(chan struct{})
 
-				go func() {
-					universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
-						res := x + 1000
-						<-canWrite
-						out <- res
-					})
-				}()
+				var mu sync.Mutex
+				isOrdered := true
+				prev := -1
 
-				outSlice := toSlice(out)
+				universalLoop(ord, in, done, n, func(x int, canWrite <-chan struct{}) {
+					res := x + 1000
+					<-canWrite
+
+					mu.Lock()
+					defer mu.Unlock()
+
+					if res < prev {
+						isOrdered = false
+					}
+					prev = res
+				})
+
+				<-done
 
 				if ord || n == 1 {
-					th.ExpectSorted(t, outSlice)
+					th.ExpectValue(t, isOrdered, true)
 				} else {
-					th.ExpectUnsorted(t, outSlice)
+					th.ExpectValue(t, isOrdered, false)
 				}
 			})
 		}

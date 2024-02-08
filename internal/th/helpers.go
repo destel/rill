@@ -1,7 +1,9 @@
 package th
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -58,6 +60,13 @@ func DoConcurrently(ff ...func()) {
 	}
 
 	wg.Wait()
+}
+
+// Name generates a test name.
+// Works the same way as fmt.Sprint, but adds spaces between all arguments.
+func Name(args ...any) string {
+	res := fmt.Sprintln(args...)
+	return strings.TrimSpace(res)
 }
 
 func TestBothOrderings(t *testing.T, f func(t *testing.T, ord bool)) {

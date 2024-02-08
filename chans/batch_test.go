@@ -48,7 +48,7 @@ func TestBatch(t *testing.T) {
 		th.ExpectSlice(t, outSlice[3], []int{10})
 	})
 
-	t.Run("slow w/o timeout", func(t *testing.T) {
+	t.Run("slow wo timeout", func(t *testing.T) {
 		in := make(chan int)
 		go func() {
 			defer close(in)
