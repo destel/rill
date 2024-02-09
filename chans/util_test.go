@@ -60,7 +60,26 @@ func TestBuffer(t *testing.T) {
 }
 
 func TestFromToSlice(t *testing.T) {
-	s := []string{"foo", "bar", "baz"}
-	s1 := ToSlice(FromSlice(s))
-	th.ExpectSlice(t, s1, s)
+	t.Run("correctness", func(t *testing.T) {
+		inSlice := make([]int, 20)
+		for i := 0; i < 20; i++ {
+			inSlice[i] = i
+		}
+
+		outSlice := ToSlice(FromSlice(inSlice))
+
+		th.ExpectSlice(t, outSlice, inSlice)
+	})
+
+	t.Run("ordering", func(t *testing.T) {
+		inSlice := make([]int, 20000)
+		for i := 0; i < 20000; i++ {
+			inSlice[i] = i
+		}
+
+		outSlice := ToSlice(FromSlice(inSlice))
+
+		th.ExpectSorted(t, outSlice)
+	})
+
 }

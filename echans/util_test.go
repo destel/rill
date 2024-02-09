@@ -3,29 +3,53 @@ package echans
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/destel/rill/internal/th"
 )
 
-func TestToFromSlice(t *testing.T) {
+func TestFromToSlice(t *testing.T) {
 	t.Run("no errors", func(t *testing.T) {
-		s := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-		in := FromSlice(s)
+		inSlice := make([]int, 20)
+		for i := 0; i < 20; i++ {
+			inSlice[i] = i
+		}
 
-		s1, err := ToSlice(in)
+		in := FromSlice(inSlice)
+		outSlice, err := ToSlice(in)
+
+		th.ExpectSlice(t, outSlice, inSlice)
 		th.ExpectNoError(t, err)
-		th.ExpectSlice(t, s1, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
 	})
 
 	t.Run("errors", func(t *testing.T) {
-		s := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-		in := FromSlice(s)
+		inSlice := make([]int, 20)
+		for i := 0; i < 20; i++ {
+			inSlice[i] = i
+		}
 
-		in = replaceWithError(in, 4, fmt.Errorf("err1"))
-		in = replaceWithError(in, 8, fmt.Errorf("err2"))
+		in := FromSlice(inSlice)
+		in = replaceWithError(in, 15, fmt.Errorf("err15"))
+		in = replaceWithError(in, 18, fmt.Errorf("err18"))
 
-		s1, err := ToSlice(in)
-		th.ExpectError(t, err, "err1")
-		th.ExpectSlice(t, s1, []int{0, 1, 2, 3})
+		outSlice, err := ToSlice(in)
+
+		th.ExpectSlice(t, outSlice, inSlice[:15])
+		th.ExpectError(t, err, "err15")
+
+		time.Sleep(1 * time.Second)
+		th.ExpectClosedChan(t, in, 1*time.Second)
+	})
+
+	t.Run("ordering", func(t *testing.T) {
+		inSlice := make([]int, 20000)
+		for i := 0; i < 20000; i++ {
+			inSlice[i] = i
+		}
+
+		in := FromSlice(inSlice)
+		outSlice, _ := ToSlice(in)
+
+		th.ExpectSorted(t, outSlice)
 	})
 }

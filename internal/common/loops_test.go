@@ -119,7 +119,7 @@ func TestBreak(t *testing.T) {
 		th.ExpectNotPanic(t, earlyExit)
 	})
 
-	t.Run("unbroken", func(t *testing.T) {
+	t.Run("normal", func(t *testing.T) {
 		in := th.FromRange(0, 10000)
 		in1, _ := Break(in)
 
@@ -135,7 +135,7 @@ func TestBreak(t *testing.T) {
 		th.ExpectClosedChan(t, in, 1*time.Second)
 	})
 
-	t.Run("broken", func(t *testing.T) {
+	t.Run("early exit", func(t *testing.T) {
 		in := th.FromRange(0, 1000)
 		in1, earlyExit := Break(in)
 

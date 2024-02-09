@@ -3,16 +3,12 @@ package echans
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/destel/rill/internal/th"
 )
 
 func TestBatch(t *testing.T) {
-	t.Run("nil", func(t *testing.T) {
-		var nilChan chan Try[string]
-		th.ExpectValue(t, Batch(nilChan, 10, 10*time.Second), nil)
-	})
+	// most logic is covered by the chans pkg tests
 
 	t.Run("correctness", func(t *testing.T) {
 		in := Wrap(th.FromRange(0, 10), fmt.Errorf("err0"))
@@ -32,10 +28,7 @@ func TestBatch(t *testing.T) {
 }
 
 func TestUnbatch(t *testing.T) {
-	t.Run("nil", func(t *testing.T) {
-		var nilChan chan Try[[]string]
-		th.ExpectValue(t, Unbatch(nilChan), nil)
-	})
+	// most logic is covered by the chans pkg tests
 
 	t.Run("correctness", func(t *testing.T) {
 		in := FromSlice([][]int{{1, 2}, {3, 4}, {5, 6}, {7, 8}, {9, 10}})
