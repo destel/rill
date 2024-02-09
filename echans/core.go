@@ -64,10 +64,11 @@ func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-ch
 	})
 }
 
-// todo: think about design of this function
 func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
 	return chans.FlatMap(in, n, func(a Try[A]) <-chan Try[B] {
 		if a.Error != nil {
+			// More optimal implementation base on common.Loop is possible.
+			// Here we assume errors are rare.
 			errChan := make(chan Try[B], 1)
 			errChan <- Try[B]{Error: a.Error}
 			close(errChan)
@@ -78,9 +79,7 @@ func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan 
 	})
 }
 
-// todo: think about design of this function
 func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
-	// todo: use Unwrap + Wrap?
 	return chans.OrderedFlatMap(in, n, func(a Try[A]) <-chan Try[B] {
 		if a.Error != nil {
 			errChan := make(chan Try[B], 1)
