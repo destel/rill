@@ -91,55 +91,25 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 }
 
 func Split2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A, outFalse <-chan A) {
-	if in == nil {
-		return nil, nil
-	}
-
-	done := make(chan struct{})
-	outT := make(chan A)
-	outF := make(chan A)
-
-	common.Loop(in, done, n, func(x A) {
-		if f(x) {
-			outT <- x
+	outs := common.MapAndSplit(in, n, 2, func(a A) (A, int) {
+		if f(a) {
+			return a, 0
 		} else {
-			outF <- x
+			return a, 1
 		}
 	})
 
-	go func() {
-		<-done
-		close(outT)
-		close(outF)
-	}()
-
-	return outT, outF
+	return outs[0], outs[1]
 }
 
 func OrderedSplit2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A, outFalse <-chan A) {
-	if in == nil {
-		return nil, nil
-	}
-
-	done := make(chan struct{})
-	outT := make(chan A)
-	outF := make(chan A)
-
-	common.OrderedLoop(in, done, n, func(x A, canWrite <-chan struct{}) {
-		t := f(x)
-		<-canWrite
-		if t {
-			outT <- x
+	outs := common.OrderedMapAndSplit(in, n, 2, func(a A) (A, int) {
+		if f(a) {
+			return a, 0
 		} else {
-			outF <- x
+			return a, 1
 		}
 	})
 
-	go func() {
-		<-done
-		close(outT)
-		close(outF)
-	}()
-
-	return outT, outF
+	return outs[0], outs[1]
 }

@@ -4,96 +4,89 @@ import (
 	"sync"
 
 	"github.com/destel/rill/chans"
+	"github.com/destel/rill/internal/common"
 )
 
-func MapAndFilter[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
-	return chans.MapAndFilter(in, n, func(a Try[A]) (Try[B], bool) {
-		if a.Error != nil {
-			return Try[B]{Error: a.Error}, true // always keep errors
-		}
-
-		b, keep, err := f(a.V)
-		if err != nil {
-			return Try[B]{Error: err}, true // always keep errors
-		}
-
-		return Try[B]{V: b}, keep
-	})
-}
-
-func OrderedMapAndFilter[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
-	return chans.OrderedMapAndFilter(in, n, func(a Try[A]) (Try[B], bool) {
-		if a.Error != nil {
-			return Try[B]{Error: a.Error}, true // always keep errors
-		}
-
-		b, keep, err := f(a.V)
-		if err != nil {
-			return Try[B]{Error: err}, true // always keep errors
-		}
-
-		return Try[B]{V: b}, keep
-	})
-}
-
 func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
-	return MapAndFilter(in, n, func(a A) (B, bool, error) {
-		b, err := f(a)
-		return b, true, err
+	return common.MapOrFilter(in, n, func(a Try[A]) (Try[B], bool) {
+		if a.Error != nil {
+			return Try[B]{Error: a.Error}, true
+		}
+
+		b, err := f(a.V)
+		if err != nil {
+			return Try[B]{Error: err}, true
+		}
+
+		return Try[B]{V: b}, true
 	})
 }
 
 func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
-	return OrderedMapAndFilter(in, n, func(a A) (B, bool, error) {
-		b, err := f(a)
-		return b, true, err
+	return common.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[B], bool) {
+		if a.Error != nil {
+			return Try[B]{Error: a.Error}, true
+		}
+
+		b, err := f(a.V)
+		if err != nil {
+			return Try[B]{Error: err}, true
+		}
+
+		return Try[B]{V: b}, true
 	})
 }
 
 func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
-	return MapAndFilter(in, n, func(a A) (A, bool, error) {
-		keep, err := f(a)
-		return a, keep, err
+	return common.MapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
+		if a.Error != nil {
+			return a, true // never filter out errors
+		}
+
+		keep, err := f(a.V)
+		if err != nil {
+			return Try[A]{Error: err}, true // never filter out errors
+		}
+
+		return a, keep
 	})
 }
 
 func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
-	return OrderedMapAndFilter(in, n, func(a A) (A, bool, error) {
-		keep, err := f(a)
-		return a, keep, err
+	return common.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
+		if a.Error != nil {
+			return a, true // never filter out errors
+		}
+
+		keep, err := f(a.V)
+		if err != nil {
+			return Try[A]{Error: err}, true // never filter out errors
+		}
+
+		return a, keep
 	})
 }
 
 func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
-	return chans.FlatMap(in, n, func(a Try[A]) <-chan Try[B] {
+	return common.MapOrFlatMap(in, n, func(a Try[A]) (<-chan Try[B], Try[B]) {
 		if a.Error != nil {
-			// More optimal implementation base on common.Loop is possible.
-			// Here we assume errors are rare.
-			errChan := make(chan Try[B], 1)
-			errChan <- Try[B]{Error: a.Error}
-			close(errChan)
-			return errChan
+			return nil, Try[B]{Error: a.Error}
 		}
-
-		return f(a.V)
+		return f(a.V), Try[B]{}
 	})
 }
 
 func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
-	return chans.OrderedFlatMap(in, n, func(a Try[A]) <-chan Try[B] {
+	return common.OrderedMapOrFlatMap(in, n, func(a Try[A]) (<-chan Try[B], Try[B]) {
 		if a.Error != nil {
-			errChan := make(chan Try[B], 1)
-			errChan <- Try[B]{Error: a.Error}
-			close(errChan)
-			return errChan
+			return nil, Try[B]{Error: a.Error}
 		}
-
-		return f(a.V)
+		return f(a.V), Try[B]{}
 	})
 }
 
 func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
-	return chans.MapAndFilter(in, n, func(a Try[A]) (Try[A], bool) {
+	return common.MapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error == nil {
 			return a, true
 		}
@@ -108,7 +101,7 @@ func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 }
 
 func OrderedCatch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
-	return chans.OrderedMapAndFilter(in, n, func(a Try[A]) (Try[A], bool) {
+	return common.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error == nil {
 			return a, true
 		}
