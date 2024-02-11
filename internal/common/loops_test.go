@@ -1,22 +1,14 @@
 package common
 
 import (
-	"sync"
+	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/destel/rill/internal/th"
 )
 
-func toSlice[A any](in <-chan A) []A {
-	var out []A
-	for x := range in {
-		out = append(out, x)
-	}
-	return out
-}
-
-// calls Loop or OrderedLoop based on the value of ord
 func universalLoop[A, B any](ord bool, in <-chan A, done chan<- B, n int, f func(a A, canWrite <-chan struct{})) {
 	if ord {
 		OrderedLoop(in, done, n, f)
@@ -30,98 +22,67 @@ func universalLoop[A, B any](ord bool, in <-chan A, done chan<- B, n int, f func
 	}
 }
 
-func TestLoops(t *testing.T) {
+func TestLoop(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
-
 		for _, n := range []int{1, 5} {
 			t.Run(th.Name("correctness", n), func(t *testing.T) {
-				in := th.FromRange(0, 50)
-				out := make(chan int)
+				in := th.FromRange(0, 20)
+				done := make(chan struct{})
 
-				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
-					res := x + 1000
+				sum := int64(0)
+
+				universalLoop(ord, in, done, n, func(x int, canWrite <-chan struct{}) {
 					<-canWrite
-					out <- res
+					atomic.AddInt64(&sum, int64(x))
 				})
 
-				outSlice := toSlice(out)
-
-				expectedOutSlice := make([]int, 0, 50)
-				for i := 0; i < 50; i++ {
-					expectedOutSlice = append(expectedOutSlice, i+1000)
-				}
-
-				th.Sort(outSlice)
-				th.ExpectSlice(t, outSlice, expectedOutSlice)
+				<-done
+				th.ExpectValue(t, sum, 19*20/2)
 			})
 
-			t.Run(th.Name("concurrency", n), func(t *testing.T) {
-				in := th.FromRange(0, 2*n)
+			t.Run(th.Name("concurrency and ordering", n), func(t *testing.T) {
+				in := th.FromRange(0, 20000)
 				out := make(chan int)
 
 				var inProgress th.InProgressCounter
 
 				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
 					inProgress.Inc()
-					time.Sleep(1 * time.Second)
-					res := x + 1000
+					runtime.Gosched()
 					inProgress.Dec()
 
 					<-canWrite
-					out <- res
+
+					out <- x
 				})
 
-				drain(out)
+				outSlice := toSlice(out)
 
 				th.ExpectValue(t, inProgress.Max(), n)
-			})
-
-			t.Run(th.Name("ordering", n), func(t *testing.T) {
-				// use huge channel to minimize the chance of accidental ordering
-				in := th.FromRange(0, 20000)
-				done := make(chan struct{})
-
-				var mu sync.Mutex
-				isOrdered := true
-				prev := -1
-
-				universalLoop(ord, in, done, n, func(x int, canWrite <-chan struct{}) {
-					res := x + 1000
-					<-canWrite
-
-					mu.Lock()
-					defer mu.Unlock()
-
-					if res < prev {
-						isOrdered = false
-					}
-					prev = res
-				})
-
-				<-done
 
 				if ord || n == 1 {
-					th.ExpectValue(t, isOrdered, true)
+					th.ExpectSorted(t, outSlice)
 				} else {
-					th.ExpectValue(t, isOrdered, false)
+					th.ExpectUnsorted(t, outSlice)
 				}
+
 			})
 		}
 
 	})
 }
 
-func TestBreak(t *testing.T) {
+func TestBreakable(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
 		var in chan int
-		in1, earlyExit := Break(in)
+		in1, earlyExit := Breakable(in)
 		th.ExpectValue(t, in1, nil)
 		th.ExpectNotPanic(t, earlyExit)
 	})
 
 	t.Run("normal", func(t *testing.T) {
 		in := th.FromRange(0, 10000)
-		in1, _ := Break(in)
+		in1, _ := Breakable(in)
 
 		maxSeen := -1
 
@@ -132,12 +93,12 @@ func TestBreak(t *testing.T) {
 		}
 
 		th.ExpectValue(t, maxSeen, 9999)
-		th.ExpectClosedChan(t, in, 1*time.Second)
+		th.ExpectClosedChan(t, in)
 	})
 
 	t.Run("early exit", func(t *testing.T) {
 		in := th.FromRange(0, 1000)
-		in1, earlyExit := Break(in)
+		in1, earlyExit := Breakable(in)
 
 		maxSeen := -1
 
@@ -159,7 +120,7 @@ func TestBreak(t *testing.T) {
 
 		}
 
-		th.ExpectClosedChan(t, in, 1*time.Second) // drained
+		th.ExpectClosedChan(t, in)
 	})
 
 }

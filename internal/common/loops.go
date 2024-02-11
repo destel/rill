@@ -133,11 +133,10 @@ func drain[A any](in <-chan A) {
 	}
 }
 
-// Break takes a channel and forwards its items to a new channel.
-// It also returns a function that can be called to stop the forwarding.
-// After forwarding is stopped, all unconsumed items from the original channel are discarded.
-// This is typically used to implement early exit from some processing.
-func Break[A any](in <-chan A) (res <-chan A, doBreak func()) {
+// Breakable creates a new channel from channel in, copying elements until doBreak function is called.
+// doBreak halts copying and discards any remaining elements from in, closing the resulting channel.
+// Use this to stop channel processing when needed.
+func Breakable[A any](in <-chan A) (res <-chan A, doBreak func()) {
 	if in == nil {
 		return nil, func() {}
 	}

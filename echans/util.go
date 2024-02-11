@@ -27,14 +27,12 @@ func FromSlice[A any](slice []A) <-chan Try[A] {
 	return out
 }
 
-// todo: do early exit or no? what are use cases?
 func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 	var res []A
 
-	defer chans.DrainNB(in)
-
 	for x := range in {
 		if err := x.Error; err != nil {
+			chans.DrainNB(in)
 			return res, err
 		}
 		res = append(res, x.V)

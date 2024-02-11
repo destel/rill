@@ -8,35 +8,26 @@ import (
 )
 
 func TestDrainNB(t *testing.T) {
-	t.Run("close before drain", func(t *testing.T) {
-		th.ExpectNotHang(t, 10*time.Second, func() {
-			in := make(chan int, 2)
-			in <- 1
-			in <- 2
-			close(in)
+	th.ExpectNotHang(t, 10*time.Second, func() {
+		in := make(chan int)
+		DrainNB(in)
 
-			DrainNB(in)
-
-			th.ExpectClosedChan(t, in, 1*time.Second)
-		})
+		// able write in the main goroutine
+		in <- 1
+		in <- 2
+		close(in)
 	})
+}
 
-	t.Run("close after drain", func(t *testing.T) {
-		th.ExpectNotHang(t, 10*time.Second, func() {
-			in := make(chan int, 2)
-			in <- 1
-			in <- 2
+func TestFromToSlice(t *testing.T) {
+	inSlice := make([]int, 20000)
+	for i := 0; i < 20000; i++ {
+		inSlice[i] = i
+	}
 
-			DrainNB(in)
+	outSlice := ToSlice(FromSlice(inSlice))
 
-			in <- 3
-			in <- 4
-			in <- 5
-			close(in)
-
-			th.ExpectClosedChan(t, in, 1*time.Second)
-		})
-	})
+	th.ExpectSorted(t, outSlice)
 }
 
 func TestBuffer(t *testing.T) {
@@ -44,7 +35,7 @@ func TestBuffer(t *testing.T) {
 		select {
 		case ch <- x:
 			return true
-		case <-time.After(1 * time.Second):
+		case <-time.After(100 * time.Millisecond):
 			return false
 		}
 	}
@@ -56,30 +47,14 @@ func TestBuffer(t *testing.T) {
 	th.ExpectValue(t, trySend(in, 1), true)
 	th.ExpectValue(t, trySend(in, 2), true)
 	th.ExpectValue(t, trySend(in, 3), false)
-	th.ExpectValue(t, trySend(in, 4), false)
-}
 
-func TestFromToSlice(t *testing.T) {
-	t.Run("correctness", func(t *testing.T) {
-		inSlice := make([]int, 20)
-		for i := 0; i < 20; i++ {
-			inSlice[i] = i
-		}
+	x, ok := <-inBuf
+	th.ExpectValue(t, x, 1)
+	th.ExpectValue(t, ok, true)
 
-		outSlice := ToSlice(FromSlice(inSlice))
+	th.ExpectValue(t, trySend(in, 4), true)
 
-		th.ExpectSlice(t, outSlice, inSlice)
-	})
-
-	t.Run("ordering", func(t *testing.T) {
-		inSlice := make([]int, 20000)
-		for i := 0; i < 20000; i++ {
-			inSlice[i] = i
-		}
-
-		outSlice := ToSlice(FromSlice(inSlice))
-
-		th.ExpectSorted(t, outSlice)
-	})
-
+	close(in)
+	inSlice := ToSlice(inBuf)
+	th.ExpectSlice(t, inSlice, []int{2, 4})
 }

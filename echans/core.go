@@ -68,20 +68,20 @@ func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-ch
 }
 
 func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
-	return common.MapOrFlatMap(in, n, func(a Try[A]) (<-chan Try[B], Try[B]) {
+	return common.MapOrFlatMap(in, n, func(a Try[A]) (b Try[B], bb <-chan Try[B], flat bool) {
 		if a.Error != nil {
-			return nil, Try[B]{Error: a.Error}
+			return Try[B]{Error: a.Error}, nil, false
 		}
-		return f(a.V), Try[B]{}
+		return Try[B]{}, f(a.V), true
 	})
 }
 
 func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
-	return common.OrderedMapOrFlatMap(in, n, func(a Try[A]) (<-chan Try[B], Try[B]) {
+	return common.OrderedMapOrFlatMap(in, n, func(a Try[A]) (b Try[B], bb <-chan Try[B], flat bool) {
 		if a.Error != nil {
-			return nil, Try[B]{Error: a.Error}
+			return Try[B]{Error: a.Error}, nil, false
 		}
-		return f(a.V), Try[B]{}
+		return Try[B]{}, f(a.V), true
 	})
 }
 

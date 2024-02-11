@@ -28,15 +28,15 @@ func OrderedFilter[A any](in <-chan A, n int, f func(A) bool) <-chan A {
 
 func FlatMap[A, B any](in <-chan A, n int, f func(A) <-chan B) <-chan B {
 	var zero B
-	return common.MapOrFlatMap(in, n, func(a A) (<-chan B, B) {
-		return f(a), zero
+	return common.MapOrFlatMap(in, n, func(a A) (b B, bb <-chan B, flat bool) {
+		return zero, f(a), true
 	})
 }
 
 func OrderedFlatMap[A, B any](in <-chan A, n int, f func(A) <-chan B) <-chan B {
 	var zero B
-	return common.OrderedMapOrFlatMap(in, n, func(a A) (<-chan B, B) {
-		return f(a), zero
+	return common.OrderedMapOrFlatMap(in, n, func(a A) (b B, bb <-chan B, flat bool) {
+		return zero, f(a), true
 	})
 }
 
@@ -53,7 +53,7 @@ func ForEach[A any](in <-chan A, n int, f func(A) bool) {
 		return
 	}
 
-	in, earlyExit := common.Break(in)
+	in, earlyExit := common.Breakable(in)
 	done := make(chan struct{})
 
 	common.Loop(in, done, n, func(a A) {

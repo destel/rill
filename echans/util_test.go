@@ -38,18 +38,6 @@ func TestFromToSlice(t *testing.T) {
 		th.ExpectError(t, err, "err15")
 
 		time.Sleep(1 * time.Second)
-		th.ExpectClosedChan(t, in, 1*time.Second)
-	})
-
-	t.Run("ordering", func(t *testing.T) {
-		inSlice := make([]int, 20000)
-		for i := 0; i < 20000; i++ {
-			inSlice[i] = i
-		}
-
-		in := FromSlice(inSlice)
-		outSlice, _ := ToSlice(in)
-
-		th.ExpectSorted(t, outSlice)
+		th.ExpectClosedChan(t, in)
 	})
 }

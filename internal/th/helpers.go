@@ -19,7 +19,7 @@ func FromRange(start, end int) <-chan int {
 	return ch
 }
 
-// Infinite generate infinite sequence of natural numbers. It stops when stop channel is closed.
+// InfiniteChan generates infinite sequence of natural numbers. It stops when stop channel is closed.
 func InfiniteChan(stop <-chan struct{}) <-chan int {
 	ch := make(chan int)
 	go func() {
@@ -51,11 +51,26 @@ func DoConcurrently(ff ...func()) {
 	var wg sync.WaitGroup
 
 	for _, f := range ff {
-		f1 := f
+		f := f
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			f1()
+			f()
+		}()
+	}
+
+	wg.Wait()
+}
+
+func DoConcurrentlyN(n int, f func(i int)) {
+	var wg sync.WaitGroup
+
+	for i := 0; i < n; i++ {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			f(i)
 		}()
 	}
 

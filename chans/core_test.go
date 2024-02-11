@@ -197,14 +197,21 @@ func TestForEach(t *testing.T) {
 				done := make(chan struct{})
 				defer close(done)
 
+				sum := int64(0)
+
 				in := th.InfiniteChan(done)
 
 				ForEach(in, n, func(x int) bool {
 					if x == 100 {
 						return false
 					}
+					atomic.AddInt64(&sum, int64(x))
 					return true
 				})
+
+				if sum < 99*100/2 {
+					t.Errorf("expected at least 100 iterations to complete")
+				}
 			})
 		})
 
@@ -212,30 +219,43 @@ func TestForEach(t *testing.T) {
 			in := th.FromRange(0, 20000)
 
 			var mu sync.Mutex
-			isOrdered := true
-			prev := -1
+			outSlice := make([]int, 0, 20000)
 
 			ForEach(in, n, func(x int) bool {
 				mu.Lock()
-				defer mu.Unlock()
-
-				if x < prev {
-					isOrdered = false
-				}
-				prev = x
-
+				outSlice = append(outSlice, x)
+				mu.Unlock()
 				return true
 			})
 
 			if n == 1 {
-				th.ExpectValue(t, isOrdered, true)
+				th.ExpectSorted(t, outSlice)
 			} else {
-				th.ExpectValue(t, isOrdered, false)
+				th.ExpectUnsorted(t, outSlice)
 			}
 		})
 
 	}
 
+	t.Run("deterministic when n=1", func(t *testing.T) {
+		in := th.FromRange(0, 100)
+
+		maxX := -1
+
+		ForEach(in, 1, func(x int) bool {
+			if x == 10 {
+				return false
+			}
+
+			if x > maxX {
+				maxX = x
+			}
+
+			return true
+		})
+
+		th.ExpectValue(t, maxX, 9)
+	})
 }
 
 // Compare ordered and unordered map in a single threaded scenario

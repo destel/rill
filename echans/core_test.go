@@ -348,8 +348,11 @@ func TestForEach(t *testing.T) {
 				})
 
 				th.ExpectError(t, err, "err100")
-				if sum == 0 {
-					t.Errorf("expected at least few iterations to complete")
+
+				fmt.Println(sum, 99*100/2)
+
+				if sum < 99*100/2 {
+					t.Errorf("expected at least 100 iterations to complete")
 				}
 			})
 		})
@@ -371,8 +374,8 @@ func TestForEach(t *testing.T) {
 				})
 
 				th.ExpectError(t, err, "err100")
-				if sum == 0 {
-					t.Errorf("expected at least few iterations to complete")
+				if sum < 99*100/2 {
+					t.Errorf("expected at least 100 iterations to complete")
 				}
 			})
 		})
@@ -381,42 +384,42 @@ func TestForEach(t *testing.T) {
 			in := Wrap(th.FromRange(0, 20000), nil)
 
 			var mu sync.Mutex
-			isOrdered := true
-			prev := -1
+			outSlice := make([]int, 0, 20000)
 
 			err := ForEach(in, n, func(x int) error {
 				mu.Lock()
-				defer mu.Unlock()
-
-				if x < prev {
-					isOrdered = false
-				}
-				prev = x
-
+				outSlice = append(outSlice, x)
+				mu.Unlock()
 				return nil
 			})
 
 			th.ExpectNoError(t, err)
 			if n == 1 {
-				th.ExpectValue(t, isOrdered, true)
+				th.ExpectSorted(t, outSlice)
 			} else {
-				th.ExpectValue(t, isOrdered, false)
+				th.ExpectUnsorted(t, outSlice)
 			}
 		})
 
 	}
 
-	t.Run("first error is returned when n is 1", func(t *testing.T) {
+	t.Run("deterministic when n=1", func(t *testing.T) {
 		in := Wrap(th.FromRange(0, 100), nil)
 
 		in = replaceWithError(in, 10, fmt.Errorf("err10"))
 		in = replaceWithError(in, 11, fmt.Errorf("err11"))
 		in = replaceWithError(in, 12, fmt.Errorf("err12"))
 
+		maxX := -1
+
 		err := ForEach(in, 1, func(x int) error {
+			if x > maxX {
+				maxX = x
+			}
 			return nil
 		})
 
+		th.ExpectValue(t, maxX, 9)
 		th.ExpectError(t, err, "err10")
 	})
 }

@@ -33,21 +33,6 @@ type ordered interface {
 	~int | ~string
 }
 
-func isSortedChan[A ordered](ch <-chan A) bool {
-	prev, ok := <-ch
-	if !ok {
-		return true
-	}
-
-	sorted := true
-	for x := range ch {
-		sorted = sorted && prev <= x
-		prev = x
-	}
-
-	return sorted
-}
-
 func ExpectSorted[T ordered](t *testing.T, arr []T) {
 	t.Helper()
 	isSorted := sort.SliceIsSorted(arr, func(i, j int) bool {
@@ -68,15 +53,31 @@ func ExpectUnsorted[T ordered](t *testing.T, arr []T) {
 	}
 }
 
-func ExpectClosedChan[A any](t *testing.T, ch <-chan A, waitFor time.Duration) {
+func ExpectClosedChan[A any](t *testing.T, ch <-chan A) {
 	t.Helper()
 	select {
 	case x, ok := <-ch:
 		if ok {
 			t.Errorf("expected channel to be closed, but got %v", x)
 		}
-	case <-time.After(waitFor):
-		t.Errorf("channel was not closed after %v", waitFor)
+	default:
+		t.Errorf("expected channel to be closed, but it's blocked")
+	}
+}
+
+func ExpectNeverClosedChan[A any](t *testing.T, ch <-chan A, waitFor time.Duration) {
+	t.Helper()
+	timeout := time.After(waitFor)
+	for {
+		select {
+		case _, ok := <-ch:
+			if !ok {
+				t.Errorf("expected channel to be never closed")
+				return
+			}
+		case <-timeout:
+			return
+		}
 	}
 }
 
