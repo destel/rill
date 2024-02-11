@@ -45,26 +45,13 @@ func TestMerge(t *testing.T) {
 
 			out := Merge(ins...)
 
-			timer := time.After(1 * time.Second)
-			for {
-				select {
-				case _, ok := <-out:
-					if !ok {
-						t.Errorf("hang expected, but channel was closed")
-					}
-
-				case <-timer:
-					return
-				}
-
-			}
-
+			th.ExpectNeverClosedChan(t, out, 1*time.Second)
 		})
 
 	}
 }
 
-func universalSplit2[A any](ord bool, in <-chan A, n int, f func(A) bool) (<-chan A, <-chan A) {
+func universalSplit2[A any](ord bool, in <-chan A, n int, f func(A) int) (<-chan A, <-chan A) {
 	if ord {
 		return OrderedSplit2(in, n, f)
 	}
@@ -76,61 +63,62 @@ func TestSplit2(t *testing.T) {
 		for _, n := range []int{1, 5} {
 
 			t.Run(th.Name("nil", n), func(t *testing.T) {
-				outT, outF := universalSplit2(ord, nil, n, func(x int) bool { return true })
-				th.ExpectValue(t, outT, nil)
-				th.ExpectValue(t, outF, nil)
+				out0, out1 := universalSplit2(ord, nil, n, func(x int) int { return 0 })
+				th.ExpectValue(t, out0, nil)
+				th.ExpectValue(t, out1, nil)
 			})
 
 			t.Run(th.Name("correctness", n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
-				outT, outF := universalSplit2(ord, in, n, func(x int) bool {
-					return x%3 == 0
+				out0, out1 := universalSplit2(ord, in, n, func(x int) int {
+					return x % 3
 				})
 
-				expectedSliceT := make([]int, 0, 20)
-				expectedSliceF := make([]int, 0, 20)
+				expectedSlice0 := make([]int, 0, 20)
+				expectedSlice1 := make([]int, 0, 20)
 				for i := 0; i < 20; i++ {
-					if i%3 == 0 {
-						expectedSliceT = append(expectedSliceT, i)
-					} else {
-						expectedSliceF = append(expectedSliceF, i)
+					switch i % 3 {
+					case 0:
+						expectedSlice0 = append(expectedSlice0, i)
+					case 1:
+						expectedSlice1 = append(expectedSlice1, i)
 					}
 				}
 
-				var outSliceT, outSliceF []int
+				var outSlice0, outSlice1 []int
 
 				th.DoConcurrently(
-					func() { outSliceT = ToSlice(outT) },
-					func() { outSliceF = ToSlice(outF) },
+					func() { outSlice0 = ToSlice(out0) },
+					func() { outSlice1 = ToSlice(out1) },
 				)
 
-				th.Sort(outSliceT)
-				th.Sort(outSliceF)
+				th.Sort(outSlice0)
+				th.Sort(outSlice1)
 
-				th.ExpectSlice(t, outSliceT, expectedSliceT)
-				th.ExpectSlice(t, outSliceF, expectedSliceF)
+				th.ExpectSlice(t, outSlice0, expectedSlice0)
+				th.ExpectSlice(t, outSlice1, expectedSlice1)
 			})
 
 			t.Run(th.Name("ordering", n), func(t *testing.T) {
 				in := th.FromRange(0, 20000)
 
-				outT, outF := universalSplit2(ord, in, n, func(x int) bool {
-					return x%2 == 0
+				out0, out1 := universalSplit2(ord, in, n, func(x int) int {
+					return x % 2
 				})
 
-				var outSliceT, outSliceF []int
+				var outSlice0, outSlice1 []int
 
 				th.DoConcurrently(
-					func() { outSliceT = ToSlice(outT) },
-					func() { outSliceF = ToSlice(outF) },
+					func() { outSlice0 = ToSlice(out0) },
+					func() { outSlice1 = ToSlice(out1) },
 				)
 
 				if ord || n == 1 {
-					th.ExpectSorted(t, outSliceT)
-					th.ExpectSorted(t, outSliceF)
+					th.ExpectSorted(t, outSlice0)
+					th.ExpectSorted(t, outSlice1)
 				} else {
-					th.ExpectUnsorted(t, outSliceT)
-					th.ExpectUnsorted(t, outSliceF)
+					th.ExpectUnsorted(t, outSlice0)
+					th.ExpectUnsorted(t, outSlice1)
 				}
 			})
 
