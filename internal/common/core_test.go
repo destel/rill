@@ -166,6 +166,10 @@ func TestOrderedMapAndSplit(t *testing.T) {
 				})
 
 				t.Run(th.Name("correctness", numOuts, n), func(t *testing.T) {
+					// idea: split input into numOuts+1 groups
+					// - first numOuts groups are split into numOuts outputs
+					// - next group is filtered out
+
 					in := th.FromRange(0, 20*(numOuts+1))
 					outs := universalMapAndSplit(ord, in, numOuts, n, func(x int) (string, int) {
 						outId := x % (numOuts + 1)
@@ -194,10 +198,10 @@ func TestOrderedMapAndSplit(t *testing.T) {
 				})
 
 				t.Run(th.Name("ordering", numOuts, n), func(t *testing.T) {
-					in := th.FromRange(0, 10000*(numOuts+1))
+					in := th.FromRange(0, 10000*numOuts)
 
 					outs := universalMapAndSplit(ord, in, numOuts, n, func(x int) (string, int) {
-						outID := x % (numOuts + 1)
+						outID := x % numOuts
 						return fmt.Sprintf("%06d", x), outID
 					})
 

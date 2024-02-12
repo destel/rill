@@ -75,6 +75,10 @@ func TestSplit2(t *testing.T) {
 				})
 
 				t.Run(th.Name("correctness", numOuts, n), func(t *testing.T) {
+					// idea: split input into numOuts+1 groups
+					// - first numOuts groups are split into numOuts outputs
+					// - next group is filtered out
+
 					in := th.FromRange(0, 20*(numOuts+1))
 					outs := universalSplit(ord, in, numOuts, n, func(x int) int {
 						return x % (numOuts + 1)
@@ -102,10 +106,10 @@ func TestSplit2(t *testing.T) {
 				})
 
 				t.Run(th.Name("ordering", numOuts, n), func(t *testing.T) {
-					in := th.FromRange(0, 10000*(numOuts+1))
+					in := th.FromRange(0, 10000*numOuts)
 
 					outs := universalSplit(ord, in, numOuts, n, func(x int) int {
-						return x % (numOuts + 1)
+						return x % numOuts
 					})
 
 					outSlices := make([][]int, numOuts)
