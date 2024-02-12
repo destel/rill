@@ -1,6 +1,9 @@
 package echans
 
-import "github.com/destel/rill/chans"
+import (
+	"github.com/destel/rill/chans"
+	"github.com/destel/rill/internal/common"
+)
 
 type Try[A any] struct {
 	V     A
@@ -29,16 +32,15 @@ func Wrap[A any](values <-chan A, err error) <-chan Try[A] {
 }
 
 func WrapAsync[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
-	//if values == nil && errs == nil {
-	//	return nil
-	//}
-
 	wrappedValues := chans.Map(values, 1, func(a A) Try[A] {
 		return Try[A]{V: a}
 	})
 
-	wrappedErrs := chans.Map(errs, 1, func(e error) Try[A] {
-		return Try[A]{Error: e}
+	wrappedErrs := common.MapOrFilter(errs, 1, func(err error) (Try[A], bool) {
+		if err == nil {
+			return Try[A]{}, false
+		}
+		return Try[A]{Error: err}, true
 	})
 
 	if wrappedValues == nil {

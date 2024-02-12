@@ -15,131 +15,101 @@ func TestWrap(t *testing.T) {
 	})
 
 	t.Run("no error", func(t *testing.T) {
-		in := th.FromRange(0, 20)
+		var inSlice []int
+		var expectedOutSlice []Try[int]
 
-		out := Wrap(in, nil)
-
-		outSlice, errSlice := toSliceAndErrors(out)
-
-		expectedSlice := make([]int, 0, 20)
-		for i := 0; i < 20; i++ {
-			expectedSlice = append(expectedSlice, i)
+		for i := 0; i < 20000; i++ {
+			inSlice = append(inSlice, i)
+			expectedOutSlice = append(expectedOutSlice, Try[int]{V: i})
 		}
 
-		th.ExpectSlice(t, outSlice, expectedSlice)
-		th.ExpectSlice(t, errSlice, nil)
+		wrapped := Wrap(chans.FromSlice(inSlice), nil)
+		outSlice := chans.ToSlice(wrapped)
+
+		th.ExpectSlice(t, outSlice, expectedOutSlice)
 	})
 
 	t.Run("with error", func(t *testing.T) {
-		in := th.FromRange(0, 20)
+		var inSlice []int
+		var expectedOutSlice []Try[int]
 
-		out := Wrap(in, fmt.Errorf("err0"))
+		err := fmt.Errorf("err")
+		expectedOutSlice = append(expectedOutSlice, Try[int]{Error: err})
 
-		if wErr := <-out; wErr.Error == nil || wErr.Error.Error() != "err0" {
-			t.Errorf("expected first output to be error, but got %v", wErr)
+		for i := 0; i < 20000; i++ {
+			inSlice = append(inSlice, i)
+			expectedOutSlice = append(expectedOutSlice, Try[int]{V: i})
 		}
 
-		outSlice, errSlice := toSliceAndErrors(out)
+		wrapped := Wrap(chans.FromSlice(inSlice), err)
+		outSlice := chans.ToSlice(wrapped)
 
-		expectedSlice := make([]int, 0, 20)
-		for i := 0; i < 20; i++ {
-			expectedSlice = append(expectedSlice, i)
-		}
-
-		th.ExpectSlice(t, outSlice, expectedSlice)
-		th.ExpectSlice(t, errSlice, nil) // no more errors
+		th.ExpectSlice(t, outSlice, expectedOutSlice)
 	})
-
-	t.Run("ordering", func(t *testing.T) {
-		in := th.FromRange(0, 20000)
-
-		out := Wrap(in, nil)
-		outSLice, _ := toSliceAndErrors(out)
-
-		th.ExpectSorted(t, outSLice)
-	})
-}
-
-func doWrapUnwrapAsync[A any](values []A, errs []error) ([]A, []error) {
-	var valuesChan <-chan A
-	var errsChan <-chan error
-
-	if values != nil {
-		valuesChan = chans.FromSlice(values)
-	}
-	if errs != nil {
-		errsChan = chans.FromSlice(errs)
-	}
-
-	outValuesChan, outErrsChan := Unwrap(WrapAsync(valuesChan, errsChan))
-
-	outValues := make([]A, 0, len(values))
-	outErrs := make([]error, 0, len(errs))
-
-	th.DoConcurrently(
-		func() { outValues = chans.ToSlice(outValuesChan) },
-		func() { outErrs = chans.ToSlice(outErrsChan) },
-	)
-
-	return outValues, outErrs
 }
 
 func TestWrapUnwrapAsync(t *testing.T) {
-	t.Run("nil", func(t *testing.T) {
-		wrapped := WrapAsync[int](nil, nil)
-		th.ExpectValue(t, wrapped, nil)
+	// slices -> FromSlice -> WrapAsync -> Unwrap -> ToSlice -> compare
+	runTest := func(name string, valsIn []int, errsIn []error) {
+		t.Run(name, func(t *testing.T) {
+			var valsInChan <-chan int
+			if len(valsIn) > 0 {
+				valsInChan = chans.FromSlice(valsIn)
+			}
 
-		vals, errs := Unwrap[int](nil)
-		th.ExpectValue(t, vals, nil)
-		th.ExpectValue(t, errs, nil)
-	})
+			var errsInChan <-chan error
+			if len(errsIn) > 0 {
+				errsInChan = chans.FromSlice(errsIn)
+			}
 
-	t.Run("no error", func(t *testing.T) {
-		values := make([]int, 20)
-		for i := 0; i < 20; i++ {
-			values[i] = i
+			valsOutChan, errsOutChan := Unwrap(WrapAsync(valsInChan, errsInChan))
+
+			if valsInChan == nil && errsInChan == nil {
+				th.ExpectValue(t, valsOutChan, nil)
+				th.ExpectValue(t, errsOutChan, nil)
+				return
+			}
+
+			var valsOut []int
+			var errsOut []error
+
+			th.DoConcurrently(
+				func() { valsOut = chans.ToSlice(valsOutChan) },
+				func() { errsOut = chans.ToSlice(errsOutChan) },
+			)
+
+			// nil errors are not expected in the output
+			var expectedErrors []error
+			for _, err := range errsIn {
+				if err != nil {
+					expectedErrors = append(expectedErrors, err)
+				}
+			}
+
+			th.ExpectSlice(t, valsOut, valsIn)
+			th.ExpectSlice(t, errsOut, expectedErrors)
+		})
+	}
+
+	makeSlice := func(n int) []int {
+		out := make([]int, n)
+		for i := 0; i < n; i++ {
+			out[i] = i
 		}
+		return out
+	}
 
-		outValues, outErrs := doWrapUnwrapAsync(values, nil)
-
-		th.ExpectSlice(t, outValues, values)
-		th.ExpectSlice(t, outErrs, nil)
-	})
-
-	t.Run("only errors", func(t *testing.T) {
-		errs := make([]error, 20)
-		for i := 0; i < 20; i++ {
-			errs[i] = fmt.Errorf("err%03d", i)
+	makeErrSlice := func(n int) []error {
+		out := make([]error, n)
+		for i := 0; i < n; i++ {
+			out[i] = fmt.Errorf("err%06d", i)
 		}
+		return out
+	}
 
-		outValues, outErrs := doWrapUnwrapAsync[int](nil, errs)
-
-		th.ExpectSlice(t, outValues, nil)
-		th.ExpectSlice(t, outErrs, errs)
-	})
-
-	t.Run("values and errors", func(t *testing.T) {
-		values := make([]int, 20)
-		errs := make([]error, 20)
-		for i := 0; i < 20; i++ {
-			values[i] = i
-			errs[i] = fmt.Errorf("err%03d", i)
-		}
-
-		outValues, outErrs := doWrapUnwrapAsync(values, errs)
-
-		th.ExpectSlice(t, outValues, values)
-		th.ExpectSlice(t, outErrs, errs)
-	})
-
-	t.Run("ordering", func(t *testing.T) {
-		values := make([]int, 20000)
-		for i := 0; i < 20000; i++ {
-			values[i] = i
-		}
-
-		outValues, _ := doWrapUnwrapAsync(values, nil)
-
-		th.ExpectSorted(t, outValues)
-	})
+	runTest("nil", nil, nil)
+	runTest("no errors", makeSlice(10000), nil)
+	runTest("only errors", nil, makeErrSlice(10000))
+	runTest("values and errors", makeSlice(10000), makeErrSlice(10000))
+	runTest("values and nil errors", makeSlice(10), []error{nil, nil, fmt.Errorf("err"), nil})
 }

@@ -77,7 +77,7 @@ func OrderedMapOrFlatMap[A, B any](in <-chan A, n int, f func(A) (b B, bb <-chan
 	return out
 }
 
-func MapAndSplit[A, B any](in <-chan A, n int, numOuts int, f func(A) (B, int)) []<-chan B {
+func MapAndSplit[A, B any](in <-chan A, numOuts int, n int, f func(A) (B, int)) []<-chan B {
 	if in == nil {
 		return make([]<-chan B, numOuts)
 	}
@@ -109,7 +109,7 @@ func MapAndSplit[A, B any](in <-chan A, n int, numOuts int, f func(A) (B, int)) 
 	return outsReadOnly
 }
 
-func OrderedMapAndSplit[A, B any](in <-chan A, n int, numOuts int, f func(A) (B, int)) []<-chan B {
+func OrderedMapAndSplit[A, B any](in <-chan A, numOuts int, n int, f func(A) (B, int)) []<-chan B {
 	if in == nil {
 		return make([]<-chan B, numOuts)
 	}

@@ -91,14 +91,14 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 }
 
 func Split2[A any](in <-chan A, n int, f func(A) int) (out0 <-chan A, out1 <-chan A) {
-	outs := common.MapAndSplit(in, n, 2, func(a A) (A, int) {
+	outs := common.MapAndSplit(in, 2, n, func(a A) (A, int) {
 		return a, f(a)
 	})
 	return outs[0], outs[1]
 }
 
 func OrderedSplit2[A any](in <-chan A, n int, f func(A) int) (out0 <-chan A, out1 <-chan A) {
-	outs := common.OrderedMapAndSplit(in, n, 2, func(a A) (A, int) {
+	outs := common.OrderedMapAndSplit(in, 2, n, func(a A) (A, int) {
 		return a, f(a)
 	})
 	return outs[0], outs[1]
