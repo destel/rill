@@ -179,12 +179,12 @@ func TestOrderedMapAndSplit(t *testing.T) {
 
 					expectedSlices := make([][]string, 3)
 					for i := 0; i < 20*(numOuts+1); i++ {
-						outId := i % (numOuts + 1)
-						if outId >= numOuts {
+						outID := i % (numOuts + 1)
+						if outID >= numOuts {
 							continue
 						}
 
-						expectedSlices[outId] = append(expectedSlices[outId], fmt.Sprintf("%03d", i))
+						expectedSlices[outID] = append(expectedSlices[outID], fmt.Sprintf("%03d", i))
 					}
 
 					for i := range outSlices {
@@ -197,12 +197,12 @@ func TestOrderedMapAndSplit(t *testing.T) {
 					in := th.FromRange(0, 10000*(numOuts+1))
 
 					outs := universalMapAndSplit(ord, in, numOuts, n, func(x int) (string, int) {
-						outId := x % (numOuts + 1)
-						return fmt.Sprintf("%06d", x), outId
+						outID := x % (numOuts + 1)
+						return fmt.Sprintf("%06d", x), outID
 					})
 
 					outSlices := make([][]string, numOuts)
-					th.DoConcurrentlyN(len(outs), func(i int) {
+					th.DoConcurrentlyN(numOuts, func(i int) {
 						outSlices[i] = toSlice(outs[i])
 					})
 

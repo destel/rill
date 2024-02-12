@@ -87,12 +87,12 @@ func TestSplit2(t *testing.T) {
 
 					expectedSlices := make([][]int, 3)
 					for i := 0; i < 20*(numOuts+1); i++ {
-						outId := i % (numOuts + 1)
-						if outId >= numOuts {
+						outID := i % (numOuts + 1)
+						if outID >= numOuts {
 							continue
 						}
 
-						expectedSlices[outId] = append(expectedSlices[outId], i)
+						expectedSlices[outID] = append(expectedSlices[outID], i)
 					}
 
 					for i := range outSlices {
