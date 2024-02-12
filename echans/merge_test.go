@@ -14,103 +14,121 @@ func universalSplit2[A any](ord bool, in <-chan Try[A], n int, f func(A) (int, e
 	return Split2(in, n, f)
 }
 
+func universalSplit[A any](ord bool, in <-chan Try[A], numOuts int, n int, f func(A) (int, error)) []<-chan Try[A] {
+	switch {
+	case !ord && numOuts == 2:
+		out0, out1 := Split2(in, n, f)
+		return []<-chan Try[A]{out0, out1}
+	case ord && numOuts == 2:
+		out0, out1 := OrderedSplit2(in, n, f)
+		return []<-chan Try[A]{out0, out1}
+	default:
+		panic("unsupported")
+	}
+}
+
 func TestSplit2(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
 		for _, n := range []int{1, 5} {
+			for _, numOuts := range []int{2} {
 
-			t.Run(th.Name("nil", n), func(t *testing.T) {
-				out0, out1 := universalSplit2(ord, nil, 5, func(string) (int, error) { return 0, nil })
-				th.ExpectValue(t, out0, nil)
-				th.ExpectValue(t, out1, nil)
-
-			})
-
-			t.Run(th.Name("correctness", n), func(t *testing.T) {
-				in := Wrap(th.FromRange(0, 200), nil)
-				in = OrderedMap(in, 1, func(x int) (int, error) {
-					if x%5 == 4 {
-						return 0, fmt.Errorf("err%03d", x)
-					}
-					return x, nil
+				t.Run(th.Name("nil", numOuts, n), func(t *testing.T) {
+					outs := universalSplit(ord, nil, numOuts, n, func(string) (int, error) { return 0, nil })
+					th.ExpectSlice(t, outs, make([]<-chan Try[string], numOuts))
 				})
 
-				outT, outF := universalSplit2(ord, in, n, func(x int) (int, error) {
-					if x%5 == 3 {
-						return 0, fmt.Errorf("err%03d", x)
+				t.Run(th.Name("correctness", numOuts, n), func(t *testing.T) {
+					// idea: split input into numOuts+3 groups
+					// - first numOuts groups are split into numOuts outputs
+					// - next group is filtered out
+					// - next group would be errors even before splitting
+					// - next group would cause error during splitting
+
+					in := Wrap(th.FromRange(0, 20*(numOuts+3)), nil)
+					in = OrderedMap(in, 1, func(x int) (int, error) {
+						outID := x % (numOuts + 3)
+						if outID == numOuts+2 {
+							return x, fmt.Errorf("err%03d", x)
+						}
+						return x, nil
+					})
+
+					outs := universalSplit(ord, in, numOuts, n, func(x int) (int, error) {
+						outID := x % (numOuts + 3)
+						if outID == numOuts+1 {
+							return 0, fmt.Errorf("err%03d", x)
+						}
+						return outID, nil
+					})
+
+					outSlices := make([][]int, numOuts)
+					errSlices := make([][]string, numOuts)
+
+					th.DoConcurrentlyN(numOuts, func(i int) {
+						outSlices[i], errSlices[i] = toSliceAndErrors(outs[i])
+					})
+
+					expectedOutSlices := make([][]int, numOuts)
+					expectedAllErrsSlice := make([]string, 0, numOuts)
+
+					for i := 0; i < 20*(numOuts+3); i++ {
+						outID := i % (numOuts + 3)
+						if outID > numOuts {
+							expectedAllErrsSlice = append(expectedAllErrsSlice, fmt.Sprintf("err%03d", i))
+						}
+						if outID < numOuts {
+							expectedOutSlices[outID] = append(expectedOutSlices[outID], i)
+						}
 					}
-					return x % 5, nil
+
+					var allErrsSlice []string
+					for _, errSlice := range errSlices {
+						allErrsSlice = append(allErrsSlice, errSlice...)
+						if len(errSlice) == 0 {
+							t.Errorf("expected at least one error in each channel")
+						}
+					}
+
+					th.Sort(allErrsSlice)
+					th.ExpectSlice(t, allErrsSlice, expectedAllErrsSlice)
+
+					for i := range outSlices {
+						th.Sort(outSlices[i])
+						th.ExpectSlice(t, outSlices[i], expectedOutSlices[i])
+					}
+
 				})
 
-				expectedSlice0 := make([]int, 0, 200)
-				expectedSlice1 := make([]int, 0, 200)
-				expectedAllErrsSLice := make([]string, 0, 200)
+				t.Run(th.Name("ordering", numOuts, n), func(t *testing.T) {
+					in := Wrap(th.FromRange(0, 10000*(numOuts+1)), nil)
 
-				for i := 0; i < 200; i++ {
-					switch i % 5 {
-					case 0:
-						expectedSlice0 = append(expectedSlice0, i)
-					case 1:
-						expectedSlice1 = append(expectedSlice1, i)
-					case 3, 4:
-						expectedAllErrsSLice = append(expectedAllErrsSLice, fmt.Sprintf("err%03d", i))
+					outs := universalSplit(ord, in, numOuts, n, func(x int) (int, error) {
+						outID := x % (numOuts + 1)
+						if outID == numOuts {
+							return 0, fmt.Errorf("err%06d", x)
+						}
+						return outID, nil
+					})
+
+					outSlices := make([][]int, numOuts)
+					errSlices := make([][]string, numOuts)
+
+					th.DoConcurrentlyN(len(outs), func(i int) {
+						outSlices[i], errSlices[i] = toSliceAndErrors(outs[i])
+					})
+
+					for i := range outSlices {
+						if ord || n == 1 {
+							th.ExpectSorted(t, outSlices[i])
+							th.ExpectSorted(t, errSlices[i])
+						} else {
+							th.ExpectUnsorted(t, outSlices[i])
+							th.ExpectUnsorted(t, errSlices[i])
+						}
 					}
-				}
-
-				var outSlice0, outSlice1 []int
-				var errSlice0, errSlice1, allErrsSlice []string
-
-				th.DoConcurrently(
-					func() { outSlice0, errSlice0 = toSliceAndErrors(outT) },
-					func() { outSlice1, errSlice1 = toSliceAndErrors(outF) },
-				)
-
-				if len(errSlice0) == 0 || len(errSlice1) == 0 {
-					t.Errorf("expected at least one error in each channel")
-				}
-
-				allErrsSlice = append(allErrsSlice, errSlice0...)
-				allErrsSlice = append(allErrsSlice, errSlice1...)
-
-				th.Sort(outSlice0)
-				th.Sort(outSlice1)
-				th.Sort(allErrsSlice)
-
-				th.ExpectSlice(t, outSlice0, expectedSlice0)
-				th.ExpectSlice(t, outSlice1, expectedSlice1)
-				th.ExpectSlice(t, allErrsSlice, expectedAllErrsSLice)
-			})
-
-			t.Run(th.Name("ordering", n), func(t *testing.T) {
-				in := Wrap(th.FromRange(0, 20000), nil)
-
-				outT, outF := universalSplit2(ord, in, n, func(x int) (int, error) {
-					if x%3 == 2 {
-						return 0, fmt.Errorf("err%06d", x)
-					}
-					return x % 3, nil
 				})
 
-				var outSlice0, outSlice1 []int
-				var errSlice0, errSlice1 []string
-
-				th.DoConcurrently(
-					func() { outSlice0, errSlice0 = toSliceAndErrors(outT) },
-					func() { outSlice1, errSlice1 = toSliceAndErrors(outF) },
-				)
-
-				if ord || n == 1 {
-					th.ExpectSorted(t, outSlice0)
-					th.ExpectSorted(t, errSlice0)
-					th.ExpectSorted(t, outSlice1)
-					th.ExpectSorted(t, errSlice1)
-				} else {
-					th.ExpectUnsorted(t, outSlice0)
-					th.ExpectUnsorted(t, errSlice0)
-					th.ExpectUnsorted(t, outSlice1)
-					th.ExpectUnsorted(t, errSlice1)
-				}
-			})
-
+			}
 		}
 	})
 }
