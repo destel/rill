@@ -39,10 +39,10 @@ func TestSplit2(t *testing.T) {
 
 				t.Run(th.Name("correctness", numOuts, n), func(t *testing.T) {
 					// idea: split input into numOuts+3 groups
-					// - first numOuts groups are split into numOuts outputs
+					// - first numOuts groups are sent into corresponding outputs
 					// - next group is filtered out
-					// - next group would be errors even before splitting
 					// - next group would cause error during splitting
+					// - next group would be errors even before splitting
 
 					in := Wrap(th.FromRange(0, 20*(numOuts+3)), nil)
 					in = OrderedMap(in, 1, func(x int) (int, error) {

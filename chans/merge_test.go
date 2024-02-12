@@ -76,7 +76,7 @@ func TestSplit2(t *testing.T) {
 
 				t.Run(th.Name("correctness", numOuts, n), func(t *testing.T) {
 					// idea: split input into numOuts+1 groups
-					// - first numOuts groups are split into numOuts outputs
+					// - first numOuts groups are sent into corresponding outputs
 					// - next group is filtered out
 
 					in := th.FromRange(0, 20*(numOuts+1))
