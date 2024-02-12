@@ -12,7 +12,7 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 }
 
 func Split2[A any](in <-chan Try[A], n int, f func(A) (int, error)) (out0 <-chan Try[A], out1 <-chan Try[A]) {
-	outs := common.MapAndSplit(in, n, 2, func(a Try[A]) (Try[A], int) {
+	outs := common.MapAndSplit(in, 2, n, func(a Try[A]) (Try[A], int) {
 		if a.Error != nil {
 			return a, rand.Int() & 1
 		}
@@ -29,7 +29,7 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (int, error)) (out0 <-chan
 }
 
 func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (int, error)) (out0 <-chan Try[A], out1 <-chan Try[A]) {
-	outs := common.OrderedMapAndSplit(in, n, 2, func(a Try[A]) (Try[A], int) {
+	outs := common.OrderedMapAndSplit(in, 2, n, func(a Try[A]) (Try[A], int) {
 		if a.Error != nil {
 			return a, rand.Int() & 1
 		}
