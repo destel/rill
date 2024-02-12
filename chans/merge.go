@@ -2,6 +2,8 @@ package chans
 
 import (
 	"sync"
+
+	"github.com/destel/rill/internal/common"
 )
 
 func fastMerge[A any](ins []<-chan A) <-chan A {
@@ -88,56 +90,16 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 	}
 }
 
-func Split2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A, outFalse <-chan A) {
-	if in == nil {
-		return nil, nil
-	}
-
-	done := make(chan struct{})
-	outT := make(chan A)
-	outF := make(chan A)
-
-	loop(in, done, n, func(x A) {
-		if f(x) {
-			outT <- x
-		} else {
-			outF <- x
-		}
+func Split2[A any](in <-chan A, n int, f func(A) int) (out0 <-chan A, out1 <-chan A) {
+	outs := common.MapAndSplit(in, n, 2, func(a A) (A, int) {
+		return a, f(a)
 	})
-
-	go func() {
-		<-done
-		close(outT)
-		close(outF)
-	}()
-
-	return outT, outF
+	return outs[0], outs[1]
 }
 
-func OrderedSplit2[A any](in <-chan A, n int, f func(A) bool) (outTrue <-chan A, outFalse <-chan A) {
-	if in == nil {
-		return nil, nil
-	}
-
-	done := make(chan struct{})
-	outT := make(chan A)
-	outF := make(chan A)
-
-	orderedLoop(in, done, n, func(x A, canWrite <-chan struct{}) {
-		t := f(x)
-		<-canWrite
-		if t {
-			outT <- x
-		} else {
-			outF <- x
-		}
+func OrderedSplit2[A any](in <-chan A, n int, f func(A) int) (out0 <-chan A, out1 <-chan A) {
+	outs := common.OrderedMapAndSplit(in, n, 2, func(a A) (A, int) {
+		return a, f(a)
 	})
-
-	go func() {
-		<-done
-		close(outT)
-		close(outF)
-	}()
-
-	return outT, outF
+	return outs[0], outs[1]
 }

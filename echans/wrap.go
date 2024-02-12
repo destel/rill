@@ -12,37 +12,33 @@ func Wrap[A any](values <-chan A, err error) <-chan Try[A] {
 		return nil
 	}
 
-	wrappedValues := chans.Map(values, 1, func(x A) Try[A] {
-		return Try[A]{V: x}
-	})
+	out := make(chan Try[A])
+	go func() {
+		defer close(out)
 
-	var wrappedErrs chan Try[A]
-	if err != nil {
-		wrappedErrs = make(chan Try[A], 1)
-		wrappedErrs <- Try[A]{Error: err}
-		close(wrappedErrs)
-	}
+		if err != nil {
+			out <- Try[A]{Error: err} // error goes first
+		}
 
-	if wrappedValues == nil {
-		return wrappedErrs
-	}
-	if wrappedErrs == nil {
-		return wrappedValues
-	}
-	return chans.Merge(wrappedErrs, wrappedValues)
+		for x := range values {
+			out <- Try[A]{V: x}
+		}
+	}()
+
+	return out
 }
 
 func WrapAsync[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
-	if values == nil && errs == nil {
-		return nil
-	}
+	//if values == nil && errs == nil {
+	//	return nil
+	//}
 
-	wrappedValues := chans.Map(values, 1, func(x A) Try[A] {
-		return Try[A]{V: x}
+	wrappedValues := chans.Map(values, 1, func(a A) Try[A] {
+		return Try[A]{V: a}
 	})
 
-	wrappedErrs := chans.Map(errs, 1, func(err error) Try[A] {
-		return Try[A]{Error: err}
+	wrappedErrs := chans.Map(errs, 1, func(e error) Try[A] {
+		return Try[A]{Error: e}
 	})
 
 	if wrappedValues == nil {

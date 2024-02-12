@@ -4,50 +4,43 @@ import (
 	"math/rand"
 
 	"github.com/destel/rill/chans"
+	"github.com/destel/rill/internal/common"
 )
 
 func Merge[A any](ins ...<-chan A) <-chan A {
 	return chans.Merge(ins...)
 }
 
-func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
-	tmp := chans.Map(in, n, func(a Try[A]) tuple2[Try[A], bool] {
+func Split2[A any](in <-chan Try[A], n int, f func(A) (int, error)) (out0 <-chan Try[A], out1 <-chan Try[A]) {
+	outs := common.MapAndSplit(in, n, 2, func(a Try[A]) (Try[A], int) {
 		if a.Error != nil {
-			return makeTuple2(a, rand.Int63()&1 == 1)
+			return a, rand.Int() & 1
 		}
 
-		side, err := f(a.V)
+		i, err := f(a.V)
 		if err != nil {
-			return makeTuple2(Try[A]{Error: err}, rand.Int63()&1 == 1)
+			return Try[A]{Error: err}, rand.Int() & 1
 		}
 
-		return makeTuple2(a, side)
+		return a, i
 	})
 
-	tmpTrue, tmpFalse := chans.Split2(tmp, 1, func(a tuple2[Try[A], bool]) bool {
-		return a.V2
-	})
-
-	return tuple2chanExtract1(tmpTrue), tuple2chanExtract1(tmpFalse)
+	return outs[0], outs[1]
 }
 
-func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
-	tmp := chans.OrderedMap(in, n, func(a Try[A]) tuple2[Try[A], bool] {
+func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (int, error)) (out0 <-chan Try[A], out1 <-chan Try[A]) {
+	outs := common.OrderedMapAndSplit(in, n, 2, func(a Try[A]) (Try[A], int) {
 		if a.Error != nil {
-			return makeTuple2(a, rand.Int63()&1 == 1)
+			return a, rand.Int() & 1
 		}
 
-		side, err := f(a.V)
+		i, err := f(a.V)
 		if err != nil {
-			return makeTuple2(Try[A]{Error: err}, rand.Int63()&1 == 1)
+			return Try[A]{Error: err}, rand.Int() & 1
 		}
 
-		return makeTuple2(a, side)
+		return a, i
 	})
 
-	tmpTrue, tmpFalse := chans.Split2(tmp, 1, func(a tuple2[Try[A], bool]) bool {
-		return a.V2
-	})
-
-	return tuple2chanExtract1(tmpTrue), tuple2chanExtract1(tmpFalse)
+	return outs[0], outs[1]
 }

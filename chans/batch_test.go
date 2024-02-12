@@ -48,7 +48,7 @@ func TestBatch(t *testing.T) {
 		th.ExpectSlice(t, outSlice[3], []int{10})
 	})
 
-	t.Run("slow w/o timeout", func(t *testing.T) {
+	t.Run("slow wo timeout", func(t *testing.T) {
 		in := make(chan int)
 		go func() {
 			defer close(in)
@@ -65,6 +65,19 @@ func TestBatch(t *testing.T) {
 		th.ExpectSlice(t, outSlice[1], []int{5, 6, 7, 8})
 		th.ExpectSlice(t, outSlice[2], []int{9, 10})
 	})
+
+	for _, timeout := range []time.Duration{-1, 10 * time.Second} {
+		t.Run(th.Name("ordering", timeout), func(t *testing.T) {
+			in := th.FromRange(0, 20000)
+
+			out := Batch(in, 1000, timeout)
+
+			ForEach(out, 1, func(batch []int) bool {
+				th.ExpectSorted(t, batch)
+				return !t.Failed()
+			})
+		})
+	}
 }
 
 func TestUnbatch(t *testing.T) {

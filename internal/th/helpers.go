@@ -1,8 +1,11 @@
 package th
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 	"sync"
+	"testing"
 )
 
 func FromRange(start, end int) <-chan int {
@@ -16,7 +19,7 @@ func FromRange(start, end int) <-chan int {
 	return ch
 }
 
-// Infinite generate infinite sequence of natural numbers. It stops when stop channel is closed.
+// InfiniteChan generates infinite sequence of natural numbers. It stops when stop channel is closed.
 func InfiniteChan(stop <-chan struct{}) <-chan int {
 	ch := make(chan int)
 	go func() {
@@ -48,13 +51,45 @@ func DoConcurrently(ff ...func()) {
 	var wg sync.WaitGroup
 
 	for _, f := range ff {
-		f1 := f
+		f := f
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			f1()
+			f()
 		}()
 	}
 
 	wg.Wait()
+}
+
+func DoConcurrentlyN(n int, f func(i int)) {
+	var wg sync.WaitGroup
+
+	for i := 0; i < n; i++ {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			f(i)
+		}()
+	}
+
+	wg.Wait()
+}
+
+// Name generates a test name.
+// Works the same way as fmt.Sprint, but adds spaces between all arguments.
+func Name(args ...any) string {
+	res := fmt.Sprintln(args...)
+	return strings.TrimSpace(res)
+}
+
+func TestBothOrderings(t *testing.T, f func(t *testing.T, ord bool)) {
+	t.Run("unordered", func(t *testing.T) {
+		f(t, false)
+	})
+
+	t.Run("ordered", func(t *testing.T) {
+		f(t, true)
+	})
 }

@@ -8,21 +8,22 @@ type InProgressCounter struct {
 	max     int
 }
 
-func (c *InProgressCounter) Inc() {
+func (c *InProgressCounter) add(delta int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.current++
+	c.current += delta
 	if c.max < c.current {
 		c.max = c.current
 	}
 }
 
-func (c *InProgressCounter) Dec() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+func (c *InProgressCounter) Inc() {
+	c.add(1)
+}
 
-	c.current--
+func (c *InProgressCounter) Dec() {
+	c.add(-1)
 }
 
 func (c *InProgressCounter) Current() int {

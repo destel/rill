@@ -2,6 +2,7 @@ package chans
 
 import (
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -9,20 +10,7 @@ import (
 	"github.com/destel/rill/internal/th"
 )
 
-func testname(name string, ordered bool, n int) string {
-	res := name
-	if ordered {
-		res = res + "_ordered"
-	} else if name == "ordering" {
-		res = res + "_unordered"
-	}
-	if n > 0 {
-		res = res + "_" + fmt.Sprint(n)
-	}
-	return res
-}
-
-func doMap[A, B any](ord bool, in <-chan A, n int, f func(A) B) <-chan B {
+func universalMap[A, B any](ord bool, in <-chan A, n int, f func(A) B) <-chan B {
 	if ord {
 		return OrderedMap(in, n, f)
 	}
@@ -30,17 +18,17 @@ func doMap[A, B any](ord bool, in <-chan A, n int, f func(A) B) <-chan B {
 }
 
 func TestMap(t *testing.T) {
-	for _, ord := range []bool{false, true} {
+	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
 		for _, n := range []int{1, 5} {
 
-			t.Run(testname("nil", ord, n), func(t *testing.T) {
-				out := doMap(ord, nil, n, func(x int) int { return x })
+			t.Run(th.Name("nil", n), func(t *testing.T) {
+				out := universalMap(ord, nil, n, func(x int) int { return x })
 				th.ExpectValue(t, out, nil)
 			})
 
-			t.Run(testname("correctness", ord, n), func(t *testing.T) {
+			t.Run(th.Name("correctness", n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
-				out := doMap(ord, in, n, func(x int) string {
+				out := universalMap(ord, in, n, func(x int) string {
 					return fmt.Sprintf("%03d", x)
 				})
 
@@ -55,43 +43,26 @@ func TestMap(t *testing.T) {
 				th.ExpectSlice(t, outSlice, expectedSlice)
 			})
 
-			t.Run(testname("concurrency", ord, n), func(t *testing.T) {
-				var inProgress th.InProgressCounter
+			t.Run(th.Name("ordering", n), func(t *testing.T) {
+				in := th.FromRange(0, 20000)
 
-				in := th.FromRange(0, n*2)
-				out := doMap(ord, in, n, func(x int) int {
-					inProgress.Inc()
-					defer inProgress.Dec()
-
-					time.Sleep(1 * time.Second)
-					return x + 1
+				out := universalMap(ord, in, n, func(x int) int {
+					return x
 				})
 
-				Drain(out)
-				th.ExpectValue(t, inProgress.Max(), n)
+				outSlice := ToSlice(out)
+
+				if ord || n == 1 {
+					th.ExpectSorted(t, outSlice)
+				} else {
+					th.ExpectUnsorted(t, outSlice)
+				}
 			})
 		}
-
-		t.Run(testname("ordering", ord, 0), func(t *testing.T) {
-			in := th.FromRange(0, 10000)
-
-			out := doMap(ord, in, 50, func(x int) int {
-				return x
-			})
-
-			outSlice := ToSlice(out)
-
-			if ord {
-				th.ExpectSorted(t, outSlice)
-			} else {
-				th.ExpectUnsorted(t, outSlice)
-			}
-		})
-
-	}
+	})
 }
 
-func doFilter[A any](ord bool, in <-chan A, n int, f func(A) bool) <-chan A {
+func universalFilter[A any](ord bool, in <-chan A, n int, f func(A) bool) <-chan A {
 	if ord {
 		return OrderedFilter(in, n, f)
 	}
@@ -99,17 +70,17 @@ func doFilter[A any](ord bool, in <-chan A, n int, f func(A) bool) <-chan A {
 }
 
 func TestFilter(t *testing.T) {
-	for _, ord := range []bool{false, true} {
+	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
 		for _, n := range []int{1, 5} {
 
-			t.Run(testname("nil", ord, n), func(t *testing.T) {
-				out := doFilter(ord, nil, n, func(x int) bool { return true })
+			t.Run(th.Name("nil", n), func(t *testing.T) {
+				out := universalFilter(ord, nil, n, func(x int) bool { return true })
 				th.ExpectValue(t, out, nil)
 			})
 
-			t.Run(testname("correctness", ord, n), func(t *testing.T) {
+			t.Run(th.Name("correctness", n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
-				out := doFilter(ord, in, n, func(x int) bool {
+				out := universalFilter(ord, in, n, func(x int) bool {
 					return x%2 == 0
 				})
 
@@ -124,43 +95,28 @@ func TestFilter(t *testing.T) {
 				th.ExpectSlice(t, outSlice, expectedSlice)
 			})
 
-			t.Run(testname("concurrency", ord, n), func(t *testing.T) {
-				var inProgress th.InProgressCounter
+			t.Run(th.Name("ordering", n), func(t *testing.T) {
+				in := th.FromRange(0, 20000)
 
-				in := th.FromRange(0, n*2)
-				out := doFilter(ord, in, n, func(x int) bool {
-					inProgress.Inc()
-					defer inProgress.Dec()
-
-					time.Sleep(1 * time.Second)
+				out := universalFilter(ord, in, n, func(x int) bool {
 					return x%2 == 0
 				})
 
-				Drain(out)
-				th.ExpectValue(t, inProgress.Max(), n)
+				outSlice := ToSlice(out)
+
+				if ord || n == 1 {
+					th.ExpectSorted(t, outSlice)
+				} else {
+					th.ExpectUnsorted(t, outSlice)
+				}
 			})
 
 		}
 
-		t.Run(testname("ordering", ord, 0), func(t *testing.T) {
-			in := th.FromRange(0, 10000)
-
-			out := doFilter(ord, in, 50, func(x int) bool {
-				return x%2 == 0
-			})
-
-			outSlice := ToSlice(out)
-
-			if ord {
-				th.ExpectSorted(t, outSlice)
-			} else {
-				th.ExpectUnsorted(t, outSlice)
-			}
-		})
-	}
+	})
 }
 
-func doFlatMap[A, B any](ord bool, in <-chan A, n int, f func(A) <-chan B) <-chan B {
+func universalFlatMap[A, B any](ord bool, in <-chan A, n int, f func(A) <-chan B) <-chan B {
 	if ord {
 		return OrderedFlatMap(in, n, f)
 	}
@@ -168,17 +124,17 @@ func doFlatMap[A, B any](ord bool, in <-chan A, n int, f func(A) <-chan B) <-cha
 }
 
 func TestFlatMap(t *testing.T) {
-	for _, ord := range []bool{false, true} {
+	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
 		for _, n := range []int{1, 5} {
 
-			t.Run(testname("nil", ord, n), func(t *testing.T) {
-				out := doFlatMap(ord, nil, n, func(x int) <-chan string { return nil })
+			t.Run(th.Name("nil", n), func(t *testing.T) {
+				out := universalFlatMap(ord, nil, n, func(x int) <-chan string { return nil })
 				th.ExpectValue(t, out, nil)
 			})
 
-			t.Run(testname("correctness", ord, n), func(t *testing.T) {
+			t.Run(th.Name("correctness", n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
-				out := doFlatMap(ord, in, n, func(x int) <-chan string {
+				out := universalFlatMap(ord, in, n, func(x int) <-chan string {
 					return FromSlice([]string{
 						fmt.Sprintf("%03dA", x),
 						fmt.Sprintf("%03dB", x),
@@ -197,50 +153,34 @@ func TestFlatMap(t *testing.T) {
 				th.ExpectSlice(t, outSlice, expectedSlice)
 			})
 
-			t.Run(testname("concurrency", ord, n), func(t *testing.T) {
-				var inProgress th.InProgressCounter
+			t.Run(th.Name("ordering", n), func(t *testing.T) {
+				in := th.FromRange(0, 20000)
 
-				in := th.FromRange(0, 2*n)
-				out := doFlatMap(ord, in, n, func(x int) <-chan int {
-					inProgress.Inc()
-					defer inProgress.Dec()
-
-					time.Sleep(1 * time.Second)
-					return th.FromRange(0, 5)
+				out := universalFlatMap(ord, in, n, func(x int) <-chan string {
+					return FromSlice([]string{
+						fmt.Sprintf("%06dA", x),
+						fmt.Sprintf("%06dB", x),
+						fmt.Sprintf("%06dC", x),
+					})
 				})
 
-				Drain(out)
-				th.ExpectValue(t, inProgress.Max(), n)
+				outSlice := ToSlice(out)
+
+				if ord || n == 1 {
+					th.ExpectSorted(t, outSlice)
+				} else {
+					th.ExpectUnsorted(t, outSlice)
+				}
 			})
 
 		}
-
-		t.Run(testname("ordering", ord, 0), func(t *testing.T) {
-			in := th.FromRange(0, 10000)
-
-			out := doFlatMap(ord, in, 50, func(x int) <-chan string {
-				return FromSlice([]string{
-					fmt.Sprintf("%06dA", x),
-					fmt.Sprintf("%06dB", x),
-					fmt.Sprintf("%06dC", x),
-				})
-			})
-
-			outSlice := ToSlice(out)
-
-			if ord {
-				th.ExpectSorted(t, outSlice)
-			} else {
-				th.ExpectUnsorted(t, outSlice)
-			}
-		})
-	}
+	})
 }
 
 func TestForEach(t *testing.T) {
 	for _, n := range []int{1, 5} {
 
-		t.Run(testname("correctness", false, n), func(t *testing.T) {
+		t.Run(th.Name("correctness", n), func(t *testing.T) {
 			sum := int64(0)
 
 			in := th.FromRange(0, 20)
@@ -252,10 +192,12 @@ func TestForEach(t *testing.T) {
 			th.ExpectValue(t, sum, int64(19*20/2))
 		})
 
-		t.Run(testname("early_exit", false, n), func(t *testing.T) {
+		t.Run(th.Name("early exit", n), func(t *testing.T) {
 			th.ExpectNotHang(t, 10*time.Second, func() {
 				done := make(chan struct{})
 				defer close(done)
+
+				sum := int64(0)
 
 				in := th.InfiniteChan(done)
 
@@ -263,42 +205,57 @@ func TestForEach(t *testing.T) {
 					if x == 100 {
 						return false
 					}
+					atomic.AddInt64(&sum, int64(x))
 					return true
 				})
+
+				if sum < 99*100/2 {
+					t.Errorf("expected at least 100 iterations to complete")
+				}
 			})
 		})
 
-		t.Run(testname("concurrency", false, n), func(t *testing.T) {
-			var inProgress th.InProgressCounter
+		t.Run(th.Name("ordering", n), func(t *testing.T) {
+			in := th.FromRange(0, 20000)
 
-			in := th.FromRange(0, 2*n)
+			var mu sync.Mutex
+			outSlice := make([]int, 0, 20000)
+
 			ForEach(in, n, func(x int) bool {
-				inProgress.Inc()
-				defer inProgress.Dec()
-
-				time.Sleep(1 * time.Second)
+				mu.Lock()
+				outSlice = append(outSlice, x)
+				mu.Unlock()
 				return true
 			})
 
-			th.ExpectValue(t, inProgress.Max(), n)
+			if n == 1 {
+				th.ExpectSorted(t, outSlice)
+			} else {
+				th.ExpectUnsorted(t, outSlice)
+			}
 		})
 
 	}
 
-	t.Run("ordering_1", func(t *testing.T) {
-		in := th.FromRange(0, 10000)
+	t.Run("deterministic when n=1", func(t *testing.T) {
+		in := th.FromRange(0, 100)
 
-		prev := -1
+		maxX := -1
+
 		ForEach(in, 1, func(x int) bool {
-			if x < prev {
-				t.Errorf("expected ordered processing")
+			if x == 10 {
 				return false
 			}
-			prev = x
+
+			if x > maxX {
+				maxX = x
+			}
+
 			return true
 		})
-	})
 
+		th.ExpectValue(t, maxX, 9)
+	})
 }
 
 // Compare ordered and unordered map in a single threaded scenario
