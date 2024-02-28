@@ -14,6 +14,32 @@ func ExpectValue[A comparable](t *testing.T, actual A, expected A) {
 	}
 }
 
+func ExpectValueLTE[A number](t *testing.T, actual A, expected A) {
+	t.Helper()
+	if actual > expected {
+		t.Errorf("expected %v <= %v", actual, expected)
+	}
+}
+
+func ExpectValueGTE[A number](t *testing.T, actual A, expected A) {
+	t.Helper()
+	if actual < expected {
+		t.Errorf("expected %v >= %v", actual, expected)
+	}
+}
+
+func ExpectValueInDelta[A number](t *testing.T, actual A, expected A, delta A) {
+	t.Helper()
+	diff := actual - expected
+	if diff < 0 {
+		diff = -diff
+	}
+
+	if diff > delta {
+		t.Errorf("expected %v in [%v-%v]", actual, expected-delta, expected+delta)
+	}
+}
+
 func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 	t.Helper()
 	if len(expected) != len(actual) {
@@ -29,8 +55,12 @@ func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 	}
 }
 
+type number interface {
+	~int | ~int64
+}
+
 type ordered interface {
-	~int | ~string
+	~int | ~int64 | ~string
 }
 
 func ExpectSorted[T ordered](t *testing.T, arr []T) {
