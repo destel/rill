@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+// Batch groups items from an input channel into batches based on a maximum size and a timeout.
+// A batch is emitted when it reaches the maximum size, the timeout expires, or the input channel closes.
+// To emit batches only when full, set the timeout to -1. This function never emits empty batches.
+// The timeout countdown starts when the first item is added to a new batch.
 func Batch[A any](in <-chan A, n int, timeout time.Duration) <-chan []A {
 	if in == nil {
 		return nil
@@ -91,6 +95,7 @@ func Batch[A any](in <-chan A, n int, timeout time.Duration) <-chan []A {
 	return out
 }
 
+// Unbatch is the inverse of Batch. It takes a channel of batches and emits individual items.
 func Unbatch[A any](in <-chan []A) <-chan A {
 	if in == nil {
 		return nil
