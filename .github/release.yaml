@@ -1,0 +1,10 @@
+changelog:
+  categories:
+    - title: ➕ New
+      labels: ["new"]
+    - title: 🐛 Fixes
+      labels: ["fix", "bug"]
+    - title: 📝 Dependencies
+      labels: ["dependencies"]
+    - title: 📦 Other
+      labels: ["*"]
