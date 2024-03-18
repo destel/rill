@@ -9,13 +9,11 @@ import (
 )
 
 func FromRange(start, end int) <-chan int {
-	ch := make(chan int)
-	go func() {
-		defer close(ch)
-		for i := start; i < end; i++ {
-			ch <- i
-		}
-	}()
+	ch := make(chan int, end-start)
+	for i := start; i < end; i++ {
+		ch <- i
+	}
+	close(ch)
 	return ch
 }
 
