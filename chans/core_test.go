@@ -214,7 +214,7 @@ func TestForEach(t *testing.T) {
 				}
 
 				time.Sleep(1 * time.Second)
-				th.ExpectClosedChan(t, in)
+				th.ExpectDrainedChan(t, in)
 			})
 		})
 

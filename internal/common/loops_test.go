@@ -93,7 +93,7 @@ func TestBreakable(t *testing.T) {
 		}
 
 		th.ExpectValue(t, maxSeen, 9999)
-		th.ExpectClosedChan(t, in)
+		th.ExpectDrainedChan(t, in)
 	})
 
 	t.Run("early exit", func(t *testing.T) {
@@ -120,7 +120,7 @@ func TestBreakable(t *testing.T) {
 
 		}
 
-		th.ExpectClosedChan(t, in)
+		th.ExpectDrainedChan(t, in)
 	})
 
 }
