@@ -46,6 +46,7 @@ func ForEach[A any](in <-chan A, n int, f func(A) bool) {
 	if n == 1 {
 		for a := range in {
 			if !f(a) {
+				defer DrainNB(in)
 				break
 			}
 		}
