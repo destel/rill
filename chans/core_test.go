@@ -194,24 +194,27 @@ func TestForEach(t *testing.T) {
 
 		t.Run(th.Name("early exit", n), func(t *testing.T) {
 			th.ExpectNotHang(t, 10*time.Second, func() {
-				done := make(chan struct{})
-				defer close(done)
+				cnt := int64(0)
 
-				sum := int64(0)
-
-				in := th.InfiniteChan(done)
+				in := th.FromRange(0, 1000)
 
 				ForEach(in, n, func(x int) bool {
 					if x == 100 {
 						return false
 					}
-					atomic.AddInt64(&sum, int64(x))
+					atomic.AddInt64(&cnt, 1)
 					return true
 				})
 
-				if sum < 99*100/2 {
+				if cnt < 100 {
 					t.Errorf("expected at least 100 iterations to complete")
 				}
+				if cnt > 150 {
+					t.Errorf("early exit did not happen")
+				}
+
+				time.Sleep(1 * time.Second)
+				th.ExpectClosedChan(t, in)
 			})
 		})
 
