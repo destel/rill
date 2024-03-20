@@ -11,8 +11,8 @@ type Try[A any] struct {
 	Error error
 }
 
-// Wrap converts a regular channel of items into a channel of items wrapped in a Try container.
-// This function can also take an error, which will also be added to the output channel.
+// Wrap converts a regular channel of items into a channel of items wrapped in a [Try] container.
+// Additionally, this function can also take an error, which will be added to the output channel.
 // Either the input channel or the error can be nil, but not both simultaneously.
 func Wrap[A any](values <-chan A, err error) <-chan Try[A] {
 	if values == nil && err == nil {
@@ -35,8 +35,9 @@ func Wrap[A any](values <-chan A, err error) <-chan Try[A] {
 	return out
 }
 
-// WrapAsync converts channel of values and channel of errors into a channel of values wrapped in a Try container.
-// Either the input channel or the error channel  can be nil, but not both simultaneously.
+// WrapAsync converts a regular channel of items into a channel of items wrapped in a [Try] container.
+// Additionally, this function can also take a channel of errors, that will be added to the output channel.
+// Either the input channel or the error channel can be nil, but not both simultaneously.
 func WrapAsync[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 	wrappedValues := chans.Map(values, 1, func(a A) Try[A] {
 		return Try[A]{V: a}
@@ -58,7 +59,7 @@ func WrapAsync[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 	return chans.Merge(wrappedErrs, wrappedValues)
 }
 
-// Unwrap converts a channel of Try containers into a channel of values and a channel of errors.
+// Unwrap converts a channel of [Try] containers into a channel of values and a channel of errors.
 func Unwrap[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 	if in == nil {
 		return nil, nil

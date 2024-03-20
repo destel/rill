@@ -9,13 +9,18 @@ func Drain[A any](in <-chan A) {
 	chans.Drain(in)
 }
 
-// DrainNB is a non-blocking version of Drain.
+// DrainNB is a non-blocking version of [Drain].
 func DrainNB[A any](in <-chan A) {
 	chans.DrainNB(in)
 }
 
 // Buffer takes a channel of items and returns a buffered channel of exact same items in the same order.
 // This is useful when you want to write to the input channel without blocking the writer.
+//
+// Typical use case would look like
+//
+//	ids = Buffer(ids, 100)
+//	// Now up to 100 ids can be buffered if subsequent stages of the pipeline are slow
 func Buffer[A any](in <-chan A, n int) <-chan A {
 	return chans.Buffer(in, n)
 }
@@ -31,7 +36,8 @@ func FromSlice[A any](slice []A) <-chan Try[A] {
 }
 
 // ToSlice converts a channel into a slice.
-// If an error is encountered, it will be returned and the rest of the channel will be drained.
+// Conversion stops at the first error encountered.
+// In case of an error, ToSlice ensures the input channel is drained to avoid goroutine leaks,
 func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 	var res []A
 
