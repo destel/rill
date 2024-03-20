@@ -31,7 +31,7 @@ func TestUnbatch(t *testing.T) {
 	// most logic is covered by the common package tests
 
 	t.Run("correctness", func(t *testing.T) {
-		in := FromSlice([][]int{{1, 2}, {3, 4}, {5, 6}, {7, 8}, {9, 10}})
+		in := WrapSlice([][]int{{1, 2}, {3, 4}, {5, 6}, {7, 8}, {9, 10}})
 		in = OrderedMap(in, 1, func(x []int) ([]int, error) {
 			if x[0] == 3 {
 				return nil, fmt.Errorf("err3")

@@ -186,7 +186,7 @@ func TestFlatMap(t *testing.T) {
 				in = replaceWithError(in, 15, fmt.Errorf("err15"))
 
 				out := universalFlatMap(ord, in, n, func(x int) <-chan Try[string] {
-					return FromSlice([]string{
+					return WrapSlice([]string{
 						fmt.Sprintf("%03dA", x),
 						fmt.Sprintf("%03dB", x),
 					})
@@ -219,7 +219,7 @@ func TestFlatMap(t *testing.T) {
 				})
 
 				out := universalFlatMap(ord, in, n, func(x int) <-chan Try[string] {
-					return FromSlice([]string{
+					return WrapSlice([]string{
 						fmt.Sprintf("%06dA", x),
 						fmt.Sprintf("%06dB", x),
 					})

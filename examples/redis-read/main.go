@@ -38,7 +38,7 @@ func printValues(ctx context.Context, urls []string) error {
 	defer cancel() // In case of error, this ensures all http and redis operations are canceled
 
 	// Convert URLs into a channel
-	urlsChan := rill.FromSlice(urls)
+	urlsChan := rill.WrapSlice(urls)
 
 	// Fetch and stream keys from each URL concurrently
 	keys := rill.FlatMap(urlsChan, 10, func(url string) <-chan rill.Try[string] {

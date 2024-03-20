@@ -8,9 +8,9 @@ import (
 	"github.com/destel/rill/internal/th"
 )
 
-func TestFromToSlice(t *testing.T) {
+func TestWrapUnwrapSlice(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		in := FromSlice[int](nil)
+		in := WrapSlice[int](nil)
 		outSlice, err := ToSlice(in)
 
 		th.ExpectSlice(t, outSlice, nil)
@@ -23,7 +23,7 @@ func TestFromToSlice(t *testing.T) {
 			inSlice[i] = i
 		}
 
-		in := FromSlice(inSlice)
+		in := WrapSlice(inSlice)
 		outSlice, err := ToSlice(in)
 
 		th.ExpectSlice(t, outSlice, inSlice)
@@ -36,7 +36,7 @@ func TestFromToSlice(t *testing.T) {
 			inSlice[i] = i
 		}
 
-		in := FromSlice(inSlice)
+		in := WrapSlice(inSlice)
 		in = replaceWithError(in, 15, fmt.Errorf("err15"))
 		in = replaceWithError(in, 18, fmt.Errorf("err18"))
 
@@ -91,7 +91,7 @@ func TestWrap(t *testing.T) {
 }
 
 func TestWrapUnwrapAsync(t *testing.T) {
-	// slices -> FromSlice -> WrapAsync -> Unwrap -> ToSlice -> compare
+	// slices -> WrapSlice -> WrapAsync -> Unwrap -> ToSlice -> compare
 	runTest := func(name string, valsIn []int, errsIn []error) {
 		t.Run(name, func(t *testing.T) {
 			var valsInChan <-chan int
