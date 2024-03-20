@@ -1,4 +1,4 @@
-package echans
+package rill
 
 import (
 	"math/rand"

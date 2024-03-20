@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/destel/rill/echans"
+	"github.com/destel/rill"
 )
 
 type Measurement struct {
@@ -34,30 +34,30 @@ func printTemperatureMovements(ctx context.Context, city string, startDate, endD
 	defer cancel() // In case of error, this ensures all pending operations are canceled
 
 	// Make a channel that emits all the days between startDate and endDate
-	days := make(chan echans.Try[time.Time])
+	days := make(chan rill.Try[time.Time])
 	go func() {
 		defer close(days)
 		for date := startDate; date.Before(endDate); date = date.AddDate(0, 0, 1) {
-			days <- echans.Try[time.Time]{V: date}
+			days <- rill.Try[time.Time]{V: date}
 		}
 	}()
 
 	// Download the temperature for each day in parallel and in order
-	measurements := echans.OrderedMap(days, 10, func(date time.Time) (Measurement, error) {
+	measurements := rill.OrderedMap(days, 10, func(date time.Time) (Measurement, error) {
 		temp, err := getTemperature(ctx, city, date)
 		return Measurement{Date: date, Temp: temp}, err
 	})
 
 	// Calculate the temperature movements. Use a single goroutine
 	prev := Measurement{Temp: math.NaN()}
-	measurements = echans.OrderedMap(measurements, 1, func(m Measurement) (Measurement, error) {
+	measurements = rill.OrderedMap(measurements, 1, func(m Measurement) (Measurement, error) {
 		m.Movement = m.Temp - prev.Temp
 		prev = m
 		return m, nil
 	})
 
 	// Iterate over the measurements and print the movements
-	err := echans.ForEach(measurements, 1, func(m Measurement) error {
+	err := rill.ForEach(measurements, 1, func(m Measurement) error {
 		fmt.Printf("%s: %.1f°C (movement %+.1f°C)\n", m.Date.Format("2006-01-02"), m.Temp, m.Movement)
 		prev = m
 		return nil

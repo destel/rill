@@ -1,4 +1,4 @@
-package echans
+package rill
 
 import (
 	"github.com/destel/rill/chans"

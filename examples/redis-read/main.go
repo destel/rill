@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/destel/rill/echans"
+	"github.com/destel/rill"
 )
 
 type KV struct {
@@ -38,23 +38,23 @@ func printValues(ctx context.Context, urls []string) error {
 	defer cancel() // In case of error, this ensures all http and redis operations are canceled
 
 	// Convert URLs into a channel
-	urlsChan := echans.FromSlice(urls)
+	urlsChan := rill.FromSlice(urls)
 
 	// Fetch and stream keys from each URL concurrently
-	keys := echans.FlatMap(urlsChan, 10, func(url string) <-chan echans.Try[string] {
+	keys := rill.FlatMap(urlsChan, 10, func(url string) <-chan rill.Try[string] {
 		return streamKeys(ctx, url)
 	})
 
 	// Exclude any empty keys from the stream
-	keys = echans.Filter(keys, 5, func(key string) (bool, error) {
+	keys = rill.Filter(keys, 5, func(key string) (bool, error) {
 		return key != "", nil
 	})
 
 	// Organize keys into manageable batches of 10 for bulk operations
-	keyBatches := echans.Batch(keys, 10, 1*time.Second)
+	keyBatches := rill.Batch(keys, 10, 1*time.Second)
 
 	// Fetch values from Redis for each batch of keys
-	resultBatches := echans.Map(keyBatches, 5, func(keys []string) ([]KV, error) {
+	resultBatches := rill.Map(keyBatches, 5, func(keys []string) ([]KV, error) {
 		values, err := redisMGet(ctx, keys...)
 		if err != nil {
 			return nil, err
@@ -69,16 +69,16 @@ func printValues(ctx context.Context, urls []string) error {
 	})
 
 	// Convert batches back to a single items for final processing
-	results := echans.Unbatch(resultBatches)
+	results := rill.Unbatch(resultBatches)
 
 	// Exclude any empty values from the stream
-	results = echans.Filter(results, 5, func(kv KV) (bool, error) {
+	results = rill.Filter(results, 5, func(kv KV) (bool, error) {
 		return kv.Value != "<nil>", nil
 	})
 
 	// Iterate over each key-value pair and print
 	cnt := 0
-	err := echans.ForEach(results, 1, func(kv KV) error {
+	err := rill.ForEach(results, 1, func(kv KV) error {
 		fmt.Println(kv.Key, "=>", kv.Value)
 		cnt++
 		return nil
@@ -89,21 +89,21 @@ func printValues(ctx context.Context, urls []string) error {
 }
 
 // streamKeys reads a file from the given URL line by line and returns a channel of lines/keys
-func streamKeys(ctx context.Context, url string) <-chan echans.Try[string] {
-	out := make(chan echans.Try[string], 1)
+func streamKeys(ctx context.Context, url string) <-chan rill.Try[string] {
+	out := make(chan rill.Try[string], 1)
 
 	go func() {
 		defer close(out)
 
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
-			out <- echans.Try[string]{Error: err}
+			out <- rill.Try[string]{Error: err}
 			return
 		}
 
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {
-			out <- echans.Try[string]{Error: err}
+			out <- rill.Try[string]{Error: err}
 			return
 		}
 		defer res.Body.Close()
@@ -115,15 +115,15 @@ func streamKeys(ctx context.Context, url string) <-chan echans.Try[string] {
 			line = strings.TrimSuffix(line, "\n")
 
 			if errors.Is(err, io.EOF) {
-				out <- echans.Try[string]{V: line}
+				out <- rill.Try[string]{V: line}
 				return
 			}
 			if err != nil {
-				out <- echans.Try[string]{Error: err}
+				out <- rill.Try[string]{Error: err}
 				return
 			}
 
-			out <- echans.Try[string]{V: line}
+			out <- rill.Try[string]{V: line}
 		}
 	}()
 

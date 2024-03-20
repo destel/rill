@@ -1,4 +1,4 @@
-package echans
+package rill
 
 func toSliceAndErrors[A any](in <-chan Try[A]) ([]A, []string) {
 	var values []A
