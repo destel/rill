@@ -1,4 +1,4 @@
-package chans
+package common
 
 import (
 	"testing"
@@ -6,6 +6,12 @@ import (
 
 	"github.com/destel/rill/internal/th"
 )
+
+func TestDrain(t *testing.T) {
+	in := th.FromRange(0, 100)
+	Drain(in)
+	th.ExpectDrainedChan(t, in)
+}
 
 func TestDrainNB(t *testing.T) {
 	th.ExpectNotHang(t, 10*time.Second, func() {
@@ -17,17 +23,6 @@ func TestDrainNB(t *testing.T) {
 		in <- 2
 		close(in)
 	})
-}
-
-func TestFromToSlice(t *testing.T) {
-	inSlice := make([]int, 20000)
-	for i := 0; i < 20000; i++ {
-		inSlice[i] = i
-	}
-
-	outSlice := ToSlice(FromSlice(inSlice))
-
-	th.ExpectSorted(t, outSlice)
 }
 
 func TestBuffer(t *testing.T) {
@@ -55,6 +50,6 @@ func TestBuffer(t *testing.T) {
 	th.ExpectValue(t, trySend(in, 4), true)
 
 	close(in)
-	inSlice := ToSlice(inBuf)
+	inSlice := th.ToSlice(inBuf)
 	th.ExpectSlice(t, inSlice, []int{2, 4})
 }

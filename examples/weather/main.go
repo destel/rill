@@ -66,12 +66,13 @@ func printTemperatureMovements(ctx context.Context, city string, startDate, endD
 	return err
 }
 
+// getTemperature emulates a network request to fetch the temperature for a given city and date.
 func getTemperature(ctx context.Context, city string, date time.Time) (float64, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
 
-	// Simulate a network request
+	// Emulates a network delay
 	randomSleep(1000 * time.Millisecond)
 
 	// Basic city hash, to make measurements unique for each city
@@ -80,7 +81,7 @@ func getTemperature(ctx context.Context, city string, date time.Time) (float64, 
 		h += float64(c)
 	}
 
-	// Simulate a temperature reading, by retuning a pseudo-random, but deterministic value
+	// Emulates a temperature reading, by retuning a pseudo-random, but deterministic value
 	temp := 15 - 10*math.Sin(h+float64(date.Unix()))
 
 	return temp, nil

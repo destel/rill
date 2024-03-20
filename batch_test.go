@@ -28,7 +28,7 @@ func TestBatch(t *testing.T) {
 }
 
 func TestUnbatch(t *testing.T) {
-	// most logic is covered by the chans pkg tests
+	// most logic is covered by the common package tests
 
 	t.Run("correctness", func(t *testing.T) {
 		in := FromSlice([][]int{{1, 2}, {3, 4}, {5, 6}, {7, 8}, {9, 10}})

@@ -49,7 +49,7 @@ func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 
 	for i := range expected {
 		if expected[i] != actual[i] {
-			t.Errorf("expected %v, got %v", expected, actual)
+			t.Errorf("expected %v, got %v, mismatch at pos %d: %v != %v", expected, actual, i, expected[i], actual[i])
 			return
 		}
 	}

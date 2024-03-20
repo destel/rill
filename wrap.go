@@ -1,10 +1,5 @@
 package rill
 
-import (
-	"github.com/destel/rill/chans"
-	"github.com/destel/rill/internal/common"
-)
-
 // Try is a container for a value or an error
 type Try[A any] struct {
 	V     A
@@ -39,24 +34,44 @@ func Wrap[A any](values <-chan A, err error) <-chan Try[A] {
 // Additionally, this function can also take a channel of errors, that will be added to the output channel.
 // Either the input channel or the error channel can be nil, but not both simultaneously.
 func WrapAsync[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
-	wrappedValues := chans.Map(values, 1, func(a A) Try[A] {
-		return Try[A]{V: a}
-	})
+	if values == nil && errs == nil {
+		return nil
+	}
 
-	wrappedErrs := common.MapOrFilter(errs, 1, func(err error) (Try[A], bool) {
-		if err == nil {
-			return Try[A]{}, false
+	out := make(chan Try[A])
+
+	go func() {
+		defer close(out)
+		for {
+			select {
+			case err, ok := <-errs:
+				if !ok {
+					errs = nil
+					if values == nil && errs == nil {
+						return
+					}
+					continue
+				}
+
+				if err != nil {
+					out <- Try[A]{Error: err}
+				}
+
+			case x, ok := <-values:
+				if !ok {
+					values = nil
+					if values == nil && errs == nil {
+						return
+					}
+					continue
+				}
+
+				out <- Try[A]{V: x}
+			}
 		}
-		return Try[A]{Error: err}, true
-	})
+	}()
 
-	if wrappedValues == nil {
-		return wrappedErrs
-	}
-	if wrappedErrs == nil {
-		return wrappedValues
-	}
-	return chans.Merge(wrappedErrs, wrappedValues)
+	return out
 }
 
 // Unwrap converts a channel of [Try] containers into a channel of values and a channel of errors.

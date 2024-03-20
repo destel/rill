@@ -3,14 +3,13 @@ package rill
 import (
 	"math/rand"
 
-	"github.com/destel/rill/chans"
 	"github.com/destel/rill/internal/common"
 )
 
 // Merge combines multiple input channels into a single output channel. Items are emitted as soon as they're available,
 // so the output order is not defined.
 func Merge[A any](ins ...<-chan A) <-chan A {
-	return chans.Merge(ins...)
+	return common.Merge(ins...)
 }
 
 // Split2 divides the input channel into two output channels based on the discriminator function f, using n goroutines for concurrency.

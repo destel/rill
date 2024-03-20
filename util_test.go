@@ -8,6 +8,17 @@ import (
 	"github.com/destel/rill/internal/th"
 )
 
+func TestDrain(t *testing.T) {
+	// real tests are in another package
+	Drain[int](th.FromRange(0, 10))
+	DrainNB[int](th.FromRange(0, 10))
+}
+
+func TestBuffer(t *testing.T) {
+	// real tests are in another package
+	Buffer[int](th.FromRange(0, 10), 5)
+}
+
 func TestFromToSlice(t *testing.T) {
 	t.Run("no errors", func(t *testing.T) {
 		inSlice := make([]int, 20)

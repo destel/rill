@@ -8,6 +8,23 @@ import (
 	"testing"
 )
 
+func FromSlice[A any](slice []A) <-chan A {
+	out := make(chan A, len(slice))
+	for _, a := range slice {
+		out <- a
+	}
+	close(out)
+	return out
+}
+
+func ToSlice[A any](in <-chan A) []A {
+	var res []A
+	for x := range in {
+		res = append(res, x)
+	}
+	return res
+}
+
 func FromRange(start, end int) <-chan int {
 	ch := make(chan int, end-start)
 	for i := start; i < end; i++ {

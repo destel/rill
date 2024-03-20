@@ -7,11 +7,9 @@ import (
 	"github.com/destel/rill/internal/th"
 )
 
-func universalSplit2[A any](ord bool, in <-chan Try[A], n int, f func(A) (int, error)) (<-chan Try[A], <-chan Try[A]) {
-	if ord {
-		return OrderedSplit2(in, n, f)
-	}
-	return Split2(in, n, f)
+func TestMerge(t *testing.T) {
+	// real tests are in another package
+	Merge[int](nil)
 }
 
 func universalSplit[A any](ord bool, in <-chan Try[A], numOuts int, n int, f func(A) (int, error)) []<-chan Try[A] {

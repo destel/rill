@@ -128,11 +128,6 @@ func OrderedLoop[A, B any](in <-chan A, done chan<- B, n int, f func(a A, canWri
 	}
 }
 
-func drain[A any](in <-chan A) {
-	for range in {
-	}
-}
-
 // Breakable creates a new channel from channel in, copying elements until doBreak function is called.
 // doBreak halts copying and discards any remaining elements from in, closing the resulting channel.
 // Use this to stop channel processing when needed.
@@ -148,7 +143,7 @@ func Breakable[A any](in <-chan A) (res <-chan A, doBreak func()) {
 
 	out := make(chan A)
 	go func() {
-		defer drain(in) // discard unconsumed items
+		defer Drain(in) // discard unconsumed items
 		defer close(out)
 
 		for x := range in {

@@ -3,7 +3,6 @@ package rill
 import (
 	"sync"
 
-	"github.com/destel/rill/chans"
 	"github.com/destel/rill/internal/common"
 )
 
@@ -82,22 +81,50 @@ func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-ch
 // The output order is not guaranteed: results are written to the output as soon as they're ready.
 // Use [OrderedFlatMap] to preserve the input order.
 func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
-	return common.MapOrFlatMap(in, n, func(a Try[A]) (b Try[B], bb <-chan Try[B], flat bool) {
+	if in == nil {
+		return nil
+	}
+
+	out := make(chan Try[B])
+
+	common.Loop(in, out, n, func(a Try[A]) {
 		if a.Error != nil {
-			return Try[B]{Error: a.Error}, nil, false
+			out <- Try[B]{Error: a.Error}
+			return
 		}
-		return Try[B]{}, f(a.V), true
+
+		bb := f(a.V)
+		for b := range bb {
+			out <- b
+		}
 	})
+
+	return out
 }
 
 // OrderedFlatMap is similar to [FlatMap], but it guarantees that the output order is the same as the input order.
 func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
-	return common.OrderedMapOrFlatMap(in, n, func(a Try[A]) (b Try[B], bb <-chan Try[B], flat bool) {
+	if in == nil {
+		return nil
+	}
+
+	out := make(chan Try[B])
+
+	common.OrderedLoop(in, out, n, func(a Try[A], canWrite <-chan struct{}) {
 		if a.Error != nil {
-			return Try[B]{Error: a.Error}, nil, false
+			<-canWrite
+			out <- Try[B]{Error: a.Error}
+			return
 		}
-		return Try[B]{}, f(a.V), true
+
+		bb := f(a.V)
+		<-canWrite
+		for b := range bb {
+			out <- b
+		}
 	})
+
+	return out
 }
 
 // Catch allows handling errors from the input channel using n goroutines for concurrency.
@@ -143,24 +170,42 @@ func OrderedCatch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Tr
 // While this function does not guarantee the order of item processing due to its concurrent nature,
 // using n = 1 results in sequential processing, as in a simple for-range loop.
 func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
+	if n == 1 {
+		for a := range in {
+			err := a.Error
+			if err == nil {
+				err = f(a.V)
+			}
+
+			if err != nil {
+				DrainNB(in)
+				return err
+			}
+		}
+
+		return nil
+	}
+
 	var retErr error
 	var once sync.Once
 
-	chans.ForEach(in, n, func(a Try[A]) bool {
+	in, earlyExit := common.Breakable(in)
+	done := make(chan struct{})
+
+	common.Loop(in, done, n, func(a Try[A]) {
 		err := a.Error
 		if err == nil {
 			err = f(a.V)
 		}
 
 		if err != nil {
+			earlyExit()
 			once.Do(func() {
 				retErr = err
 			})
-			return false // early exit
 		}
-
-		return true
 	})
 
+	<-done
 	return retErr
 }

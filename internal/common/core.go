@@ -34,49 +34,6 @@ func OrderedMapOrFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-cha
 	return out
 }
 
-func MapOrFlatMap[A, B any](in <-chan A, n int, f func(A) (b B, bb <-chan B, flat bool)) <-chan B {
-	if in == nil {
-		return nil
-	}
-
-	out := make(chan B)
-
-	Loop(in, out, n, func(a A) {
-		b, bb, flat := f(a)
-		if flat {
-			for x := range bb {
-				out <- x
-			}
-		} else {
-			out <- b
-		}
-	})
-
-	return out
-}
-
-func OrderedMapOrFlatMap[A, B any](in <-chan A, n int, f func(A) (b B, bb <-chan B, flat bool)) <-chan B {
-	if in == nil {
-		return nil
-	}
-
-	out := make(chan B)
-
-	OrderedLoop(in, out, n, func(a A, canWrite <-chan struct{}) {
-		b, bb, flat := f(a)
-		<-canWrite
-		if flat {
-			for x := range bb {
-				out <- x
-			}
-		} else {
-			out <- b
-		}
-	})
-
-	return out
-}
-
 func MapAndSplit[A, B any](in <-chan A, numOuts int, n int, f func(A) (B, int)) []<-chan B {
 	if in == nil {
 		return make([]<-chan B, numOuts)

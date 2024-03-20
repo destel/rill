@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/destel/rill/chans"
 	"github.com/destel/rill/internal/th"
 )
 
@@ -23,8 +22,8 @@ func TestWrap(t *testing.T) {
 			expectedOutSlice = append(expectedOutSlice, Try[int]{V: i})
 		}
 
-		wrapped := Wrap(chans.FromSlice(inSlice), nil)
-		outSlice := chans.ToSlice(wrapped)
+		wrapped := Wrap(th.FromSlice(inSlice), nil)
+		outSlice := th.ToSlice(wrapped)
 
 		th.ExpectSlice(t, outSlice, expectedOutSlice)
 	})
@@ -41,8 +40,8 @@ func TestWrap(t *testing.T) {
 			expectedOutSlice = append(expectedOutSlice, Try[int]{V: i})
 		}
 
-		wrapped := Wrap(chans.FromSlice(inSlice), err)
-		outSlice := chans.ToSlice(wrapped)
+		wrapped := Wrap(th.FromSlice(inSlice), err)
+		outSlice := th.ToSlice(wrapped)
 
 		th.ExpectSlice(t, outSlice, expectedOutSlice)
 	})
@@ -54,12 +53,12 @@ func TestWrapUnwrapAsync(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var valsInChan <-chan int
 			if len(valsIn) > 0 {
-				valsInChan = chans.FromSlice(valsIn)
+				valsInChan = th.FromSlice(valsIn)
 			}
 
 			var errsInChan <-chan error
 			if len(errsIn) > 0 {
-				errsInChan = chans.FromSlice(errsIn)
+				errsInChan = th.FromSlice(errsIn)
 			}
 
 			valsOutChan, errsOutChan := Unwrap(WrapAsync(valsInChan, errsInChan))
@@ -74,8 +73,8 @@ func TestWrapUnwrapAsync(t *testing.T) {
 			var errsOut []error
 
 			th.DoConcurrently(
-				func() { valsOut = chans.ToSlice(valsOutChan) },
-				func() { errsOut = chans.ToSlice(errsOutChan) },
+				func() { valsOut = th.ToSlice(valsOutChan) },
+				func() { errsOut = th.ToSlice(errsOutChan) },
 			)
 
 			// nil errors are not expected in the output

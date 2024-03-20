@@ -21,9 +21,9 @@ type KV struct {
 
 func main() {
 	err := printValues(context.Background(), []string{
-		"https://raw.githubusercontent.com/destel/rill/f/docs/examples/redis-read/ids1.txt",
-		"https://raw.githubusercontent.com/destel/rill/f/docs/examples/redis-read/ids2.txt",
-		"https://raw.githubusercontent.com/destel/rill/f/docs/examples/redis-read/ids3.txt",
+		"https://raw.githubusercontent.com/destel/rill/main/examples/redis-read/ids1.txt",
+		"https://raw.githubusercontent.com/destel/rill/main/examples/redis-read/ids2.txt",
+		"https://raw.githubusercontent.com/destel/rill/main/examples/redis-read/ids3.txt",
 	})
 
 	if err != nil {
@@ -107,6 +107,11 @@ func streamKeys(ctx context.Context, url string) <-chan rill.Try[string] {
 			return
 		}
 		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			out <- rill.Try[string]{Error: fmt.Errorf("got %d code for %s", res.StatusCode, url)}
+			return
+		}
 
 		r := bufio.NewReader(res.Body)
 

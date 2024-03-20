@@ -56,7 +56,7 @@ func TestLoop(t *testing.T) {
 					out <- x
 				})
 
-				outSlice := toSlice(out)
+				outSlice := th.ToSlice(out)
 
 				th.ExpectValue(t, inProgress.Max(), n)
 
