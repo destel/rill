@@ -26,9 +26,12 @@ func main() {
 	}
 }
 
+// printTemperatureMovements orchestrates a pipeline that fetches temperature measurements for a given city and
+// prints the daily temperature movements. Measurements are fetched concurrently, but the movements are calculated
+// in order, using a single goroutine.
 func printTemperatureMovements(ctx context.Context, city string, startDate, endDate time.Time) error {
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel() // In case of error or early exit, this ensures all http are canceled
+	defer cancel() // In case of error, this ensures all pending operations are canceled
 
 	// Make a channel that emits all the days between startDate and endDate
 	days := make(chan echans.Try[time.Time])

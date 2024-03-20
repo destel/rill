@@ -32,12 +32,10 @@ func main() {
 }
 
 // printValues orchestrates a pipeline that fetches keys from URLs, retrieves their values from Redis, and prints them.
-// The pipeline leverages concurrency for fetching and processing, utilizes batching for efficient Redis lookups,
-// and employs context for graceful cancellation and timeout handling. Batching not only improves performance by
-// reducing the number of Redis calls but also demonstrates the package's ability to group stream elements effectively.
+// The pipeline leverages concurrency for fetching and processing and uses batching to reduce the number of Redis calls.
 func printValues(ctx context.Context, urls []string) error {
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel() // In case of error or early exit, this ensures all http and redis operations are canceled
+	defer cancel() // In case of error, this ensures all http and redis operations are canceled
 
 	// Convert URLs into a channel
 	urlsChan := echans.FromSlice(urls)
