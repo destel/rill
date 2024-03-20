@@ -111,8 +111,8 @@ func streamLines(ctx context.Context, url string) <-chan rill.Try[string] {
 ## Testing strategy
 Rill has a test coverage of over 95%, with testing focused on:
 - **Correctness**: ensuring that functions produce accurate results at different levels of concurrency
-- **Concurrency**: confirming that correct number of goroutines are spawned and utilized
-- **Ordering**: ensuring that ordered versions of the functions preserve the order, while basic versions do not
+- **Concurrency**: confirming that correct number of goroutines is spawned and utilized
+- **Ordering**: ensuring that ordered versions of functions preserve the order, while basic versions do not
 
 
 
@@ -186,7 +186,7 @@ func doWork(ctx context.Context) error {
             return fmt.Errorf("some error") // Early exit on error
         }
     }
-	return nil
+    return nil
 }
 ```
 
@@ -200,8 +200,8 @@ func doWork(ctx context.Context) error {
     
     // Define other pipeline stages...
 	
-	// Ensure pipeline is drained in case of failure
-	defer rill.DrainNB(results)
+    // Ensure pipeline is drained in case of failure
+    defer rill.DrainNB(results)
 	
     // Final stage processing
     for value := range results {
@@ -210,7 +210,7 @@ func doWork(ctx context.Context) error {
             return fmt.Errorf("some error") // Early exit on error
         }
     }
-	return nil
+    return nil
 }
 ```
 
@@ -224,8 +224,8 @@ func doWork(ctx context.Context) error {
     
     // Define other pipeline stages...
 
-	// Use ForEach for final stage processing, which includes error handling and automatic draining
-	return rill.ForEach(results, 5, func(value string) error {
+    // Final stage processing
+    return rill.ForEach(results, 5, func(value string) error {
         // Process value...
         if someCondition {
             return fmt.Errorf("some error") // Early exit on error, with automatic draining
@@ -244,13 +244,13 @@ func doWork(ctx context.Context) error {
     ctx, cancel := context.WithCancel(ctx)
     defer cancel() // Ensures first stage is cancelled upon function exit
 
-	// Initialize the first stage of the pipeline
-	ids := streamIDs(ctx)
+    // Initialize the first stage of the pipeline
+    ids := streamIDs(ctx)
 
     // Define other pipeline stages...
 
-	// Use ForEach for final stage processing, which includes error handling and automatic draining
-	return rill.ForEach(results, 5, func(value string) error {
+    // Final stage processing
+    return rill.ForEach(results, 5, func(value string) error {
         // Process value
         if someCondition {
             return fmt.Errorf("some error") // Early exit on error, with automatic draining
@@ -281,9 +281,9 @@ See a full runnable example at examples/weather
 
 ```go
 type Measurement struct {
-	Date     time.Time
-	Temp     float64
-	Movement float64
+    Date   time.Time
+    Temp   float64
+    Change float64
 }
 
 func printTemperatureChanges(ctx context.Context, city string, startDate, endDate time.Time) error {
