@@ -8,6 +8,10 @@ import (
 	"github.com/destel/rill/internal/th"
 )
 
+func TestWrap(t *testing.T) {
+	_ = Wrap(10, nil)
+}
+
 func TestWrapUnwrapSlice(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		in := WrapSlice[int](nil)
@@ -50,7 +54,7 @@ func TestWrapUnwrapSlice(t *testing.T) {
 	})
 }
 
-func TestWrap(t *testing.T) {
+func TestWrapChan(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
 		res := WrapChan[int](nil, nil)
 		th.ExpectValue(t, res, nil)
