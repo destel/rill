@@ -1,4 +1,4 @@
-package echans
+package rill
 
 func toSliceAndErrors[A any](in <-chan Try[A]) ([]A, []string) {
 	var values []A
@@ -10,7 +10,7 @@ func toSliceAndErrors[A any](in <-chan Try[A]) ([]A, []string) {
 			continue
 		}
 
-		values = append(values, x.V)
+		values = append(values, x.Value)
 	}
 
 	return values, errors
@@ -23,7 +23,7 @@ func replaceWithError[A comparable](in <-chan Try[A], value A, err error) <-chan
 		defer close(out)
 
 		for x := range in {
-			if x.Error == nil && x.V == value {
+			if x.Error == nil && x.Value == value {
 				x.Error = err
 			}
 			out <- x

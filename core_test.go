@@ -1,4 +1,4 @@
-package echans
+package rill
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ func TestMap(t *testing.T) {
 			})
 
 			t.Run(th.Name("correctness", n), func(t *testing.T) {
-				in := Wrap(th.FromRange(0, 20), nil)
+				in := WrapChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 15, fmt.Errorf("err15"))
 
 				out := universalMap(ord, in, n, func(x int) (string, error) {
@@ -60,7 +60,7 @@ func TestMap(t *testing.T) {
 			})
 
 			t.Run(th.Name("ordering", n), func(t *testing.T) {
-				in := Wrap(th.FromRange(0, 20000), nil)
+				in := WrapChan(th.FromRange(0, 20000), nil)
 
 				out := universalMap(ord, in, n, func(x int) (int, error) {
 					if x%2 == 0 {
@@ -103,7 +103,7 @@ func TestFilter(t *testing.T) {
 			})
 
 			t.Run(th.Name("correctness", n), func(t *testing.T) {
-				in := Wrap(th.FromRange(0, 20), nil)
+				in := WrapChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 15, fmt.Errorf("err15"))
 
 				out := universalFilter(ord, in, n, func(x int) (bool, error) {
@@ -135,7 +135,7 @@ func TestFilter(t *testing.T) {
 			})
 
 			t.Run(th.Name("ordering", n), func(t *testing.T) {
-				in := Wrap(th.FromRange(0, 20000), nil)
+				in := WrapChan(th.FromRange(0, 20000), nil)
 
 				out := universalFilter(ord, in, n, func(x int) (bool, error) {
 					switch x % 3 {
@@ -181,12 +181,12 @@ func TestFlatMap(t *testing.T) {
 			})
 
 			t.Run(th.Name("correctness", n), func(t *testing.T) {
-				in := Wrap(th.FromRange(0, 20), nil)
+				in := WrapChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 5, fmt.Errorf("err05"))
 				in = replaceWithError(in, 15, fmt.Errorf("err15"))
 
 				out := universalFlatMap(ord, in, n, func(x int) <-chan Try[string] {
-					return FromSlice([]string{
+					return WrapSlice([]string{
 						fmt.Sprintf("%03dA", x),
 						fmt.Sprintf("%03dB", x),
 					})
@@ -210,7 +210,7 @@ func TestFlatMap(t *testing.T) {
 			})
 
 			t.Run(th.Name("ordering", n), func(t *testing.T) {
-				in := Wrap(th.FromRange(0, 20000), nil)
+				in := WrapChan(th.FromRange(0, 20000), nil)
 				in = OrderedMap(in, 1, func(x int) (int, error) {
 					if x%2 == 0 {
 						return x, fmt.Errorf("err%06d", x)
@@ -219,7 +219,7 @@ func TestFlatMap(t *testing.T) {
 				})
 
 				out := universalFlatMap(ord, in, n, func(x int) <-chan Try[string] {
-					return FromSlice([]string{
+					return WrapSlice([]string{
 						fmt.Sprintf("%06dA", x),
 						fmt.Sprintf("%06dB", x),
 					})
@@ -256,7 +256,7 @@ func TestCatch(t *testing.T) {
 			})
 
 			t.Run(th.Name("correctness", n), func(t *testing.T) {
-				in := Wrap(th.FromRange(0, 20), nil)
+				in := WrapChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 5, fmt.Errorf("err05"))
 				in = replaceWithError(in, 10, fmt.Errorf("err10"))
 				in = replaceWithError(in, 15, fmt.Errorf("err15"))
@@ -290,7 +290,7 @@ func TestCatch(t *testing.T) {
 			})
 
 			t.Run(th.Name("ordering", n), func(t *testing.T) {
-				in := Wrap(th.FromRange(0, 20000), nil)
+				in := WrapChan(th.FromRange(0, 20000), nil)
 				in = OrderedMap(in, 1, func(x int) (int, error) {
 					if x%2 == 0 {
 						return x, fmt.Errorf("err%06d", x)
@@ -321,7 +321,7 @@ func TestForEach(t *testing.T) {
 	for _, n := range []int{1, 5} {
 
 		t.Run(th.Name("no errors", n), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 10), nil)
+			in := WrapChan(th.FromRange(0, 10), nil)
 
 			sum := int64(0)
 			err := ForEach(in, n, func(x int) error {
@@ -335,7 +335,7 @@ func TestForEach(t *testing.T) {
 
 		t.Run(th.Name("error in input", n), func(t *testing.T) {
 			th.ExpectNotHang(t, 10*time.Second, func() {
-				in := Wrap(th.FromRange(0, 1000), nil)
+				in := WrapChan(th.FromRange(0, 1000), nil)
 				in = replaceWithError(in, 100, fmt.Errorf("err100"))
 
 				cnt := int64(0)
@@ -359,7 +359,7 @@ func TestForEach(t *testing.T) {
 
 		t.Run(th.Name("error in func", n), func(t *testing.T) {
 			th.ExpectNotHang(t, 10*time.Second, func() {
-				in := Wrap(th.FromRange(0, 1000), nil)
+				in := WrapChan(th.FromRange(0, 1000), nil)
 
 				cnt := int64(0)
 				err := ForEach(in, n, func(x int) error {
@@ -385,7 +385,7 @@ func TestForEach(t *testing.T) {
 		})
 
 		t.Run(th.Name("ordering", n), func(t *testing.T) {
-			in := Wrap(th.FromRange(0, 20000), nil)
+			in := WrapChan(th.FromRange(0, 20000), nil)
 
 			var mu sync.Mutex
 			outSlice := make([]int, 0, 20000)
@@ -408,7 +408,7 @@ func TestForEach(t *testing.T) {
 	}
 
 	t.Run("deterministic when n=1", func(t *testing.T) {
-		in := Wrap(th.FromRange(0, 100), nil)
+		in := WrapChan(th.FromRange(0, 100), nil)
 
 		in = replaceWithError(in, 10, fmt.Errorf("err10"))
 		in = replaceWithError(in, 11, fmt.Errorf("err11"))

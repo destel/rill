@@ -1,4 +1,4 @@
-package common
+package core
 
 import (
 	"sync"
@@ -88,7 +88,7 @@ func OrderedLoop[A, B any](in <-chan A, done chan<- B, n int, f func(a A, canWri
 	}
 
 	// High level idea:
-	// Each items holds its own canWrite channel and a reference to the next item's canWrite channel.
+	// Each item holds its own canWrite channel and a reference to the next item's canWrite channel.
 	// After item is processed and written, it sends a signal to the next item that it can also be written.
 
 	orderedIn := make(chan orderedValue[A])
@@ -128,11 +128,6 @@ func OrderedLoop[A, B any](in <-chan A, done chan<- B, n int, f func(a A, canWri
 	}
 }
 
-func drain[A any](in <-chan A) {
-	for range in {
-	}
-}
-
 // Breakable creates a new channel from channel in, copying elements until doBreak function is called.
 // doBreak halts copying and discards any remaining elements from in, closing the resulting channel.
 // Use this to stop channel processing when needed.
@@ -148,7 +143,7 @@ func Breakable[A any](in <-chan A) (res <-chan A, doBreak func()) {
 
 	out := make(chan A)
 	go func() {
-		defer drain(in) // discard unconsumed items
+		defer Drain(in) // discard unconsumed items
 		defer close(out)
 
 		for x := range in {

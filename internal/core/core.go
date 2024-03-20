@@ -1,4 +1,4 @@
-package common
+package core
 
 func MapOrFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
 	if in == nil {
@@ -28,49 +28,6 @@ func OrderedMapOrFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-cha
 		<-canWrite
 		if keep {
 			out <- y
-		}
-	})
-
-	return out
-}
-
-func MapOrFlatMap[A, B any](in <-chan A, n int, f func(A) (b B, bb <-chan B, flat bool)) <-chan B {
-	if in == nil {
-		return nil
-	}
-
-	out := make(chan B)
-
-	Loop(in, out, n, func(a A) {
-		b, bb, flat := f(a)
-		if flat {
-			for x := range bb {
-				out <- x
-			}
-		} else {
-			out <- b
-		}
-	})
-
-	return out
-}
-
-func OrderedMapOrFlatMap[A, B any](in <-chan A, n int, f func(A) (b B, bb <-chan B, flat bool)) <-chan B {
-	if in == nil {
-		return nil
-	}
-
-	out := make(chan B)
-
-	OrderedLoop(in, out, n, func(a A, canWrite <-chan struct{}) {
-		b, bb, flat := f(a)
-		<-canWrite
-		if flat {
-			for x := range bb {
-				out <- x
-			}
-		} else {
-			out <- b
 		}
 	})
 

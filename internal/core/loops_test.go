@@ -1,4 +1,4 @@
-package common
+package core
 
 import (
 	"runtime"
@@ -56,7 +56,7 @@ func TestLoop(t *testing.T) {
 					out <- x
 				})
 
-				outSlice := toSlice(out)
+				outSlice := th.ToSlice(out)
 
 				th.ExpectValue(t, inProgress.Max(), n)
 

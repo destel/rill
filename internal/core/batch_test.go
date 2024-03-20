@@ -1,4 +1,4 @@
-package chans
+package core
 
 import (
 	"testing"
@@ -22,7 +22,7 @@ func TestBatch(t *testing.T) {
 
 		out := Batch(in, 4, 500*time.Millisecond)
 
-		outSlice := ToSlice(out)
+		outSlice := th.ToSlice(out)
 		th.ExpectValue(t, len(outSlice), 3)
 		th.ExpectSlice(t, outSlice[0], []int{1, 2, 3, 4})
 		th.ExpectSlice(t, outSlice[1], []int{5, 6, 7, 8})
@@ -40,7 +40,7 @@ func TestBatch(t *testing.T) {
 
 		out := Batch(in, 4, 500*time.Millisecond)
 
-		outSlice := ToSlice(out)
+		outSlice := th.ToSlice(out)
 		th.ExpectValue(t, len(outSlice), 4)
 		th.ExpectSlice(t, outSlice[0], []int{1, 2, 3, 4})
 		th.ExpectSlice(t, outSlice[1], []int{5})
@@ -59,7 +59,7 @@ func TestBatch(t *testing.T) {
 
 		out := Batch(in, 4, -1)
 
-		outSlice := ToSlice(out)
+		outSlice := th.ToSlice(out)
 		th.ExpectValue(t, len(outSlice), 3)
 		th.ExpectSlice(t, outSlice[0], []int{1, 2, 3, 4})
 		th.ExpectSlice(t, outSlice[1], []int{5, 6, 7, 8})
@@ -72,10 +72,10 @@ func TestBatch(t *testing.T) {
 
 			out := Batch(in, 1000, timeout)
 
-			ForEach(out, 1, func(batch []int) bool {
+			for batch := range out {
 				th.ExpectSorted(t, batch)
-				return !t.Failed()
-			})
+			}
+
 		})
 	}
 }
@@ -94,7 +94,7 @@ func TestUnbatch(t *testing.T) {
 		}()
 
 		out := Unbatch(in)
-		outSlice := ToSlice(out)
+		outSlice := th.ToSlice(out)
 
 		th.ExpectSlice(t, outSlice, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 	})

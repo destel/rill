@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/destel/rill/echans"
+	"github.com/destel/rill"
 )
 
 type KV struct {
@@ -20,10 +20,10 @@ type KV struct {
 }
 
 func main() {
-	err := printValues(context.Background(), []string{
-		"https://raw.githubusercontent.com/destel/rill/f/docs/examples/redis-read/ids1.txt",
-		"https://raw.githubusercontent.com/destel/rill/f/docs/examples/redis-read/ids2.txt",
-		"https://raw.githubusercontent.com/destel/rill/f/docs/examples/redis-read/ids3.txt",
+	err := printValuesFromRedis(context.Background(), []string{
+		"https://raw.githubusercontent.com/destel/rill/main/examples/redis-read/ids1.txt",
+		"https://raw.githubusercontent.com/destel/rill/main/examples/redis-read/ids2.txt",
+		"https://raw.githubusercontent.com/destel/rill/main/examples/redis-read/ids3.txt",
 	})
 
 	if err != nil {
@@ -33,28 +33,28 @@ func main() {
 
 // printValues orchestrates a pipeline that fetches keys from URLs, retrieves their values from Redis, and prints them.
 // The pipeline leverages concurrency for fetching and processing and uses batching to reduce the number of Redis calls.
-func printValues(ctx context.Context, urls []string) error {
+func printValuesFromRedis(ctx context.Context, urls []string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel() // In case of error, this ensures all http and redis operations are canceled
 
-	// Convert URLs into a channel
-	urlsChan := echans.FromSlice(urls)
+	// Convert urls into a channel
+	urlsChan := rill.WrapSlice(urls)
 
 	// Fetch and stream keys from each URL concurrently
-	keys := echans.FlatMap(urlsChan, 10, func(url string) <-chan echans.Try[string] {
-		return streamKeys(ctx, url)
+	keys := rill.FlatMap(urlsChan, 10, func(url string) <-chan rill.Try[string] {
+		return streamLines(ctx, url)
 	})
 
 	// Exclude any empty keys from the stream
-	keys = echans.Filter(keys, 5, func(key string) (bool, error) {
+	keys = rill.Filter(keys, 5, func(key string) (bool, error) {
 		return key != "", nil
 	})
 
 	// Organize keys into manageable batches of 10 for bulk operations
-	keyBatches := echans.Batch(keys, 10, 1*time.Second)
+	keyBatches := rill.Batch(keys, 10, 1*time.Second)
 
 	// Fetch values from Redis for each batch of keys
-	resultBatches := echans.Map(keyBatches, 5, func(keys []string) ([]KV, error) {
+	resultBatches := rill.Map(keyBatches, 5, func(keys []string) ([]KV, error) {
 		values, err := redisMGet(ctx, keys...)
 		if err != nil {
 			return nil, err
@@ -69,44 +69,52 @@ func printValues(ctx context.Context, urls []string) error {
 	})
 
 	// Convert batches back to a single items for final processing
-	results := echans.Unbatch(resultBatches)
+	results := rill.Unbatch(resultBatches)
 
 	// Exclude any empty values from the stream
-	results = echans.Filter(results, 5, func(kv KV) (bool, error) {
+	results = rill.Filter(results, 5, func(kv KV) (bool, error) {
 		return kv.Value != "<nil>", nil
 	})
 
 	// Iterate over each key-value pair and print
 	cnt := 0
-	err := echans.ForEach(results, 1, func(kv KV) error {
+	err := rill.ForEach(results, 1, func(kv KV) error {
 		fmt.Println(kv.Key, "=>", kv.Value)
 		cnt++
 		return nil
 	})
-	fmt.Println("Total keys:", cnt)
+	if err != nil {
+		return err
+	}
 
-	return err
+	fmt.Println("Total keys:", cnt)
+	return nil
 }
 
-// streamKeys reads a file from the given URL line by line and returns a channel of lines/keys
-func streamKeys(ctx context.Context, url string) <-chan echans.Try[string] {
-	out := make(chan echans.Try[string], 1)
+// streamLines reads a file from the given URL line by line and returns a channel of lines
+func streamLines(ctx context.Context, url string) <-chan rill.Try[string] {
+	out := make(chan rill.Try[string], 1)
 
 	go func() {
 		defer close(out)
 
 		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
-			out <- echans.Try[string]{Error: err}
+			out <- rill.Try[string]{Error: err}
 			return
 		}
 
 		res, err := http.DefaultClient.Do(req)
 		if err != nil {
-			out <- echans.Try[string]{Error: err}
+			out <- rill.Try[string]{Error: err}
 			return
 		}
 		defer res.Body.Close()
+
+		if res.StatusCode != http.StatusOK {
+			out <- rill.Try[string]{Error: fmt.Errorf("got %d code for %s", res.StatusCode, url)}
+			return
+		}
 
 		r := bufio.NewReader(res.Body)
 
@@ -115,15 +123,15 @@ func streamKeys(ctx context.Context, url string) <-chan echans.Try[string] {
 			line = strings.TrimSuffix(line, "\n")
 
 			if errors.Is(err, io.EOF) {
-				out <- echans.Try[string]{V: line}
+				out <- rill.Try[string]{Value: line}
 				return
 			}
 			if err != nil {
-				out <- echans.Try[string]{Error: err}
+				out <- rill.Try[string]{Error: err}
 				return
 			}
 
-			out <- echans.Try[string]{V: line}
+			out <- rill.Try[string]{Value: line}
 		}
 	}()
 

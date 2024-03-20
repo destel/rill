@@ -1,4 +1,4 @@
-package chans
+package core
 
 import (
 	"testing"
