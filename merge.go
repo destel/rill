@@ -3,13 +3,13 @@ package rill
 import (
 	"math/rand"
 
-	"github.com/destel/rill/internal/common"
+	"github.com/destel/rill/internal/core"
 )
 
 // Merge combines multiple input channels into a single output channel. Items are emitted as soon as they're available,
 // so the output order is not defined.
 func Merge[A any](ins ...<-chan A) <-chan A {
-	return common.Merge(ins...)
+	return core.Merge(ins...)
 }
 
 // Split2 divides the input channel into two output channels based on the discriminator function f, using n goroutines for concurrency.
@@ -20,7 +20,7 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 // The output order is not guaranteed: results are written to the outputs as soon as they're ready.
 // Use [OrderedSplit2] to preserve the input order.
 func Split2[A any](in <-chan Try[A], n int, f func(A) (int, error)) (out0 <-chan Try[A], out1 <-chan Try[A]) {
-	outs := common.MapAndSplit(in, 2, n, func(a Try[A]) (Try[A], int) {
+	outs := core.MapAndSplit(in, 2, n, func(a Try[A]) (Try[A], int) {
 		if a.Error != nil {
 			return a, rand.Int() & 1
 		}
@@ -38,7 +38,7 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (int, error)) (out0 <-chan
 
 // OrderedSplit2 is similar to [Split2], but it guarantees that the order of the outputs matches the order of the input.
 func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (int, error)) (out0 <-chan Try[A], out1 <-chan Try[A]) {
-	outs := common.OrderedMapAndSplit(in, 2, n, func(a Try[A]) (Try[A], int) {
+	outs := core.OrderedMapAndSplit(in, 2, n, func(a Try[A]) (Try[A], int) {
 		if a.Error != nil {
 			return a, rand.Int() & 1
 		}

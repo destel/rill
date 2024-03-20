@@ -1,4 +1,4 @@
-package common
+package core
 
 func Drain[A any](in <-chan A) {
 	for range in {

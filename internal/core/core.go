@@ -1,4 +1,4 @@
-package common
+package core
 
 func MapOrFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
 	if in == nil {

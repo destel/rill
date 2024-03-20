@@ -3,7 +3,7 @@ package rill
 import (
 	"sync"
 
-	"github.com/destel/rill/internal/common"
+	"github.com/destel/rill/internal/core"
 )
 
 // Map applies a transformation function to each item in an input channel, using n goroutines for concurrency.
@@ -11,7 +11,7 @@ import (
 // The output order is not guaranteed: results are written to the output as soon as they're ready.
 // Use [OrderedMap] to preserve the input order.
 func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
-	return common.MapOrFilter(in, n, func(a Try[A]) (Try[B], bool) {
+	return core.MapOrFilter(in, n, func(a Try[A]) (Try[B], bool) {
 		if a.Error != nil {
 			return Try[B]{Error: a.Error}, true
 		}
@@ -27,7 +27,7 @@ func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] 
 
 // OrderedMap is similar to [Map], but it guarantees that the output order is the same as the input order.
 func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
-	return common.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[B], bool) {
+	return core.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[B], bool) {
 		if a.Error != nil {
 			return Try[B]{Error: a.Error}, true
 		}
@@ -46,7 +46,7 @@ func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan 
 // The output order is not guaranteed: results are written to the output as soon as they're ready.
 // Use [OrderedFilter] to preserve the input order.
 func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
-	return common.MapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
+	return core.MapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error != nil {
 			return a, true // never filter out errors
 		}
@@ -62,7 +62,7 @@ func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[
 
 // OrderedFilter is similar to [Filter], but it guarantees that the output order is the same as the input order.
 func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
-	return common.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
+	return core.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error != nil {
 			return a, true // never filter out errors
 		}
@@ -87,7 +87,7 @@ func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan 
 
 	out := make(chan Try[B])
 
-	common.Loop(in, out, n, func(a Try[A]) {
+	core.Loop(in, out, n, func(a Try[A]) {
 		if a.Error != nil {
 			out <- Try[B]{Error: a.Error}
 			return
@@ -110,7 +110,7 @@ func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) 
 
 	out := make(chan Try[B])
 
-	common.OrderedLoop(in, out, n, func(a Try[A], canWrite <-chan struct{}) {
+	core.OrderedLoop(in, out, n, func(a Try[A], canWrite <-chan struct{}) {
 		if a.Error != nil {
 			<-canWrite
 			out <- Try[B]{Error: a.Error}
@@ -132,7 +132,7 @@ func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) 
 // The output order is not guaranteed: results are written to the output as soon as they're ready.
 // Use [OrderedCatch] to preserve the input order.
 func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
-	return common.MapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
+	return core.MapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error == nil {
 			return a, true
 		}
@@ -148,7 +148,7 @@ func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 
 // OrderedCatch is similar to [Catch], but it guarantees that the output order is the same as the input order.
 func OrderedCatch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
-	return common.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
+	return core.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error == nil {
 			return a, true
 		}
@@ -189,10 +189,10 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 	var retErr error
 	var once sync.Once
 
-	in, earlyExit := common.Breakable(in)
+	in, earlyExit := core.Breakable(in)
 	done := make(chan struct{})
 
-	common.Loop(in, done, n, func(a Try[A]) {
+	core.Loop(in, done, n, func(a Try[A]) {
 		err := a.Error
 		if err == nil {
 			err = f(a.V)
