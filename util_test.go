@@ -20,6 +20,14 @@ func TestBuffer(t *testing.T) {
 }
 
 func TestFromToSlice(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		in := FromSlice[int](nil)
+		outSlice, err := ToSlice(in)
+
+		th.ExpectSlice(t, outSlice, nil)
+		th.ExpectNoError(t, err)
+	})
+
 	t.Run("no errors", func(t *testing.T) {
 		inSlice := make([]int, 20)
 		for i := 0; i < 20; i++ {
