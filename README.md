@@ -12,7 +12,7 @@ without getting bogged down by the complexity of concurrency.
 - **Error Handling**: provides a structured way to handle errors in concurrent apps
 - **Streaming**: handles real-time data streams or large datasets with a minimal memory footprint
 - **Order Preservation**: offers functions that preserve the original order of data, while still allowing for concurrent processing
-- **Efficient Resource Use**: the number of goroutines and allocations does not depend on data size
+- **Efficient Resource Use**: the number of goroutines and allocations does not depend on the data size
 - **Generic**: all operations are type-safe and can be used with any data type
 - **Functional Programming**: based on functional programming concepts, making operations like map, filter, flatMap and others available for channel-based workflows
 
@@ -114,7 +114,7 @@ such as **Map**, **Filter**, **FlatMap** and others. Finally when all processing
 ## Batching
 Batching is a common pattern in concurrent processing, especially when dealing with external services or databases.
 Rill provides a Batch function that organizes a stream of items into batches of a specified size. It's also possible 
-to specify a timeout, after which the batch is emitted even if it's not full. This is useful for keeping an app reactive
+to specify a timeout, after which the batch is emitted even if it's not full. This is useful for keeping an application reactive
 when input stream is slow or sparse.
 
 
@@ -124,22 +124,22 @@ when input stream is slow or sparse.
 ## Error handling
 In the examples above errors are handled using **ForEach**, which is good for most use cases. 
 **ForEach** stops processing on the first error and returns it. If you need to handle error in the middle of pipeline,
-and continue processing, there is a **Catch** function that can be used for that.
+and/or continue processing, there is a **Catch** function that can be used for that.
 
 ```go
-results := echans.Map(input, 10, func(item int) (int, error) {
+results := rill.Map(input, 10, func(item int) (int, error) {
     // do some processing
 })
 
-results = echans.Catch(results, 5, func(err error) {
+results = rill.Catch(results, 5, func(err error) {
     if errors.Is(err, sql.ErrNoRows) {
         return nil // ignore this error
     } else {
-        return fmt.Errorf("error processing item: %w", err) // wrap error and continue processing
+        return fmt.Errorf("error processing item: %w", err) // wrap other errors
     }
 })
 
-err := echans.ForEach(results, 1, func(item int) error {
+err := rill.ForEach(results, 1, func(item int) error {
     // process results as usual
 })
 ```
