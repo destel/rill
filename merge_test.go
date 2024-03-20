@@ -42,7 +42,7 @@ func TestSplit2(t *testing.T) {
 					// - next group would cause error during splitting
 					// - next group would be errors even before splitting
 
-					in := Wrap(th.FromRange(0, 20*(numOuts+3)), nil)
+					in := WrapChan(th.FromRange(0, 20*(numOuts+3)), nil)
 					in = OrderedMap(in, 1, func(x int) (int, error) {
 						outID := x % (numOuts + 3)
 						if outID == numOuts+2 {
@@ -98,7 +98,7 @@ func TestSplit2(t *testing.T) {
 				})
 
 				t.Run(th.Name("ordering", numOuts, n), func(t *testing.T) {
-					in := Wrap(th.FromRange(0, 10000*(numOuts+1)), nil)
+					in := WrapChan(th.FromRange(0, 10000*(numOuts+1)), nil)
 
 					outs := universalSplit(ord, in, numOuts, n, func(x int) (int, error) {
 						outID := x % (numOuts + 1)

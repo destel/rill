@@ -12,9 +12,9 @@ without getting bogged down by the complexity of concurrency.
 - **Error Handling**: provides a structured way to handle errors in concurrent apps
 - **Streaming**: handles real-time data streams or large datasets with a minimal memory footprint
 - **Order Preservation**: offers functions that preserve the original order of data, while still allowing for concurrent processing
-- **Functional Programming**: based on functional programming concepts, making operations like map, filter, flatMap and others available for channel-based workflows
+- **Efficient Resource Use**: the number of goroutines and allocations does not depend on data size
 - **Generic**: all operations are type-safe and can be used with any data type
-
+- **Functional Programming**: based on functional programming concepts, making operations like map, filter, flatMap and others available for channel-based workflows
 
 ## Installation
 ```bash
@@ -33,59 +33,68 @@ type KV struct {
     Value string
 }
 
-func printValues(ctx context.Context, urls []string) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel() // In case of error or early exit, this ensures all http and redis operations are canceled
 
-	// Convert URLs into a channel
-	urlsChan := echans.FromSlice(urls)
+func printValuesFromRedis(ctx context.Context, urls []string) error {
+    ctx, cancel := context.WithCancel(ctx)
+    defer cancel() // In case of error, this ensures all http and redis operations are canceled
 
-	// Fetch and stream keys from each URL concurrently
-	keys := echans.FlatMap(urlsChan, 10, func(url string) <-chan echans.Try[string] {
-		return streamKeys(ctx, url)
-	})
+    // Convert urls into a channel
+    urlsChan := rill.WrapSlice(urls)
+    
+    // Fetch and stream keys from each URL concurrently
+    keys := rill.FlatMap(urlsChan, 10, func(url string) <-chan rill.Try[string] {
+        return streamKeys(ctx, url)
+    })
+    
+    // Exclude any empty keys from the stream
+    keys = rill.Filter(keys, 5, func(key string) (bool, error) {
+        return key != "", nil
+    })
+    
+    // Organize keys into manageable batches of 10 for bulk operations
+    keyBatches := rill.Batch(keys, 10, 1*time.Second)
+    
+    // Fetch values from Redis for each batch of keys
+    resultBatches := rill.Map(keyBatches, 5, func(keys []string) ([]KV, error) {
+        values, err := redisMGet(ctx, keys...)
+        if err != nil {
+            return nil, err
+        }
+    
+        results := make([]KV, len(keys))
+        for i, key := range keys {
+            results[i] = KV{Key: key, Value: values[i]}
+        }
+        
+        return results, nil
+    })
 
-	// Exclude any empty keys from the stream
-	keys = echans.Filter(keys, 5, func(key string) (bool, error) {
-		return key != "", nil
-	})
+    // Convert batches back to a single items for final processing
+    results := rill.Unbatch(resultBatches)
+    
+    // Exclude any empty values from the stream
+    results = rill.Filter(results, 5, func(kv KV) (bool, error) {
+        return kv.Value != "<nil>", nil
+    })
+    
+    // Iterate over each key-value pair and print
+    cnt := 0
+    err := rill.ForEach(results, 1, func(kv KV) error {
+        fmt.Println(kv.Key, "=>", kv.Value)
+        cnt++
+        return nil
+    })
+    if err != nil {
+        return err
+    }
 
-	// Organize keys into manageable batches of 10 for bulk operations
-	keyBatches := echans.Batch(keys, 10, 1*time.Second)
+    fmt.Println("Total keys:", cnt)
+    return nil
+}
 
-	// Fetch values from Redis for each batch of keys
-	resultBatches := echans.Map(keyBatches, 5, func(keys []string) ([]KV, error) {
-		values, err := redisMGet(ctx, keys...)
-		if err != nil {
-			return nil, err
-		}
-
-		results := make([]KV, len(keys))
-		for i, key := range keys {
-			results[i] = KV{Key: key, Value: values[i]}
-		}
-
-		return results, nil
-	})
-
-	// Convert batches back to a single items for final processing
-	results := echans.Unbatch(resultBatches)
-
-	// Exclude any empty values from the stream
-	results = echans.Filter(results, 5, func(kv KV) (bool, error) {
-		return kv.Value != "<nil>", nil
-	})
-
-	// Iterate over each key-value pair and print
-	cnt := 0
-	err := echans.ForEach(results, 1, func(kv KV) error {
-		fmt.Println(kv.Key, "=>", kv.Value)
-		cnt++
-		return nil
-	})
-	fmt.Println("Total keys:", cnt)
-
-	return err
+// streamKeys reads a file from the given URL line by line and returns a channel of lines/keys
+func streamKeys(ctx context.Context, url string) <-chan rill.Try[string] {
+    // ...
 }
 
 
@@ -96,9 +105,9 @@ func printValues(ctx context.Context, urls []string) error {
 
 ## Design philosophy
 At the heart of rill lies a simple yet powerful concept: operating on channels of wrapped values, encapsulated by the Try structure.
-Such channels can be created manually or through utilities like **FromSlice**, **Wrap**, and **WrapAsync**, and then transformed via operations 
+Such channels can be created manually or through utilities like **WrapSlice** or **WrapChan**, and then transformed via operations 
 such as **Map**, **Filter**, **FlatMap** and others. Finally when all processing stages are completed, the data can be consumed by 
-**ForEach**, **ToSlice** or manually by iterating over the resulting channel.
+**ForEach**, **UnwrapToSlice** or manually by iterating over the resulting channel.
 
 
 
@@ -151,39 +160,44 @@ type Measurement struct {
 }
 
 func printTemperatureMovements(ctx context.Context, city string, startDate, endDate time.Time) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel() // In case of error or early exit, this ensures all http are canceled
+    ctx, cancel := context.WithCancel(ctx)
+    defer cancel() // In case of error, this ensures all pending operations are canceled
+    
+    // Make a channel that emits all the days between startDate and endDate
+    days := make(chan rill.Try[time.Time])
+    go func() {
+        defer close(days)
+        for date := startDate; date.Before(endDate); date = date.AddDate(0, 0, 1) {
+            days <- rill.Wrap(date, nil)
+        }
+    }()
+    
+    // Download the temperature for each day in parallel and in order
+    measurements := rill.OrderedMap(days, 10, func(date time.Time) (Measurement, error) {
+        temp, err := getTemperature(ctx, city, date)
+        return Measurement{Date: date, Temp: temp}, err
+    })
+    
+    // Calculate the temperature movements. Use a single goroutine
+    prev := Measurement{Temp: math.NaN()}
+    measurements = rill.OrderedMap(measurements, 1, func(m Measurement) (Measurement, error) {
+        m.Movement = m.Temp - prev.Temp
+        prev = m
+        return m, nil
+    })
+    
+    // Iterate over the measurements and print the movements
+    err := rill.ForEach(measurements, 1, func(m Measurement) error {
+        fmt.Printf("%s: %.1f°C (movement %+.1f°C)\n", m.Date.Format("2006-01-02"), m.Temp, m.Movement)
+        prev = m
+        return nil
+    })
+    
+    return err
+}
 
-	// Make a channel that emits all the days between startDate and endDate
-	days := make(chan echans.Try[time.Time])
-	go func() {
-		defer close(days)
-		for date := startDate; date.Before(endDate); date = date.AddDate(0, 0, 1) {
-			days <- echans.Try[time.Time]{V: date}
-		}
-	}()
-
-	// Download the temperature for each day in parallel and in order
-	measurements := echans.OrderedMap(days, 10, func(date time.Time) (Measurement, error) {
-		temp, err := getTemperature(ctx, city, date)
-		return Measurement{Date: date, Temp: temp}, err
-	})
-
-	// Calculate the temperature movements. Use a single goroutine
-	prev := Measurement{Temp: math.NaN()}
-	measurements = echans.OrderedMap(measurements, 1, func(m Measurement) (Measurement, error) {
-		m.Movement = m.Temp - prev.Temp
-		prev = m
-		return m, nil
-	})
-
-	// Iterate over the measurements and print the movements
-	err := echans.ForEach(measurements, 1, func(m Measurement) error {
-		fmt.Printf("%s: %.1f°C (movement %+.1f°C)\n", m.Date.Format("2006-01-02"), m.Temp, m.Movement)
-		prev = m
-		return nil
-	})
-
-	return err
+// getTemperature does a network request to fetch the temperature for a given city and date.
+func getTemperature(ctx context.Context, city string, date time.Time) (float64, error) {
+    // ...
 }
 ```

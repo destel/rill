@@ -88,7 +88,7 @@ func OrderedLoop[A, B any](in <-chan A, done chan<- B, n int, f func(a A, canWri
 	}
 
 	// High level idea:
-	// Each items holds its own canWrite channel and a reference to the next item's canWrite channel.
+	// Each item holds its own canWrite channel and a reference to the next item's canWrite channel.
 	// After item is processed and written, it sends a signal to the next item that it can also be written.
 
 	orderedIn := make(chan orderedValue[A])

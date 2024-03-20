@@ -20,7 +20,7 @@ type KV struct {
 }
 
 func main() {
-	err := printValues(context.Background(), []string{
+	err := printValuesFromRedis(context.Background(), []string{
 		"https://raw.githubusercontent.com/destel/rill/main/examples/redis-read/ids1.txt",
 		"https://raw.githubusercontent.com/destel/rill/main/examples/redis-read/ids2.txt",
 		"https://raw.githubusercontent.com/destel/rill/main/examples/redis-read/ids3.txt",
@@ -33,11 +33,11 @@ func main() {
 
 // printValues orchestrates a pipeline that fetches keys from URLs, retrieves their values from Redis, and prints them.
 // The pipeline leverages concurrency for fetching and processing and uses batching to reduce the number of Redis calls.
-func printValues(ctx context.Context, urls []string) error {
+func printValuesFromRedis(ctx context.Context, urls []string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel() // In case of error, this ensures all http and redis operations are canceled
 
-	// Convert URLs into a channel
+	// Convert urls into a channel
 	urlsChan := rill.WrapSlice(urls)
 
 	// Fetch and stream keys from each URL concurrently
@@ -83,9 +83,12 @@ func printValues(ctx context.Context, urls []string) error {
 		cnt++
 		return nil
 	})
-	fmt.Println("Total keys:", cnt)
+	if err != nil {
+		return err
+	}
 
-	return err
+	fmt.Println("Total keys:", cnt)
+	return nil
 }
 
 // streamKeys reads a file from the given URL line by line and returns a channel of lines/keys

@@ -11,7 +11,7 @@ func TestBatch(t *testing.T) {
 	// most logic is covered by the chans pkg tests
 
 	t.Run("correctness", func(t *testing.T) {
-		in := Wrap(th.FromRange(0, 10), fmt.Errorf("err0"))
+		in := WrapChan(th.FromRange(0, 10), fmt.Errorf("err0"))
 		in = replaceWithError(in, 5, fmt.Errorf("err5"))
 		in = replaceWithError(in, 7, fmt.Errorf("err7"))
 

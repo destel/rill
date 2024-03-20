@@ -6,7 +6,13 @@ type Try[A any] struct {
 	Error error
 }
 
-// WrapSlice converts a slice into a channel.
+// Wrap converts a value and/or error into a [Try] container.
+// It's a convenience function to avoid creating a [Try] container manually and benefit from type inference.
+func Wrap[A any](value A, err error) Try[A] {
+	return Try[A]{Value: value, Error: err}
+}
+
+// WrapSlice converts a slice into a channel of [Try] containers.
 func WrapSlice[A any](slice []A) <-chan Try[A] {
 	out := make(chan Try[A], len(slice))
 	for _, a := range slice {
@@ -16,10 +22,10 @@ func WrapSlice[A any](slice []A) <-chan Try[A] {
 	return out
 }
 
-// ToSlice converts a channel into a slice.
-// It's in way an inverse of [WrapSlice], but it stops on the first error and returns it
-// Also in case of an error, ToSlice ensures the input channel is drained to avoid goroutine leaks.
-func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
+// UnwrapToSlice converts a channel of [Try] containers into a slice of values and an error.
+// In a way it's an inverse of [WrapSlice], but it stops on the first error and returns it
+// Also in case of an error, UnwrapToSlice ensures the input channel is drained to avoid goroutine leaks.
+func UnwrapToSlice[A any](in <-chan Try[A]) ([]A, error) {
 	var res []A
 
 	for x := range in {
@@ -33,10 +39,10 @@ func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 	return res, nil
 }
 
-// Wrap converts a regular channel of items into a channel of items wrapped in a [Try] container.
-// Additionally, this function can also take an error, which will be added to the output channel.
+// WrapChan converts a regular channel into a channel of values wrapped in a [Try] container.
+// Additionally, this function can take an error, which will be added to the output channel alongside the values.
 // Either the input channel or the error can be nil, but not both simultaneously.
-func Wrap[A any](values <-chan A, err error) <-chan Try[A] {
+func WrapChan[A any](values <-chan A, err error) <-chan Try[A] {
 	if values == nil && err == nil {
 		return nil
 	}
@@ -57,9 +63,9 @@ func Wrap[A any](values <-chan A, err error) <-chan Try[A] {
 	return out
 }
 
-// WrapAsync is similar to [Wrap], but instead of single error, it can take a channel of errors,
-// that all will be added to the output channel.
-func WrapAsync[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
+// WrapChanAndErrs takes channel of values and a channel of errors and merges them into a single channel of [Try] containers.
+// Either of the input channels can be nil, but not both simultaneously.
+func WrapChanAndErrs[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 	if values == nil && errs == nil {
 		return nil
 	}
@@ -100,8 +106,9 @@ func WrapAsync[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 	return out
 }
 
-// Unwrap converts a channel of [Try] containers into a channel of values and a channel of errors.
-func Unwrap[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
+// UnwrapToChanAndErrs converts a channel of [Try] containers into a channel of values and a channel of errors.
+// It's an inverse of [WrapChanAndErrs].
+func UnwrapToChanAndErrs[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 	if in == nil {
 		return nil, nil
 	}
