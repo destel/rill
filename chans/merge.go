@@ -77,6 +77,8 @@ func slowMerge[A any](ins []<-chan A) <-chan A {
 	return out
 }
 
+// Merge combines multiple input channels into a single output channel. Items are emitted as soon as they're available,
+// so the output order is not defined.
 func Merge[A any](ins ...<-chan A) <-chan A {
 	switch len(ins) {
 	case 0:
@@ -90,6 +92,11 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 	}
 }
 
+// Split2 divides the input channel into two output channels based on the discriminator function f, using n goroutines for concurrency.
+// The function f takes an item from the input and decides which output channel (out0 or out1) it should go to by returning 0 or 1, respectively.
+// Return values other than 0 or 1 lead to the item being discarded.
+// The output order is not guaranteed: results are written to the outputs as soon as they're ready.
+// Use OrderedSplit2 to preserve the input order.
 func Split2[A any](in <-chan A, n int, f func(A) int) (out0 <-chan A, out1 <-chan A) {
 	outs := common.MapAndSplit(in, 2, n, func(a A) (A, int) {
 		return a, f(a)
@@ -97,6 +104,7 @@ func Split2[A any](in <-chan A, n int, f func(A) int) (out0 <-chan A, out1 <-cha
 	return outs[0], outs[1]
 }
 
+// OrderedSplit2 is similar to Split2, but it guarantees that the order of the outputs matches the order of the input.
 func OrderedSplit2[A any](in <-chan A, n int, f func(A) int) (out0 <-chan A, out1 <-chan A) {
 	outs := common.OrderedMapAndSplit(in, 2, n, func(a A) (A, int) {
 		return a, f(a)
