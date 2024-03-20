@@ -16,12 +16,12 @@ func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] 
 			return Try[B]{Error: a.Error}, true
 		}
 
-		b, err := f(a.V)
+		b, err := f(a.Value)
 		if err != nil {
 			return Try[B]{Error: err}, true
 		}
 
-		return Try[B]{V: b}, true
+		return Try[B]{Value: b}, true
 	})
 }
 
@@ -32,12 +32,12 @@ func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan 
 			return Try[B]{Error: a.Error}, true
 		}
 
-		b, err := f(a.V)
+		b, err := f(a.Value)
 		if err != nil {
 			return Try[B]{Error: err}, true
 		}
 
-		return Try[B]{V: b}, true
+		return Try[B]{Value: b}, true
 	})
 }
 
@@ -51,7 +51,7 @@ func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[
 			return a, true // never filter out errors
 		}
 
-		keep, err := f(a.V)
+		keep, err := f(a.Value)
 		if err != nil {
 			return Try[A]{Error: err}, true // never filter out errors
 		}
@@ -67,7 +67,7 @@ func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-ch
 			return a, true // never filter out errors
 		}
 
-		keep, err := f(a.V)
+		keep, err := f(a.Value)
 		if err != nil {
 			return Try[A]{Error: err}, true // never filter out errors
 		}
@@ -93,7 +93,7 @@ func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan 
 			return
 		}
 
-		bb := f(a.V)
+		bb := f(a.Value)
 		for b := range bb {
 			out <- b
 		}
@@ -117,7 +117,7 @@ func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) 
 			return
 		}
 
-		bb := f(a.V)
+		bb := f(a.Value)
 		<-canWrite
 		for b := range bb {
 			out <- b
@@ -174,7 +174,7 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 		for a := range in {
 			err := a.Error
 			if err == nil {
-				err = f(a.V)
+				err = f(a.Value)
 			}
 
 			if err != nil {
@@ -195,7 +195,7 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 	core.Loop(in, done, n, func(a Try[A]) {
 		err := a.Error
 		if err == nil {
-			err = f(a.V)
+			err = f(a.Value)
 		}
 
 		if err != nil {

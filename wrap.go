@@ -2,7 +2,7 @@ package rill
 
 // Try is a container for a value or an error
 type Try[A any] struct {
-	V     A
+	Value A
 	Error error
 }
 
@@ -23,16 +23,15 @@ func Wrap[A any](values <-chan A, err error) <-chan Try[A] {
 		}
 
 		for x := range values {
-			out <- Try[A]{V: x}
+			out <- Try[A]{Value: x}
 		}
 	}()
 
 	return out
 }
 
-// WrapAsync converts a regular channel of items into a channel of items wrapped in a [Try] container.
-// Additionally, this function can also take a channel of errors, that will be added to the output channel.
-// Either the input channel or the error channel can be nil, but not both simultaneously.
+// WrapAsync is similar to [Wrap], but instead of single error, it can take a channel of errors,
+// that all will be added to the output channel.
 func WrapAsync[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 	if values == nil && errs == nil {
 		return nil
@@ -66,7 +65,7 @@ func WrapAsync[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 					continue
 				}
 
-				out <- Try[A]{V: x}
+				out <- Try[A]{Value: x}
 			}
 		}
 	}()
@@ -91,7 +90,7 @@ func Unwrap[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 			if x.Error != nil {
 				errs <- x.Error
 			} else {
-				out <- x.V
+				out <- x.Value
 			}
 		}
 	}()

@@ -25,7 +25,7 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (int, error)) (out0 <-chan
 			return a, rand.Int() & 1
 		}
 
-		i, err := f(a.V)
+		i, err := f(a.Value)
 		if err != nil {
 			return Try[A]{Error: err}, rand.Int() & 1
 		}
@@ -43,7 +43,7 @@ func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (int, error)) (out0
 			return a, rand.Int() & 1
 		}
 
-		i, err := f(a.V)
+		i, err := f(a.Value)
 		if err != nil {
 			return Try[A]{Error: err}, rand.Int() & 1
 		}

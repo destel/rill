@@ -19,7 +19,7 @@ func TestWrap(t *testing.T) {
 
 		for i := 0; i < 20000; i++ {
 			inSlice = append(inSlice, i)
-			expectedOutSlice = append(expectedOutSlice, Try[int]{V: i})
+			expectedOutSlice = append(expectedOutSlice, Try[int]{Value: i})
 		}
 
 		wrapped := Wrap(th.FromSlice(inSlice), nil)
@@ -37,7 +37,7 @@ func TestWrap(t *testing.T) {
 
 		for i := 0; i < 20000; i++ {
 			inSlice = append(inSlice, i)
-			expectedOutSlice = append(expectedOutSlice, Try[int]{V: i})
+			expectedOutSlice = append(expectedOutSlice, Try[int]{Value: i})
 		}
 
 		wrapped := Wrap(th.FromSlice(inSlice), err)

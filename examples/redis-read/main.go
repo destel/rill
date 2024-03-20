@@ -120,7 +120,7 @@ func streamKeys(ctx context.Context, url string) <-chan rill.Try[string] {
 			line = strings.TrimSuffix(line, "\n")
 
 			if errors.Is(err, io.EOF) {
-				out <- rill.Try[string]{V: line}
+				out <- rill.Try[string]{Value: line}
 				return
 			}
 			if err != nil {
@@ -128,7 +128,7 @@ func streamKeys(ctx context.Context, url string) <-chan rill.Try[string] {
 				return
 			}
 
-			out <- rill.Try[string]{V: line}
+			out <- rill.Try[string]{Value: line}
 		}
 	}()
 

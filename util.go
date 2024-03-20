@@ -27,7 +27,7 @@ func Buffer[A any](in <-chan A, n int) <-chan A {
 func FromSlice[A any](slice []A) <-chan Try[A] {
 	out := make(chan Try[A], len(slice))
 	for _, a := range slice {
-		out <- Try[A]{V: a}
+		out <- Try[A]{Value: a}
 	}
 	close(out)
 	return out
@@ -44,7 +44,7 @@ func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 			DrainNB(in)
 			return res, err
 		}
-		res = append(res, x.V)
+		res = append(res, x.Value)
 	}
 
 	return res, nil

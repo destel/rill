@@ -38,7 +38,7 @@ func printTemperatureMovements(ctx context.Context, city string, startDate, endD
 	go func() {
 		defer close(days)
 		for date := startDate; date.Before(endDate); date = date.AddDate(0, 0, 1) {
-			days <- rill.Try[time.Time]{V: date}
+			days <- rill.Try[time.Time]{Value: date}
 		}
 	}()
 
