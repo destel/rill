@@ -17,22 +17,6 @@ func FromRange(start, end int) <-chan int {
 	return ch
 }
 
-// InfiniteChan generates infinite sequence of natural numbers. It stops when stop channel is closed.
-func InfiniteChan(stop <-chan struct{}) <-chan int {
-	ch := make(chan int)
-	go func() {
-		defer close(ch)
-		for i := 0; ; i++ {
-			select {
-			case <-stop:
-				return
-			case ch <- i:
-			}
-		}
-	}()
-	return ch
-}
-
 func Send[T any](ch chan<- T, items ...T) {
 	for _, item := range items {
 		ch <- item

@@ -335,48 +335,52 @@ func TestForEach(t *testing.T) {
 
 		t.Run(th.Name("error in input", n), func(t *testing.T) {
 			th.ExpectNotHang(t, 10*time.Second, func() {
-				done := make(chan struct{})
-				defer close(done)
-
-				in := Wrap(th.InfiniteChan(done), nil)
+				in := Wrap(th.FromRange(0, 1000), nil)
 				in = replaceWithError(in, 100, fmt.Errorf("err100"))
 
-				sum := int64(0)
+				cnt := int64(0)
 				err := ForEach(in, n, func(x int) error {
-					atomic.AddInt64(&sum, int64(x))
+					atomic.AddInt64(&cnt, 1)
 					return nil
 				})
 
 				th.ExpectError(t, err, "err100")
-
-				fmt.Println(sum, 99*100/2)
-
-				if sum < 99*100/2 {
+				if cnt < 100 {
 					t.Errorf("expected at least 100 iterations to complete")
 				}
+				if cnt > 150 {
+					t.Errorf("early exit did not happen")
+				}
+
+				time.Sleep(1 * time.Second)
+				th.ExpectDrainedChan(t, in)
 			})
 		})
 
 		t.Run(th.Name("error in func", n), func(t *testing.T) {
 			th.ExpectNotHang(t, 10*time.Second, func() {
-				done := make(chan struct{})
-				defer close(done)
+				in := Wrap(th.FromRange(0, 1000), nil)
 
-				in := Wrap(th.InfiniteChan(done), nil)
-
-				sum := int64(0)
+				cnt := int64(0)
 				err := ForEach(in, n, func(x int) error {
 					if x == 100 {
 						return fmt.Errorf("err100")
 					}
-					atomic.AddInt64(&sum, int64(x))
+					atomic.AddInt64(&cnt, 1)
 					return nil
 				})
 
 				th.ExpectError(t, err, "err100")
-				if sum < 99*100/2 {
+				if cnt < 100 {
 					t.Errorf("expected at least 100 iterations to complete")
 				}
+				if cnt > 150 {
+					t.Errorf("early exit did not happen")
+				}
+
+				// wait until it drained
+				time.Sleep(1 * time.Second)
+				th.ExpectDrainedChan(t, in)
 			})
 		})
 

@@ -83,7 +83,7 @@ func ExpectUnsorted[T ordered](t *testing.T, arr []T) {
 	}
 }
 
-func ExpectClosedChan[A any](t *testing.T, ch <-chan A) {
+func ExpectDrainedChan[A any](t *testing.T, ch <-chan A) {
 	t.Helper()
 	select {
 	case x, ok := <-ch:

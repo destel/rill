@@ -38,6 +38,6 @@ func TestFromToSlice(t *testing.T) {
 		th.ExpectError(t, err, "err15")
 
 		time.Sleep(1 * time.Second)
-		th.ExpectClosedChan(t, in)
+		th.ExpectDrainedChan(t, in)
 	})
 }
