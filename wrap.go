@@ -6,6 +6,33 @@ type Try[A any] struct {
 	Error error
 }
 
+// FromSlice converts a slice into a channel.
+func FromSlice[A any](slice []A) <-chan Try[A] {
+	out := make(chan Try[A], len(slice))
+	for _, a := range slice {
+		out <- Try[A]{Value: a}
+	}
+	close(out)
+	return out
+}
+
+// ToSlice converts a channel into a slice.
+// Conversion stops at the first error encountered.
+// In case of an error, ToSlice ensures the input channel is drained to avoid goroutine leaks,
+func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
+	var res []A
+
+	for x := range in {
+		if err := x.Error; err != nil {
+			DrainNB(in)
+			return res, err
+		}
+		res = append(res, x.Value)
+	}
+
+	return res, nil
+}
+
 // Wrap converts a regular channel of items into a channel of items wrapped in a [Try] container.
 // Additionally, this function can also take an error, which will be added to the output channel.
 // Either the input channel or the error can be nil, but not both simultaneously.
