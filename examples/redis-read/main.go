@@ -42,7 +42,7 @@ func printValuesFromRedis(ctx context.Context, urls []string) error {
 
 	// Fetch and stream keys from each URL concurrently
 	keys := rill.FlatMap(urlsChan, 10, func(url string) <-chan rill.Try[string] {
-		return streamKeys(ctx, url)
+		return streamLines(ctx, url)
 	})
 
 	// Exclude any empty keys from the stream
@@ -91,8 +91,8 @@ func printValuesFromRedis(ctx context.Context, urls []string) error {
 	return nil
 }
 
-// streamKeys reads a file from the given URL line by line and returns a channel of lines/keys
-func streamKeys(ctx context.Context, url string) <-chan rill.Try[string] {
+// streamLines reads a file from the given URL line by line and returns a channel of lines
+func streamLines(ctx context.Context, url string) <-chan rill.Try[string] {
 	out := make(chan rill.Try[string], 1)
 
 	go func() {
