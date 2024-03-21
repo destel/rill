@@ -135,6 +135,12 @@ to specify a timeout, after which the batch is emitted even if it's not full. Th
 when input stream is slow or sparse.
 
 
+## Fan-In and Fan-Out
+Library provides a simple way to fan-in and fan-out data streams. Fan-in is done with the **Merge** function,
+which consolidates multiple data streams into a single unified channel.
+Fan-out is done with the **Split2** function, that divides a single input stream into two distinct output channels. 
+This division is based on a discriminator function, allowing parallel processing paths based on data characteristics.
+
 
 
 ## Error handling
