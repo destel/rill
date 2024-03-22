@@ -40,7 +40,7 @@ type KV struct {
 
 func printValuesFromDB(ctx context.Context, urls []string) error {
     ctx, cancel := context.WithCancel(ctx)
-    defer cancel() // In case of error, this ensures all http and redis operations are canceled
+    defer cancel() // In case of error, this ensures all http and DB operations are canceled
     
     // Convert urls into a channel
     urlsChan := rill.FromSlice(urls, nil)
@@ -58,7 +58,7 @@ func printValuesFromDB(ctx context.Context, urls []string) error {
     // Organize keys into manageable batches of 10 for bulk operations
     keyBatches := rill.Batch(keys, 10, 1*time.Second)
     
-    // Fetch values from Redis for each batch of keys
+    // Fetch values from DB for each batch of keys
     resultBatches := rill.Map(keyBatches, 5, func(keys []string) ([]KV, error) {
         values, err := dbMultiGet(ctx, keys...)
         if err != nil {
