@@ -25,11 +25,11 @@ go get github.com/destel/rill
 ```
 
 ## Example usage
-Consider function that fetches keys from multiple URLs, retrieves their values from a Redis database, and prints them. 
+Consider function that fetches keys from multiple URLs, retrieves their values from a key-value database, and prints them. 
 This example demonstrates the library's strengths in handling concurrent tasks, error propagation, batching and data streaming, 
 all while maintaining simplicity and efficiency.
 
-See a full runnable example at examples/redis-read
+See a full runnable example at examples/kv-read
 
 ```go
 type KV struct {
@@ -38,12 +38,12 @@ type KV struct {
 }
 
 
-func printValuesFromRedis(ctx context.Context, urls []string) error {
+func printValuesFromDB(ctx context.Context, urls []string) error {
     ctx, cancel := context.WithCancel(ctx)
     defer cancel() // In case of error, this ensures all http and redis operations are canceled
-
+    
     // Convert urls into a channel
-    urlsChan := rill.ToSlice(urls)
+    urlsChan := rill.FromSlice(urls, nil)
     
     // Fetch and stream keys from each URL concurrently
     keys := rill.FlatMap(urlsChan, 10, func(url string) <-chan rill.Try[string] {
@@ -60,11 +60,11 @@ func printValuesFromRedis(ctx context.Context, urls []string) error {
     
     // Fetch values from Redis for each batch of keys
     resultBatches := rill.Map(keyBatches, 5, func(keys []string) ([]KV, error) {
-        values, err := redisMGet(ctx, keys...)
+        values, err := dbMultiGet(ctx, keys...)
         if err != nil {
             return nil, err
         }
-    
+        
         results := make([]KV, len(keys))
         for i, key := range keys {
             results[i] = KV{Key: key, Value: values[i]}
@@ -72,7 +72,7 @@ func printValuesFromRedis(ctx context.Context, urls []string) error {
         
         return results, nil
     })
-
+    
     // Convert batches back to a single items for final processing
     results := rill.Unbatch(resultBatches)
     
@@ -91,13 +91,18 @@ func printValuesFromRedis(ctx context.Context, urls []string) error {
     if err != nil {
         return err
     }
-
+    
     fmt.Println("Total keys:", cnt)
     return nil
 }
 
 // streamLines reads a file from the given URL line by line and returns a channel of lines
 func streamLines(ctx context.Context, url string) <-chan rill.Try[string] {
+    // ...
+}
+
+// dbMultiGet does a batch read from a key-value store. It returns the values for the given keys.
+func dbMultiGet(ctx context.Context, keys ...string) ([]string, error) {
     // ...
 }
 

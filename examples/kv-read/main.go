@@ -20,10 +20,10 @@ type KV struct {
 }
 
 func main() {
-	err := printValuesFromRedis(context.Background(), []string{
-		"https://raw.githubusercontent.com/destel/rill/main/examples/redis-read/ids1.txt",
-		"https://raw.githubusercontent.com/destel/rill/main/examples/redis-read/ids2.txt",
-		"https://raw.githubusercontent.com/destel/rill/main/examples/redis-read/ids3.txt",
+	err := printValuesFromDB(context.Background(), []string{
+		"https://raw.githubusercontent.com/destel/rill/main/examples/kv-read/ids1.txt",
+		"https://raw.githubusercontent.com/destel/rill/main/examples/kv-read/ids2.txt",
+		"https://raw.githubusercontent.com/destel/rill/main/examples/kv-read/ids3.txt",
 	})
 
 	if err != nil {
@@ -31,9 +31,10 @@ func main() {
 	}
 }
 
-// printValues orchestrates a pipeline that fetches keys from URLs, retrieves their values from Redis, and prints them.
-// The pipeline leverages concurrency for fetching and processing and uses batching to reduce the number of Redis calls.
-func printValuesFromRedis(ctx context.Context, urls []string) error {
+// printValuesFromDB orchestrates a pipeline that fetches keys from URLs, retrieves their values from
+// key-value database, and prints them.
+// The pipeline leverages concurrency for fetching and processing and uses batching to reduce the number of db calls.
+func printValuesFromDB(ctx context.Context, urls []string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel() // In case of error, this ensures all http and redis operations are canceled
 
@@ -55,7 +56,7 @@ func printValuesFromRedis(ctx context.Context, urls []string) error {
 
 	// Fetch values from Redis for each batch of keys
 	resultBatches := rill.Map(keyBatches, 5, func(keys []string) ([]KV, error) {
-		values, err := redisMGet(ctx, keys...)
+		values, err := dbMultiGet(ctx, keys...)
 		if err != nil {
 			return nil, err
 		}
@@ -138,8 +139,8 @@ func streamLines(ctx context.Context, url string) <-chan rill.Try[string] {
 	return out
 }
 
-// redisMGet emulates a batch Redis read operation. It returns the values for the given keys.
-func redisMGet(ctx context.Context, keys ...string) ([]string, error) {
+// dbMultiGet emulates a batch read from a key-value store. It returns the values for the given keys.
+func dbMultiGet(ctx context.Context, keys ...string) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
