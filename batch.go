@@ -12,14 +12,14 @@ import (
 // The timeout countdown starts when the first item is added to a new batch.
 // Zero timeout is not supported and will panic.
 func Batch[A any](in <-chan Try[A], n int, timeout time.Duration) <-chan Try[[]A] {
-	values, errs := UnwrapToChanAndErrs(in)
+	values, errs := ToChans(in)
 	batches := core.Batch(values, n, timeout)
-	return WrapChanAndErrs(batches, errs)
+	return FromChans(batches, errs)
 }
 
 // Unbatch is the inverse of Batch. It takes a channel of batches and emits individual items.
 func Unbatch[A any](in <-chan Try[[]A]) <-chan Try[A] {
-	batches, errs := UnwrapToChanAndErrs(in)
+	batches, errs := ToChans(in)
 	values := core.Unbatch(batches)
-	return WrapChanAndErrs(values, errs)
+	return FromChans(values, errs)
 }

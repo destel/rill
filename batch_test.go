@@ -11,7 +11,7 @@ func TestBatch(t *testing.T) {
 	// most logic is covered by the chans pkg tests
 
 	t.Run("correctness", func(t *testing.T) {
-		in := WrapChan(th.FromRange(0, 10), fmt.Errorf("err0"))
+		in := FromChan(th.FromRange(0, 10), fmt.Errorf("err0"))
 		in = replaceWithError(in, 5, fmt.Errorf("err5"))
 		in = replaceWithError(in, 7, fmt.Errorf("err7"))
 
@@ -31,7 +31,7 @@ func TestUnbatch(t *testing.T) {
 	// most logic is covered by the common package tests
 
 	t.Run("correctness", func(t *testing.T) {
-		in := WrapSlice([][]int{{1, 2}, {3, 4}, {5, 6}, {7, 8}, {9, 10}})
+		in := FromSlice([][]int{{1, 2}, {3, 4}, {5, 6}, {7, 8}, {9, 10}}, nil)
 		in = OrderedMap(in, 1, func(x []int) ([]int, error) {
 			if x[0] == 3 {
 				return nil, fmt.Errorf("err3")

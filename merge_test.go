@@ -34,7 +34,7 @@ func TestSplit2(t *testing.T) {
 				// - 3rd would cause error during splitting
 				// - 4th would be errors even before splitting
 
-				in := WrapChan(th.FromRange(0, 20*4), nil)
+				in := FromChan(th.FromRange(0, 20*4), nil)
 				in = OrderedMap(in, 1, func(x int) (int, error) {
 					if x%4 == 3 {
 						return 0, fmt.Errorf("err%03d", x)
@@ -95,7 +95,7 @@ func TestSplit2(t *testing.T) {
 			})
 
 			t.Run(th.Name("ordering", n), func(t *testing.T) {
-				in := WrapChan(th.FromRange(0, 10000*4), nil)
+				in := FromChan(th.FromRange(0, 10000*4), nil)
 
 				outTrue, outFalse := universalSplit2(ord, in, n, func(x int) (bool, error) {
 					switch x % 3 {

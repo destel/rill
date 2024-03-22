@@ -43,7 +43,7 @@ func printValuesFromRedis(ctx context.Context, urls []string) error {
     defer cancel() // In case of error, this ensures all http and redis operations are canceled
 
     // Convert urls into a channel
-    urlsChan := rill.WrapSlice(urls)
+    urlsChan := rill.ToSlice(urls)
     
     // Fetch and stream keys from each URL concurrently
     keys := rill.FlatMap(urlsChan, 10, func(url string) <-chan rill.Try[string] {
@@ -121,9 +121,9 @@ Rill has a test coverage of over 95%, with testing focused on:
 
 ## Design philosophy
 At the heart of rill lies a simple yet powerful concept: operating on channels of wrapped values, encapsulated by the Try structure.
-Such channels can be created manually or through utilities like **WrapSlice** or **WrapChan**, and then transformed via operations 
-such as **Map**, **Filter**, **FlatMap** and others. Finally when all processing stages are completed, the data can be consumed by 
-**ForEach**, **UnwrapToSlice** or manually by iterating over the resulting channel.
+Such channels can be created manually or through utilities like **FromSlice** or **FromChan**, and then transformed via operations 
+such as **Map**, **Filter**, **FlatMap** and others. Finally, when all processing stages are completed, the data can be consumed by 
+**ForEach**, **ToSlice** or manually by iterating over the resulting channel.
 
 
 
@@ -220,7 +220,7 @@ func doWork(ctx context.Context) error {
 }
 ```
 
-Utilizing functions like **ForEach** or **UnwrapToSlice**, which incorporate built-in draining mechanisms, can simplify 
+Utilizing functions like **ForEach** or **ToSlice**, which incorporate built-in draining mechanisms, can simplify 
 the code and enhance readability:
 
 ```go
