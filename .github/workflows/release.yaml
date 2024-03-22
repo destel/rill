@@ -15,7 +15,5 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref }}
-          name: ${{ env.GITHUB_TAG }}
           prerelease: ${{ contains(github.ref, '-') }}
           generate_release_notes: true
