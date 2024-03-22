@@ -140,29 +140,12 @@ to specify a timeout, after which the batch is emitted even if it's not full. Th
 when input stream is slow or sparse.
 
 
+
 ## Fan-In and Fan-Out
-Library provides a simple way to fan-in and fan-out data streams. Fan-in is done with the **Merge** function,
+The library offers mechanisms for fanning in and out data streams. Fan-in is done with the **Merge** function,
 which consolidates multiple data streams into a single unified channel.
 Fan-out is done with the **Split2** function, that divides a single input stream into two distinct output channels. 
 This division is based on a discriminator function, allowing parallel processing paths based on data characteristics.
-
-When splitting a stream, you create a scenario with a single producer and two consumers. 
-It's important to note that if one consumer is blocked, it can lock the entire pipeline, 
-affecting the producer and the other consumer.
-One way to mitigate this is to use a buffer on the output channels, but be aware that this will increase memory usage.
-
-```go
-out1, out2 := rill.Split2(input, 10, func(item string) bool {
-    // Some splitting logic...
-}) 
-
-// out1 is slow. Buffer up to 100 items that go to it
-out1 = rill.Buffer(out1, 100) 
-
-// Now, work with out1 and out2 as usual
-```
-
-
 
 
 
