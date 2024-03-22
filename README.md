@@ -101,7 +101,7 @@ func streamLines(ctx context.Context, url string) <-chan rill.Try[string] {
     // ...
 }
 
-// dbMultiGet does a batch read from a key-value store. It returns the values for the given keys.
+// dbMultiGet does a batch read from a key-value database. It returns the values for the given keys.
 func dbMultiGet(ctx context.Context, keys ...string) ([]string, error) {
     // ...
 }

@@ -139,7 +139,7 @@ func streamLines(ctx context.Context, url string) <-chan rill.Try[string] {
 	return out
 }
 
-// dbMultiGet emulates a batch read from a key-value store. It returns the values for the given keys.
+// dbMultiGet emulates a batch read from a key-value database. It returns the values for the given keys.
 func dbMultiGet(ctx context.Context, keys ...string) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
