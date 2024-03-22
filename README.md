@@ -135,7 +135,7 @@ such as **Map**, **Filter**, **FlatMap** and others. Finally, when all processin
 
 ## Batching
 Batching is a common pattern in concurrent processing, especially when dealing with external services or databases.
-Rill provides a Batch function that organizes a stream of items into batches of a specified size. It's also possible 
+Rill provides a **Batch** function that organizes a stream of items into batches of a specified size. It's also possible 
 to specify a timeout, after which the batch is emitted even if it's not full. This is useful for keeping an application reactive
 when input stream is slow or sparse.
 
@@ -151,8 +151,8 @@ This division is based on a discriminator function, allowing parallel processing
 
 ## Error handling
 In the examples above errors are handled using **ForEach**, which is good for most use cases. 
-**ForEach** stops processing on the first error and returns it. If you need to handle error in the middle of pipeline,
-and/or continue processing, there is a **Catch** function that can be used for that.
+**ForEach** stops processing on the first error and returns it. If you need to handle errors in the middle of a pipeline,
+and/or continue processing after an error, there is a **Catch** function that can be used for that.
 
 ```go
 results := rill.Map(input, 10, func(item int) (int, error) {
@@ -176,7 +176,7 @@ err := rill.ForEach(results, 1, func(item int) error {
 
 
 
-## Termination and Resource Leaks
+## Termination and resource leaks
 In Go concurrent applications, if there are no readers for a channel, writers can become stuck, 
 leading to potential goroutine and memory leaks. This issue extends to rill pipelines, which are built on Go channels; 
 if any stage in a pipeline lacks a consumer, the whole chain of producers upstream may become blocked. 
