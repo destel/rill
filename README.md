@@ -25,11 +25,11 @@ go get github.com/destel/rill
 ```
 
 ## Example usage
-Consider function that fetches keys from multiple URLs, retrieves their values from a Redis database, and prints them. 
+Consider function that fetches keys from multiple URLs, retrieves their values from a key-value database, and prints them. 
 This example demonstrates the library's strengths in handling concurrent tasks, error propagation, batching and data streaming, 
 all while maintaining simplicity and efficiency.
 
-See a full runnable example at examples/redis-read
+See a full runnable example at examples/kv-read
 
 ```go
 type KV struct {
@@ -38,12 +38,12 @@ type KV struct {
 }
 
 
-func printValuesFromRedis(ctx context.Context, urls []string) error {
+func printValuesFromDB(ctx context.Context, urls []string) error {
     ctx, cancel := context.WithCancel(ctx)
     defer cancel() // In case of error, this ensures all http and redis operations are canceled
-
+    
     // Convert urls into a channel
-    urlsChan := rill.WrapSlice(urls)
+    urlsChan := rill.FromSlice(urls, nil)
     
     // Fetch and stream keys from each URL concurrently
     keys := rill.FlatMap(urlsChan, 10, func(url string) <-chan rill.Try[string] {
@@ -60,11 +60,11 @@ func printValuesFromRedis(ctx context.Context, urls []string) error {
     
     // Fetch values from Redis for each batch of keys
     resultBatches := rill.Map(keyBatches, 5, func(keys []string) ([]KV, error) {
-        values, err := redisMGet(ctx, keys...)
+        values, err := dbMultiGet(ctx, keys...)
         if err != nil {
             return nil, err
         }
-    
+        
         results := make([]KV, len(keys))
         for i, key := range keys {
             results[i] = KV{Key: key, Value: values[i]}
@@ -72,7 +72,7 @@ func printValuesFromRedis(ctx context.Context, urls []string) error {
         
         return results, nil
     })
-
+    
     // Convert batches back to a single items for final processing
     results := rill.Unbatch(resultBatches)
     
@@ -91,13 +91,18 @@ func printValuesFromRedis(ctx context.Context, urls []string) error {
     if err != nil {
         return err
     }
-
+    
     fmt.Println("Total keys:", cnt)
     return nil
 }
 
 // streamLines reads a file from the given URL line by line and returns a channel of lines
 func streamLines(ctx context.Context, url string) <-chan rill.Try[string] {
+    // ...
+}
+
+// dbMultiGet does a batch read from a key-value database. It returns the values for the given keys.
+func dbMultiGet(ctx context.Context, keys ...string) ([]string, error) {
     // ...
 }
 
@@ -121,22 +126,23 @@ Rill has a test coverage of over 95%, with testing focused on:
 
 ## Design philosophy
 At the heart of rill lies a simple yet powerful concept: operating on channels of wrapped values, encapsulated by the Try structure.
-Such channels can be created manually or through utilities like **WrapSlice** or **WrapChan**, and then transformed via operations 
-such as **Map**, **Filter**, **FlatMap** and others. Finally when all processing stages are completed, the data can be consumed by 
-**ForEach**, **UnwrapToSlice** or manually by iterating over the resulting channel.
+Such channels can be created manually or through utilities like **FromSlice** or **FromChan**, and then transformed via operations 
+such as **Map**, **Filter**, **FlatMap** and others. Finally, when all processing stages are completed, the data can be consumed by 
+**ForEach**, **ToSlice** or manually by iterating over the resulting channel.
 
 
 
 
 ## Batching
 Batching is a common pattern in concurrent processing, especially when dealing with external services or databases.
-Rill provides a Batch function that organizes a stream of items into batches of a specified size. It's also possible 
+Rill provides a **Batch** function that organizes a stream of items into batches of a specified size. It's also possible 
 to specify a timeout, after which the batch is emitted even if it's not full. This is useful for keeping an application reactive
 when input stream is slow or sparse.
 
 
+
 ## Fan-In and Fan-Out
-Library provides a simple way to fan-in and fan-out data streams. Fan-in is done with the **Merge** function,
+The library offers mechanisms for fanning in and out data streams. Fan-in is done with the **Merge** function,
 which consolidates multiple data streams into a single unified channel.
 Fan-out is done with the **Split2** function, that divides a single input stream into two distinct output channels. 
 This division is based on a discriminator function, allowing parallel processing paths based on data characteristics.
@@ -145,8 +151,8 @@ This division is based on a discriminator function, allowing parallel processing
 
 ## Error handling
 In the examples above errors are handled using **ForEach**, which is good for most use cases. 
-**ForEach** stops processing on the first error and returns it. If you need to handle error in the middle of pipeline,
-and/or continue processing, there is a **Catch** function that can be used for that.
+**ForEach** stops processing on the first error and returns it. If you need to handle errors in the middle of a pipeline,
+and/or continue processing after an error, there is a **Catch** function that can be used for that.
 
 ```go
 results := rill.Map(input, 10, func(item int) (int, error) {
@@ -170,7 +176,7 @@ err := rill.ForEach(results, 1, func(item int) error {
 
 
 
-## Termination and Resource Leaks
+## Termination and resource leaks
 In Go concurrent applications, if there are no readers for a channel, writers can become stuck, 
 leading to potential goroutine and memory leaks. This issue extends to rill pipelines, which are built on Go channels; 
 if any stage in a pipeline lacks a consumer, the whole chain of producers upstream may become blocked. 
@@ -220,7 +226,7 @@ func doWork(ctx context.Context) error {
 }
 ```
 
-Utilizing functions like **ForEach** or **UnwrapToSlice**, which incorporate built-in draining mechanisms, can simplify 
+Utilizing functions like **ForEach** or **ToSlice**, which incorporate built-in draining mechanisms, can simplify 
 the code and enhance readability:
 
 ```go

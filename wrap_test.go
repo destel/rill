@@ -12,13 +12,21 @@ func TestWrap(t *testing.T) {
 	_ = Wrap(10, nil)
 }
 
-func TestWrapUnwrapSlice(t *testing.T) {
+func TestFromSlice(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		in := WrapSlice[int](nil)
-		outSlice, err := UnwrapToSlice(in)
+		in := FromSlice[int](nil, nil)
+		outSlice, err := ToSlice(in)
 
 		th.ExpectSlice(t, outSlice, nil)
 		th.ExpectNoError(t, err)
+	})
+
+	t.Run("error in second arg", func(t *testing.T) {
+		in := FromSlice([]int{1, 2, 3, 4}, fmt.Errorf("err0"))
+		outSlice, errs := toSliceAndErrors(in)
+
+		th.ExpectSlice(t, outSlice, nil)
+		th.ExpectSlice(t, errs, []string{"err0"})
 	})
 
 	t.Run("no errors", func(t *testing.T) {
@@ -27,8 +35,8 @@ func TestWrapUnwrapSlice(t *testing.T) {
 			inSlice[i] = i
 		}
 
-		in := WrapSlice(inSlice)
-		outSlice, err := UnwrapToSlice(in)
+		in := FromSlice(inSlice, nil)
+		outSlice, err := ToSlice(in)
 
 		th.ExpectSlice(t, outSlice, inSlice)
 		th.ExpectNoError(t, err)
@@ -40,11 +48,11 @@ func TestWrapUnwrapSlice(t *testing.T) {
 			inSlice[i] = i
 		}
 
-		in := WrapSlice(inSlice)
+		in := FromSlice(inSlice, nil)
 		in = replaceWithError(in, 15, fmt.Errorf("err15"))
 		in = replaceWithError(in, 18, fmt.Errorf("err18"))
 
-		outSlice, err := UnwrapToSlice(in)
+		outSlice, err := ToSlice(in)
 
 		th.ExpectSlice(t, outSlice, inSlice[:15])
 		th.ExpectError(t, err, "err15")
@@ -54,9 +62,9 @@ func TestWrapUnwrapSlice(t *testing.T) {
 	})
 }
 
-func TestWrapChan(t *testing.T) {
+func TestFromChan(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		res := WrapChan[int](nil, nil)
+		res := FromChan[int](nil, nil)
 		th.ExpectValue(t, res, nil)
 	})
 
@@ -69,7 +77,7 @@ func TestWrapChan(t *testing.T) {
 			expectedOutSlice = append(expectedOutSlice, Try[int]{Value: i})
 		}
 
-		wrapped := WrapChan(th.FromSlice(inSlice), nil)
+		wrapped := FromChan(th.FromSlice(inSlice), nil)
 		outSlice := th.ToSlice(wrapped)
 
 		th.ExpectSlice(t, outSlice, expectedOutSlice)
@@ -87,15 +95,15 @@ func TestWrapChan(t *testing.T) {
 			expectedOutSlice = append(expectedOutSlice, Try[int]{Value: i})
 		}
 
-		wrapped := WrapChan(th.FromSlice(inSlice), err)
+		wrapped := FromChan(th.FromSlice(inSlice), err)
 		outSlice := th.ToSlice(wrapped)
 
 		th.ExpectSlice(t, outSlice, expectedOutSlice)
 	})
 }
 
-func TestWrapUnwrapChanAndErrs(t *testing.T) {
-	// slices -> WrapSlice -> WrapChanAndErrs -> UnwrapToChanAndErrs -> UnwrapToSlice -> compare
+func TestFromChans(t *testing.T) {
+	// slices -> FromSlice -> FromChans -> ToChans -> ToSlice -> compare
 	runTest := func(name string, valsIn []int, errsIn []error) {
 		t.Run(name, func(t *testing.T) {
 			var valsInChan <-chan int
@@ -108,7 +116,7 @@ func TestWrapUnwrapChanAndErrs(t *testing.T) {
 				errsInChan = th.FromSlice(errsIn)
 			}
 
-			valsOutChan, errsOutChan := UnwrapToChanAndErrs(WrapChanAndErrs(valsInChan, errsInChan))
+			valsOutChan, errsOutChan := ToChans(FromChans(valsInChan, errsInChan))
 
 			if valsInChan == nil && errsInChan == nil {
 				th.ExpectValue(t, valsOutChan, nil)
