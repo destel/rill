@@ -28,10 +28,10 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Run tests
-        run: go test -v -race ./...
+        run: go test -race ./...
 
       - name: Run coverage
-        run: go test -coverprofile=coverage.out -covermode=atomic
+        run: go test -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4.0.1

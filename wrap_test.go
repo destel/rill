@@ -57,7 +57,7 @@ func TestFromSlice(t *testing.T) {
 		th.ExpectSlice(t, outSlice, inSlice[:15])
 		th.ExpectError(t, err, "err15")
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 		th.ExpectDrainedChan(t, in)
 	})
 }
