@@ -352,7 +352,7 @@ func TestForEach(t *testing.T) {
 					t.Errorf("early exit did not happen")
 				}
 
-				time.Sleep(1 * time.Second)
+				time.Sleep(2 * time.Second)
 				th.ExpectDrainedChan(t, in)
 			})
 		})
@@ -379,7 +379,7 @@ func TestForEach(t *testing.T) {
 				}
 
 				// wait until it drained
-				time.Sleep(1 * time.Second)
+				time.Sleep(2 * time.Second)
 				th.ExpectDrainedChan(t, in)
 			})
 		})
