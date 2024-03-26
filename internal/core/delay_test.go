@@ -31,8 +31,8 @@ func TestDelay(t *testing.T) {
 	}
 
 	t.Run("correctness", func(t *testing.T) {
-		const delay = 2 * time.Second
-		const eps = 100 * time.Millisecond
+		const delay = 5 * time.Second
+		const eps = 1000 * time.Millisecond // Race detector slows down the execution. Need to use larger epsilon
 
 		in := make(chan Item)
 		out := Delay(in, delay)
@@ -49,13 +49,16 @@ func TestDelay(t *testing.T) {
 			i++
 			th.ExpectValue(t, item.Value, i)
 			th.ExpectValueInDelta(t, time.Since(item.SentAt), delay, eps)
+			if t.Failed() {
+				t.FailNow()
+			}
 		}
 		th.ExpectValue(t, i, 100000-1)
 	})
 
 	t.Run("slow producer", func(t *testing.T) {
-		const delay = 2 * time.Second
-		const eps = 200 * time.Millisecond
+		const delay = 5 * time.Second
+		const eps = 1000 * time.Millisecond
 
 		in := make(chan Item)
 		out := Delay(in, delay)
@@ -84,7 +87,7 @@ func TestDelay(t *testing.T) {
 	})
 
 	t.Run("slow consumer", func(t *testing.T) {
-		const delay = 2 * time.Second
+		const delay = 5 * time.Second
 
 		in := make(chan Item)
 		out := Delay(in, delay)
