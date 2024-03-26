@@ -77,7 +77,7 @@ func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-ch
 }
 
 // FlatMap applies a function to each item in an input channel, where the function returns a channel of items.
-// These items are then flattened into a single output channel. Uses n goroutines for concurrency.
+// These items are then flattened into a single output channel using n goroutines for concurrency.
 // The output order is not guaranteed: results are written to the output as soon as they're ready.
 // Use [OrderedFlatMap] to preserve the input order.
 func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
