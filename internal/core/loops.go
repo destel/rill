@@ -143,8 +143,8 @@ func Breakable[A any](in <-chan A) (res <-chan A, doBreak func()) {
 
 	out := make(chan A)
 	go func() {
-		defer Drain(in) // discard unconsumed items
-		defer close(out)
+		//defer Drain(in) // discard unconsumed items
+		//defer close(out)
 
 		for x := range in {
 			if atomic.LoadInt64(&breakCalled) == 1 {
@@ -152,6 +152,9 @@ func Breakable[A any](in <-chan A) (res <-chan A, doBreak func()) {
 			}
 			out <- x
 		}
+
+		close(out)
+		Drain(in)
 	}()
 
 	return out, breakFunc
