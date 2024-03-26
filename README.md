@@ -1,4 +1,4 @@
-# Rill [![GoDoc](https://pkg.go.dev/badge/github.com/destel/rill)](https://pkg.go.dev/github.com/destel/rill)
+# Rill [![GoDoc](https://pkg.go.dev/badge/github.com/destel/rill)](https://pkg.go.dev/github.com/destel/rill) [![Go Report Card](https://goreportcard.com/badge/github.com/destel/rill)](https://goreportcard.com/report/github.com/destel/rill) [![codecov](https://codecov.io/gh/destel/rill/graph/badge.svg?token=252K8OQ7E1)](https://codecov.io/gh/destel/rill) 
 Rill (noun: a small stream) is a comprehensive Go toolkit for streaming, parallel processing, and pipeline construction. 
 Designed to reduce boilerplate and simplify usage, it empowers developers to focus on core logic 
 without getting bogged down by the complexity of concurrency.
@@ -40,7 +40,7 @@ type KV struct {
 
 func printValuesFromDB(ctx context.Context, urls []string) error {
     ctx, cancel := context.WithCancel(ctx)
-    defer cancel() // In case of error, this ensures all http and redis operations are canceled
+    defer cancel() // In case of error, this ensures all http and DB operations are canceled
     
     // Convert urls into a channel
     urlsChan := rill.FromSlice(urls, nil)
@@ -58,7 +58,7 @@ func printValuesFromDB(ctx context.Context, urls []string) error {
     // Organize keys into manageable batches of 10 for bulk operations
     keyBatches := rill.Batch(keys, 10, 1*time.Second)
     
-    // Fetch values from Redis for each batch of keys
+    // Fetch values from DB for each batch of keys
     resultBatches := rill.Map(keyBatches, 5, func(keys []string) ([]KV, error) {
         values, err := dbMultiGet(ctx, keys...)
         if err != nil {

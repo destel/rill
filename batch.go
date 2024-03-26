@@ -17,7 +17,7 @@ func Batch[A any](in <-chan Try[A], n int, timeout time.Duration) <-chan Try[[]A
 	return FromChans(batches, errs)
 }
 
-// Unbatch is the inverse of Batch. It takes a channel of batches and emits individual items.
+// Unbatch is the inverse of [Batch]. It takes a channel of batches and emits individual items.
 func Unbatch[A any](in <-chan Try[[]A]) <-chan Try[A] {
 	batches, errs := ToChans(in)
 	values := core.Unbatch(batches)
