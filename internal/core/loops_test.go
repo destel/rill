@@ -105,7 +105,6 @@ func TestBreakable(t *testing.T) {
 		for x := range in1 {
 			if x == 100 {
 				earlyExit()
-				time.Sleep(1 * time.Second) // give Break some time to react and drain
 			}
 
 			if x > maxSeen {
@@ -120,6 +119,7 @@ func TestBreakable(t *testing.T) {
 
 		}
 
+		time.Sleep(1 * time.Second)
 		th.ExpectDrainedChan(t, in)
 	})
 
