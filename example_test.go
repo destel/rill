@@ -15,26 +15,8 @@ type KV struct {
 	Value string
 }
 
-// This example demonstrates how [ForEach] can be used for concurrent processing of items.
+// This example demonstrates how [ForEach] can be used for concurrent processing and error handling.
 func Example_forEach() {
-	startedAt := time.Now()
-	defer func() { fmt.Println("Elapsed:", time.Since(startedAt)) }()
-
-	items := rill.FromSlice([]string{"item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8", "item9", "item10"}, nil)
-
-	err := rill.ForEach(items, 3, func(item string) error {
-		randomSleep(1000 * time.Millisecond) // simulate some work
-		fmt.Println(item)
-		return nil
-	})
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-}
-
-// This example demonstrates a pipeline that causes an error in the middle of processing.
-// On the final stage, [ForEach] catches the error, returns it, and stops the pipeline.
-func Example_errorHandling() {
 	startedAt := time.Now()
 	defer func() { fmt.Println("Elapsed:", time.Since(startedAt)) }()
 
@@ -50,6 +32,7 @@ func Example_errorHandling() {
 		return strings.ToUpper(item), nil
 	})
 
+	// For each will stop on the first error
 	err := rill.ForEach(items, 3, func(item string) error {
 		fmt.Println(item)
 		return nil
