@@ -31,7 +31,7 @@ Consider an application that fetches keys from multiple URLs, retrieves their va
 This example demonstrates the library's strengths in handling concurrent tasks, error propagation, batching and data streaming, 
 all while maintaining simplicity and efficiency.
 
-See a full runnable example at examples/kv-read
+[Full runnable example](https://pkg.go.dev/github.com/destel/rill#example-package-Batching)
 
 ```go
 func main() {
@@ -281,7 +281,7 @@ daily temperature measurements over a specific period and calculates the change 
 Although fetching the data in parallel boosts efficiency, processing it in the original order is crucial for 
 accurate computation of temperature variations.
 
-See a full runnable example at examples/weather
+[Full runnable example](https://pkg.go.dev/github.com/destel/rill#example-package-Ordering)
 
 ```go
 type Measurement struct {
