@@ -2,6 +2,7 @@ package rill_test
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"path/filepath"
 	"strings"
@@ -15,26 +16,19 @@ type KV struct {
 	Value string
 }
 
-// This example demonstrates how [ForEach] can be used for concurrent processing and error handling.
-func Example_forEach() {
-	startedAt := time.Now()
-	defer func() { fmt.Println("Elapsed:", time.Since(startedAt)) }()
+type Measurement struct {
+	Date time.Time
+	Temp float64
+}
 
+// A basic demonstrating how [ForEach] can be used to process a list of items concurrently.
+func Example_basic() {
 	items := rill.FromSlice([]string{"item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8", "item9", "item10"}, nil)
 
-	items = rill.Map(items, 3, func(item string) (string, error) {
-		randomSleep(1000 * time.Millisecond) // simulate some work
-
-		if item == "item6" {
-			return "", fmt.Errorf("invalid item")
-		}
-
-		return strings.ToUpper(item), nil
-	})
-
-	// For each will stop on the first error
 	err := rill.ForEach(items, 3, func(item string) error {
-		fmt.Println(item)
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
+		res := strings.ToUpper(item)
+		fmt.Println(res)
 		return nil
 	})
 	if err != nil {
@@ -44,7 +38,7 @@ func Example_forEach() {
 
 // This example fetches keys from a list of URLs, retrieves their values from a key-value database, and prints them.
 // The pipeline leverages concurrency for fetching and processing and uses batching to reduce the number of database calls.
-func Example_keyValueBatchRead() {
+func Example_batching() {
 	startedAt := time.Now()
 	defer func() { fmt.Println("Elapsed:", time.Since(startedAt)) }()
 
@@ -57,7 +51,7 @@ func Example_keyValueBatchRead() {
 
 	// Fetch keys from each URL and flatten them into a single stream
 	keys := rill.FlatMap(urls, 3, func(url string) <-chan rill.Try[string] {
-		return downloadFile(url)
+		return streamFileLines(url)
 	})
 
 	// Exclude any empty keys from the stream
@@ -106,22 +100,38 @@ func Example_keyValueBatchRead() {
 }
 
 // This example demonstrates how [OrderedMap] can be used to enforce ordering of processing results.
-// Pipeline below takes a list of keys and queries their values from a key-value database.
-// Values are fetched concurrently, but results are printed in order.
+// Pipeline below fetches temperature measurements for a city and calculates daily temperature changes.
+// Measurements are fetched concurrently, but ordered processing is used to calculate the changes.
 func Example_ordering() {
 	startedAt := time.Now()
 	defer func() { fmt.Println("Elapsed:", time.Since(startedAt)) }()
 
-	keys := rill.FromSlice([]string{"key:1", "key:2", "key:3", "key:4", "key:5", "key:6", "key:7", "key:8", "key:9", "key:10"}, nil)
+	city := "New York"
+	endDate := time.Now()
+	startDate := endDate.AddDate(0, 0, -30)
 
-	// Get values for each key concurrently, but stream them in order
-	values := rill.OrderedMap(keys, 3, func(key string) (string, error) {
-		return kvGet(key)
+	// Make a channel that emits all the days between startDate and endDate
+	days := make(chan rill.Try[time.Time])
+	go func() {
+		defer close(days)
+		for date := startDate; date.Before(endDate); date = date.AddDate(0, 0, 1) {
+			days <- rill.Wrap(date, nil)
+		}
+	}()
+
+	// Download the temperature for each day concurrently
+	measurements := rill.OrderedMap(days, 10, func(date time.Time) (Measurement, error) {
+		temp, err := getTemperature(city, date)
+		return Measurement{Date: date, Temp: temp}, err
 	})
 
-	// Iterate over each value and print
-	err := rill.ForEach(values, 1, func(value string) error {
-		fmt.Println(value)
+	// Iterate over the measurements, calculate and print changes. Use a single goroutine
+	prev := Measurement{Temp: math.NaN()}
+	err := rill.ForEach(measurements, 1, func(m Measurement) error {
+		change := m.Temp - prev.Temp
+		prev = m
+
+		fmt.Printf("%s: %.1f°C (change %+.1f°C)\n", m.Date.Format("2006-01-02"), m.Temp, change)
 		return nil
 	})
 	if err != nil {
@@ -129,10 +139,10 @@ func Example_ordering() {
 	}
 }
 
-// downloadFile simulates line-by-line streaming of a file from a URL,
+// streamFileLines simulates line-by-line streaming of a file from a URL,
 // introducing a randomized delay to simulate network latency.
 // It's a simplified placeholder for actual network-based file streaming.
-func downloadFile(url string) <-chan rill.Try[string] {
+func streamFileLines(url string) <-chan rill.Try[string] {
 	out := make(chan rill.Try[string])
 	go func() {
 		defer close(out)
@@ -180,6 +190,22 @@ func kvMultiGet(keys ...string) ([]string, error) {
 	}
 
 	return values, nil
+}
+
+// getTemperature simulates fetching a temperature reading for a city and date,
+func getTemperature(city string, date time.Time) (float64, error) {
+	randomSleep(1000 * time.Millisecond) // Simulate a network delay
+
+	// Basic city hash, to make measurements unique for each city
+	var h float64
+	for _, c := range city {
+		h += float64(c)
+	}
+
+	// Simulate a temperature reading, by retuning a pseudo-random, but deterministic value
+	temp := 15 - 10*math.Sin(h+float64(date.Unix()))
+
+	return temp, nil
 }
 
 func randomSleep(max time.Duration) {
