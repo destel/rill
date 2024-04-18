@@ -117,7 +117,7 @@ Rill has a test coverage of over 95%, with testing focused on:
 
 
 ## Design philosophy
-At the heart of rill lies a simple yet powerful concept: operating on channels of wrapped values, encapsulated by the Try structure.
+At the heart of rill lies a simple yet powerful concept: operating on channels of wrapped values, encapsulated by the **Try** structure.
 Such channels can be created manually or through utilities like **FromSlice** or **FromChan**, and then transformed via operations 
 such as **Map**, **Filter**, **FlatMap** and others. Finally, when all processing stages are completed, the data can be consumed by 
 **ForEach**, **ToSlice** or manually by iterating over the resulting channel.
