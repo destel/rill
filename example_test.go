@@ -21,7 +21,12 @@ type Measurement struct {
 	Temp float64
 }
 
-// A basic demonstrating how [ForEach] can be used to process a list of items concurrently.
+type User struct {
+	ID       int
+	Username string
+}
+
+// A basic example demonstrating how [ForEach] can be used to process a list of items concurrently.
 func Example_basic() {
 	items := rill.FromSlice([]string{"item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8", "item9", "item10"}, nil)
 
@@ -34,6 +39,31 @@ func Example_basic() {
 	if err != nil {
 		fmt.Println("Error:", err)
 	}
+}
+
+// Rill is designed for channel based workflows, but it can also be used with slices, thanks to its ability
+// to do ordered processing. Example below demonstrates how you can create a **mapSLice** generic helper function that
+// does parallel slice processing. That helper is then used to fetch users from an API concurrently.
+func Example_slices() {
+	startedAt := time.Now()
+	defer func() { fmt.Println("Elapsed:", time.Since(startedAt)) }()
+
+	ids := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+
+	users, err := mapSLice(ids, 3, getUser)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Printf("%+v\n", users)
+}
+
+// mapSLice is a helper function that does a parallel map operation on a slice of items
+func mapSLice[A, B any](in []A, n int, f func(A) (B, error)) ([]B, error) {
+	inChan := rill.FromSlice(in, nil)
+	outChan := rill.OrderedMap(inChan, n, f)
+	return rill.ToSlice(outChan)
 }
 
 // This example fetches keys from a list of URLs, retrieves their values from a key-value database, and prints them.
@@ -210,4 +240,16 @@ func getTemperature(city string, date time.Time) (float64, error) {
 
 func randomSleep(max time.Duration) {
 	time.Sleep(time.Duration(rand.Intn(int(max))))
+}
+
+// getUser simulates fetching a user from an API, introducing a randomized delay to simulate network latency.
+func getUser(id int) (User, error) {
+	randomSleep(1000 * time.Millisecond) // Simulate a network delay
+
+	// generate random name adj+noun
+	adj := []string{"big", "small", "fast", "slow", "smart", "happy", "sad", "funny", "serious"}
+	noun := []string{"dog", "cat", "bird", "fish", "mouse", "elephant", "lion", "tiger", "bear", "wolf"}
+	username := fmt.Sprintf("%s_%s", adj[rand.Intn(len(adj))], noun[rand.Intn(len(noun))])
+
+	return User{ID: id, Username: username}, nil
 }
