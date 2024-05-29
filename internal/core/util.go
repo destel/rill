@@ -22,3 +22,12 @@ func Buffer[A any](in <-chan A, n int) <-chan A {
 
 	return out
 }
+
+type Semaphore chan struct{}
+
+func (s Semaphore) Acquire() {
+	s <- struct{}{}
+}
+func (s Semaphore) Release() {
+	<-s
+}
