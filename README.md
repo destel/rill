@@ -28,7 +28,9 @@ go get github.com/destel/rill
 
 ## Example usage
 A basic example demonstrating how **ForEach** can be used to process a list of items concurrently and handle errors.
+
 [Full runnable example](https://pkg.go.dev/github.com/destel/rill#example-package-Basic)
+
 ```go
 func main() {
     items := rill.FromSlice([]string{"item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8", "item9", "item10"}, nil)
@@ -351,7 +353,7 @@ func getTemperature(city string, date time.Time) (float64, error) {
 
 ## Working with slices
 Rill is designed for channel based workflows, but it can also be used with slices, thanks to its ability
-to do ordered processing. Example below demonstrates how you can create a **mapSLice** generic helper function that 
+to do ordered processing. Example below demonstrates how to create a **mapSLice** generic helper function that 
 does parallel slice processing. That helper is then used to fetch users from an API concurrently.
 
 [Full runnable example](https://pkg.go.dev/github.com/destel/rill#example-package-Slices)
