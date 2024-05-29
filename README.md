@@ -27,7 +27,26 @@ go get github.com/destel/rill
 
 
 ## Example usage
-Consider an application that fetches keys from multiple URLs, retrieves their values from a key-value database in batches, and prints them. 
+A basic example demonstrating how **ForEach** can be used to process a list of items concurrently and handle errors.
+[Full runnable example](https://pkg.go.dev/github.com/destel/rill#example-package-Basic)
+```go
+func main() {
+    items := rill.FromSlice([]string{"item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8", "item9", "item10"}, nil)
+
+    err := rill.ForEach(items, 3, func(item string) error {
+        randomSleep(1000 * time.Millisecond) // simulate some additional work
+        res := strings.ToUpper(item)
+        fmt.Println(res)
+        return nil
+    })
+    if err != nil {
+        fmt.Println("Error:", err)
+    }
+}
+```
+
+
+Consider a more advanced example: an application that fetches keys from multiple URLs, retrieves their values from a key-value database in batches, and prints them. 
 This example demonstrates the library's strengths in handling concurrent tasks, error propagation, batching and data streaming, 
 all while maintaining simplicity and efficiency.
 
@@ -326,6 +345,47 @@ func main() {
 // getTemperature fetches a temperature reading for a city and date,
 func getTemperature(city string, date time.Time) (float64, error) {
     // ...
+}
+```
+
+
+## Working with slices
+Rill is designed for channel based workflows, but it can also be used with slices, thanks to its ability
+to do ordered processing. Example below demonstrates how you can create a **mapSLice** generic helper function that 
+does parallel slice processing. That helper is then used to fetch users from an API concurrently.
+
+[Full runnable example](https://pkg.go.dev/github.com/destel/rill#example-package-Slices)
+
+```go
+type User struct {
+    ID       int
+    Username string
+}
+
+// mapSLice is a helper function that does a parallel map operation on a slice of items
+func mapSLice[A, B any](in []A, n int, f func(A) (B, error)) ([]B, error) {
+    inChan := rill.FromSlice(in, nil)
+    outChan := rill.OrderedMap(inChan, n, f)
+    return rill.ToSlice(outChan)
+}
+
+func main() {
+    ids := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+
+    users, err := mapSLice(ids, 3, getUser)
+    if err != nil {
+        fmt.Println("Error:", err)
+        return
+    }
+
+    fmt.Printf("%+v\n", users)
+}
+
+
+
+// getUser fetches a user from an API
+func getUser(id int) (User, error) {
+	// ...
 }
 
 ```
