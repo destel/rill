@@ -55,6 +55,27 @@ func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 	}
 }
 
+func ExpectMap[K, V comparable](t *testing.T, actual map[K]V, expected map[K]V) {
+	t.Helper()
+	if len(expected) != len(actual) {
+		t.Errorf("expected %v, got %v", expected, actual)
+		return
+	}
+
+	for k, v := range expected {
+		actualV, ok := actual[k]
+		if !ok {
+			t.Errorf("expected %v, got %v", expected, actual)
+			return
+		}
+
+		if v != actualV {
+			t.Errorf("expected %v, got %v", expected, actual)
+			return
+		}
+	}
+}
+
 type number interface {
 	~int | ~int64
 }
@@ -108,6 +129,22 @@ func ExpectNeverClosedChan[A any](t *testing.T, ch <-chan A, waitFor time.Durati
 		case <-timeout:
 			return
 		}
+	}
+}
+
+func ExpectHang(t *testing.T, waitFor time.Duration, f func()) {
+	t.Helper()
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		f()
+	}()
+
+	select {
+	case <-done:
+		t.Errorf("expected hang")
+	case <-time.After(waitFor):
 	}
 }
 
