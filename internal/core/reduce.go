@@ -5,40 +5,36 @@ import (
 )
 
 // nonConcurrentReduce is a non-concurrent version of Reduce.
-func nonConcurrentReduce[A any](in <-chan A, reducer func(A, A) A) (A, bool) {
+func nonConcurrentReduce[A any](in <-chan A, f func(A, A) A) (A, bool) {
 	res, ok := <-in
 	if !ok {
 		return res, false
 	}
 
 	for a := range in {
-		res = reducer(res, a)
+		res = f(res, a)
 	}
 
 	return res, true
 }
 
-// reduce reduces the input channel by applying the reducer function to pairs of elements.
-// Total number of spawned goroutines is between n and 2n
-// It also takes a semaphore for precise control over the number of concurrent goroutines.
-func reduce[A any](in <-chan A, sema Semaphore, n int, reducer func(A, A) A) (A, bool) {
+// todo: document
+func Reduce[A any](in <-chan A, n int, f func(A, A) A) (A, bool) {
 	// Phase 0: Optimized non-concurrent case
 	if n == 1 {
-		return nonConcurrentReduce(in, reducer)
+		return nonConcurrentReduce(in, f)
 	}
 
 	// Phase 1: Each goroutine calculates its own partial result
 	partialResults := make(chan A, n)
 	var wg sync.WaitGroup
 
-	for i := 0; i < n/2; i++ {
+	for i := 0; i < n; i++ {
 		wg.Add(1)
-		sema.Acquire()
 		go func() {
-			defer sema.Release()
 			defer wg.Done()
 
-			res, ok := nonConcurrentReduce(in, reducer)
+			res, ok := nonConcurrentReduce(in, f)
 			if ok {
 				partialResults <- res
 			}
@@ -50,17 +46,21 @@ func reduce[A any](in <-chan A, sema Semaphore, n int, reducer func(A, A) A) (A,
 		close(partialResults)
 	}()
 
-	// Phase 2: Recursive call. Reduce partial partialResults into a single value.
-	// partialResults channel contains at most n elements, which implies we can have at most n/2 concurrent reductions.
-	// Total number of spawned goroutines therefore is n + n/2 + n/4 + ... = 2n. But because of integer division, it's actually less than 2n.
-	// Recursion depth is at most log2(n)
-	// Overall number of goroutines and recursion depth are independent of the input size.
-	return reduce(partialResults, sema, n/2, reducer)
-}
-
-// todo: document
-func Reduce[A any](in <-chan A, n int, f func(A, A) A) (A, bool) {
-	return reduce(in, make(Semaphore, n), n, f)
+	// Phase 2: Recursive call. Reduce partialResults into a single value.
+	// Both the number of goroutines and the recursion depth are independent of the input size.
+	//
+	// The partialResults channel contains at most n elements, which will be grouped into at most n/2 pairs in the next recursion level.
+	// The total number of concurrent goroutines is n + n/2 + n/4 + ... = 2n. However, due to integer division, it's actually less than 2n.
+	// The number of concurrent reductions at any given moment is at most n (see below).
+	// The recursion depth is at most log2(n).
+	//
+	// Number of concurrent reductions:
+	// - At the current level, there are at most n concurrent reductions.
+	// - For each additional concurrent reduction at the next level, at least two goroutines from the current level need to
+	//   finish and send their partial results through the partialResults channel.
+	// - This implies that when the number of concurrent reductions increases by 1 at the next level, it decreases by at least 2 at the current level.
+	// - Consequently, the total number of concurrent reductions across all levels starts from n and decreases as data travels down the stack.
+	return Reduce(partialResults, n/2, f)
 }
 
 type keyValue[K, V any] struct {
@@ -69,9 +69,9 @@ type keyValue[K, V any] struct {
 }
 
 // reduceIntoMap is a helper function that adds a new key-value pair to the map or reduces the value of an existing key.
-func reduceIntoMap[K comparable, V any](m map[K]V, k K, v V, reducer func(V, V) V) {
+func reduceIntoMap[K comparable, V any](m map[K]V, k K, v V, f func(V, V) V) {
 	if oldV, ok := m[k]; ok {
-		m[k] = reducer(oldV, v)
+		m[k] = f(oldV, v)
 	} else {
 		m[k] = v
 	}
@@ -106,14 +106,11 @@ func MapReduce[A any, K comparable, V any](in <-chan A, nm int, mapper func(A) (
 
 	// Phase 2.2: Each goroutine builds its own partial map
 	partialResults := make(chan map[K]V, nr)
-	sema := make(Semaphore, nr)
 	var wg sync.WaitGroup
 
 	for i := 0; i < nr; i++ {
 		wg.Add(1)
-		sema.Acquire()
 		go func() {
-			defer sema.Release()
 			defer wg.Done()
 
 			res := make(map[K]V)
@@ -130,7 +127,7 @@ func MapReduce[A any, K comparable, V any](in <-chan A, nm int, mapper func(A) (
 	}()
 
 	// Phase 3: Merge all partial maps into a single one
-	res, _ := reduce(partialResults, sema, nr/2, func(m1, m2 map[K]V) map[K]V {
+	res, _ := Reduce(partialResults, nr/2, func(m1, m2 map[K]V) map[K]V {
 		// Always merge smaller map into a bigger one
 		if len(m2) > len(m1) {
 			m1, m2 = m2, m1
