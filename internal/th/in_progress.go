@@ -2,6 +2,7 @@ package th
 
 import "sync"
 
+// Deprecated: use ConcurrencyMonitor instead
 type InProgressCounter struct {
 	mu      sync.Mutex
 	current int
