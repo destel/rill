@@ -11,6 +11,7 @@ import (
 func TestReduce(t *testing.T) {
 	for _, n := range []int{1, 4, 8} {
 		t.Run(th.Name("nil", n), func(t *testing.T) {
+			n := n
 			th.ExpectHang(t, 1*time.Second, func() {
 				_, _ = Reduce[int](nil, n, func(a, b int) int {
 					return a + b
@@ -58,6 +59,7 @@ func TestMapReduce(t *testing.T) {
 	for _, nm := range []int{1, 4} {
 		for _, nr := range []int{1, 4, 8} {
 			t.Run(th.Name("nil", nm, nr), func(t *testing.T) {
+				nm, nr := nm, nr
 				th.ExpectHang(t, 1*time.Second, func() {
 					var in chan int
 					_ = MapReduce(in,
