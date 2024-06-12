@@ -148,6 +148,22 @@ func ExpectHang(t *testing.T, waitFor time.Duration, f func()) {
 	}
 }
 
+func ExpectNotHang(t *testing.T, waitFor time.Duration, f func()) {
+	t.Helper()
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		f()
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(waitFor):
+		t.Errorf("test hanged")
+	}
+}
+
 func ExpectError(t *testing.T, err error, message string) {
 	t.Helper()
 	if err == nil {
@@ -164,22 +180,6 @@ func ExpectNoError(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Errorf("unexpected error '%v'", err)
-	}
-}
-
-func ExpectNotHang(t *testing.T, waitFor time.Duration, f func()) {
-	t.Helper()
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-		f()
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(waitFor):
-		t.Errorf("test hanged")
 	}
 }
 
