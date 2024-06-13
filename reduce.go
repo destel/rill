@@ -8,7 +8,7 @@ import (
 
 // Reduce combines all elements from the input channel into a single value
 // using a binary function f. The function f must be commutative, meaning
-// f(x,y) == f(y,x). It is applied to pairs of elements concurrently, using n
+// f(x,y) == f(y,x). It is applied to pairs of elements, using n
 // goroutines, progressively reducing the channel's contents until only one value remains.
 // The order in which the function f is applied is not guaranteed due to concurrent processing.
 //
@@ -47,13 +47,14 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (A, bool, e
 }
 
 // MapReduce reduces the input channel to a map using a mapper and a reducer functions.
-// Reduction is done in two phases happening concurrently. In the first phase,
-// the mapper function transforms each input item into a key-value pair using
-// nm goroutines. As a result of this phase, we can get multiple values for the
-// same key. In the second phase, the reducer function reduces values for the
-// same key into a single value, using nr goroutines. The order in which the reducer
-// is applied is not guaranteed due to concurrent processing. See [Reduce] documentation
-// for more details on reduction phase semantics.
+// Reduction is done in two phases, both occurring concurrently. In the first phase,
+// the mapper function transforms each input item into a key-value pair.
+// As a result of this phase, we can get multiple values for the same key, so
+// in the second phase, the reducer function reduces values for the same key into a single value.
+// The order in which the reducer is applied is not guaranteed due to concurrent processing.
+// See [Reduce] documentation for more details on reduction phase semantics.
+//
+// The number of concurrent mappers and reducers can be controlled using nm and nr parameters respectively.
 //
 // MapReduce blocks until all items are processed or an error is encountered,
 // either from the mapper, reducer, or the upstream. In case of an error
