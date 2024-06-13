@@ -189,6 +189,44 @@ func ExampleReduce() {
 	fmt.Println("OK:", ok)
 }
 
+// This example demonstrates using the Any function to check if there is an even number in a channel.
+// The function exits immediately after the first even number is found
+func ExampleAny() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	ok, err := rill.Any(numbers, 3, func(x int) (bool, error) {
+		if x == 10 {
+			return true, fmt.Errorf("some error")
+		}
+
+		return x%2 == 0, nil
+	})
+
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Printf("Has even number: %t\n", ok)
+}
+
+// This example demonstrates using the All function to check if all numbers in a channel are even.
+// The function exits immediately after the first odd number is found
+func ExampleAll() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	ok, err := rill.All(numbers, 3, func(x int) (bool, error) {
+		return x%2 == 0, nil
+	})
+
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Printf("All numbers are even: %t\n", ok)
+}
+
 // This example demonstrates how MapReduce can be used to count how many times each word appears in a stream.
 // Mappers emit a count of '1' for each word, and reducers sum these counts to calculate the total occurrences of each word.
 func ExampleMapReduce() {
