@@ -1,7 +1,9 @@
 package rill_test
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"path/filepath"
@@ -169,6 +171,47 @@ func Example_ordering() {
 	}
 }
 
+// This example demonstrates how [Reduce] can be used to calculate a sum of numbers from a channel.
+func ExampleReduce() {
+	// Create a channel with some values
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Reduce the channel to a single value by summing all numbers
+	sum, ok, err := rill.Reduce(numbers, 3, func(a, b int) (int, error) {
+		return a + b, nil
+	})
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Println("Sum:", sum)
+	fmt.Println("OK:", ok)
+}
+
+// This example demonstrates how MapReduce can be used to count how many times each word appears in a stream.
+// Mappers emit a count of '1' for each word, and reducers sum these counts to calculate the total occurrences of each word.
+func ExampleMapReduce() {
+	stream := strings.NewReader(`Early morning brings early birds to the early market. Birds sing, the market buzzes, and the morning shines.`)
+
+	words := streamWords(stream)
+
+	mr, err := rill.MapReduce(words,
+		3, func(word string) (string, int, error) {
+			return strings.ToLower(word), 1, nil
+		},
+		2, func(x, y int) (int, error) {
+			return x + y, nil
+		},
+	)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Println("Result:", mr)
+}
+
 // streamFileLines simulates line-by-line streaming of a file from a URL,
 // introducing a randomized delay to simulate network latency.
 // It's a simplified placeholder for actual network-based file streaming.
@@ -186,6 +229,31 @@ func streamFileLines(url string) <-chan rill.Try[string] {
 		}
 	}()
 	return out
+}
+
+// streamWords is helper function that reads words from a reader and streams them as strings.
+func streamWords(r io.Reader) <-chan rill.Try[string] {
+	raw := make(chan rill.Try[string], 1)
+
+	go func() {
+		defer close(raw)
+
+		scanner := bufio.NewScanner(r)
+		scanner.Split(bufio.ScanWords)
+
+		for scanner.Scan() {
+			word := scanner.Text()
+			word = strings.Trim(word, ".,;:!?&()") // it's basic and just for demonstration
+			if len(word) > 0 {
+				raw <- rill.Wrap(word, nil)
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			raw <- rill.Wrap("", err)
+		}
+	}()
+
+	return raw
 }
 
 // kvGet simulates fetching a value form a key-value database,

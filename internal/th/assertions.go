@@ -55,6 +55,27 @@ func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 	}
 }
 
+func ExpectMap[K, V comparable](t *testing.T, actual map[K]V, expected map[K]V) {
+	t.Helper()
+	if len(expected) != len(actual) {
+		t.Errorf("expected %v, got %v", expected, actual)
+		return
+	}
+
+	for k, v := range expected {
+		actualV, ok := actual[k]
+		if !ok {
+			t.Errorf("expected %v, got %v", expected, actual)
+			return
+		}
+
+		if v != actualV {
+			t.Errorf("expected %v, got %v", expected, actual)
+			return
+		}
+	}
+}
+
 type number interface {
 	~int | ~int64
 }
@@ -111,22 +132,19 @@ func ExpectNeverClosedChan[A any](t *testing.T, ch <-chan A, waitFor time.Durati
 	}
 }
 
-func ExpectError(t *testing.T, err error, message string) {
+func ExpectHang(t *testing.T, waitFor time.Duration, f func()) {
 	t.Helper()
-	if err == nil {
-		t.Errorf("expected error '%s', got nil", message)
-		return
-	}
+	done := make(chan struct{})
 
-	if err.Error() != message {
-		t.Errorf("expected error '%s', got '%s'", message, err.Error())
-	}
-}
+	go func() {
+		defer close(done)
+		f()
+	}()
 
-func ExpectNoError(t *testing.T, err error) {
-	t.Helper()
-	if err != nil {
-		t.Errorf("unexpected error '%v'", err)
+	select {
+	case <-done:
+		t.Errorf("expected hang")
+	case <-time.After(waitFor):
 	}
 }
 
@@ -143,6 +161,25 @@ func ExpectNotHang(t *testing.T, waitFor time.Duration, f func()) {
 	case <-done:
 	case <-time.After(waitFor):
 		t.Errorf("test hanged")
+	}
+}
+
+func ExpectError(t *testing.T, err error, message string) {
+	t.Helper()
+	if err == nil {
+		t.Errorf("expected error '%s', got nil", message)
+		return
+	}
+
+	if err.Error() != message {
+		t.Errorf("expected error '%s', got '%s'", message, err.Error())
+	}
+}
+
+func ExpectNoError(t *testing.T, err error) {
+	t.Helper()
+	if err != nil {
+		t.Errorf("unexpected error '%v'", err)
 	}
 }
 
