@@ -174,9 +174,12 @@ func ExampleMapReduce() {
 			return x + y, nil
 		},
 	)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
 
-	fmt.Println("Err:", err)
-	fmt.Println("MapReduce:", mr)
+	fmt.Println("Result:", mr)
 }
 
 // streamFileLines simulates line-by-line streaming of a file from a URL,
