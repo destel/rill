@@ -10,6 +10,70 @@ import (
 	"github.com/destel/rill/internal/th"
 )
 
+func TestErr(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		in := FromChan(th.FromSlice([]int{}), nil)
+		err := Err(in)
+
+		th.ExpectNoError(t, err)
+	})
+
+	t.Run("no errors", func(t *testing.T) {
+		in := FromChan(th.FromRange(0, 100), nil)
+		err := Err(in)
+
+		th.ExpectNoError(t, err)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		in := FromChan(th.FromRange(0, 1000), nil)
+		in = replaceWithError(in, 100, fmt.Errorf("err100"))
+
+		err := Err(in)
+		th.ExpectError(t, err, "err100")
+
+		// wait until it drained
+		time.Sleep(1 * time.Second)
+		th.ExpectDrainedChan(t, in)
+	})
+}
+
+func TestFirst(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		in := FromChan(th.FromSlice([]int{}), nil)
+		_, ok, err := First(in)
+
+		th.ExpectNoError(t, err)
+		th.ExpectValue(t, ok, false)
+	})
+
+	t.Run("value is first", func(t *testing.T) {
+		in := FromChan(th.FromRange(1, 1000), nil)
+		in = replaceWithError(in, 100, fmt.Errorf("err100"))
+		x, ok, err := First(in)
+
+		th.ExpectNoError(t, err)
+		th.ExpectValue(t, ok, true)
+		th.ExpectValue(t, x, 1)
+
+		// wait until it drained
+		time.Sleep(1 * time.Second)
+		th.ExpectDrainedChan(t, in)
+	})
+
+	t.Run("error is first", func(t *testing.T) {
+		in := FromChan(th.FromRange(1, 1000), nil)
+		in = replaceWithError(in, 1, fmt.Errorf("err1"))
+		_, _, err := First(in)
+
+		th.ExpectError(t, err, "err1")
+
+		// wait until it drained
+		time.Sleep(1 * time.Second)
+		th.ExpectDrainedChan(t, in)
+	})
+}
+
 func TestForEach(t *testing.T) {
 	for _, n := range []int{1, 5} {
 

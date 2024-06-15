@@ -28,6 +28,11 @@ type User struct {
 	Username string
 }
 
+type Company struct {
+	ID   int
+	Name string
+}
+
 // A basic example demonstrating how [ForEach] can be used to process a list of items concurrently.
 func Example_basic() {
 	items := rill.FromSlice([]string{"item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8", "item9", "item10"}, nil)
@@ -187,6 +192,63 @@ func ExampleReduce() {
 
 	fmt.Println("Sum:", sum)
 	fmt.Println("OK:", ok)
+}
+
+// This example demonstrates how to use the combination of [Map], [Merge] and Err to catch errors from multiple concurrent
+// tasks of different types, such as saving users and companies.
+// [ForEach] can't be used here because there are two input channels.
+// Those channels can't be merged directly because their types do not match.
+// A practical solution is to perform side-effect-only processing using Map,
+// then merge the results and use Err to catch the first error that occurs.
+func ExampleErr() {
+	users := rill.FromSlice([]*User{
+		{ID: 1, Username: "foo"},
+		{ID: 2, Username: "bar"},
+		{ID: 3},
+		{ID: 4, Username: "baz"},
+		{ID: 5, Username: "qux"},
+		{ID: 6, Username: "quux"},
+	}, nil)
+
+	companies := rill.FromSlice([]*Company{
+		{ID: 1, Name: "Company 1"},
+		{ID: 2, Name: "Company 2"},
+	}, nil)
+
+	// Save users. Use struct{} as a result type
+	userResults := rill.Map(users, 2, func(user *User) (struct{}, error) {
+		return struct{}{}, saveUser(user)
+	})
+
+	// Save users. Use struct{} as a result type
+	companyResults := rill.Map(companies, 3, func(company *Company) (struct{}, error) {
+		return struct{}{}, saveCompany(company)
+	})
+
+	// Merge results
+	allResults := rill.Merge(userResults, companyResults)
+
+	// Use Err to wait until everything is saved and get the first error
+	err := rill.Err(allResults)
+	fmt.Println("Error:", err)
+}
+
+// This example demonstrates how to use the combination of First and [OrderedFilter] functions
+// to find the first number divisible by 4 in a channel of numbers.
+func ExampleFirst() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	dvisibleBy4 := rill.OrderedFilter(numbers, 3, func(x int) (bool, error) {
+		return x%4 == 0, nil
+	})
+
+	first, ok, err := rill.First(dvisibleBy4)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Println("Result:", first, ok)
 }
 
 // This example demonstrates using the Any function to check if there is an even number in a channel.
@@ -358,4 +420,26 @@ func getUser(id int) (User, error) {
 	username := fmt.Sprintf("%s_%s", adj[rand.Intn(len(adj))], noun[rand.Intn(len(noun))])
 
 	return User{ID: id, Username: username}, nil
+}
+
+func saveUser(user *User) error {
+	randomSleep(1000 * time.Millisecond) // Simulate a network delay
+
+	if user.Username == "" {
+		return fmt.Errorf("empty username")
+	}
+
+	fmt.Printf("User saved: %+v\n", user)
+	return nil
+}
+
+func saveCompany(comp *Company) error {
+	randomSleep(1000 * time.Millisecond) // Simulate a network delay
+
+	if comp.Name == "" {
+		return fmt.Errorf("empty name")
+	}
+
+	fmt.Printf("Company saved: %+v\n", comp)
+	return nil
 }

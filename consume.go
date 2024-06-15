@@ -66,6 +66,48 @@ func onceFunc1[T any](f func(T)) func(T) {
 	}
 }
 
+// Err returns the first error encountered in the input channel.
+// This function blocks until:
+//   - An error is found.
+//   - The end of the input channel is reached.
+//
+// If Err terminates early (before the input channel is fully consumed),
+// it initiates background draining of the remaining items in the channel. This is done
+// to prevent goroutine leaks by ensuring that all goroutines feeding the channel are allowed to complete.
+// The input channel should not be used anymore after calling this function.
+func Err[A any](in <-chan Try[A]) error {
+	defer DrainNB(in)
+
+	for a := range in {
+		if a.Error != nil {
+			return a.Error
+		}
+	}
+
+	return nil
+}
+
+// First returns the first value or error encountered in the input channel.
+// This function blocks until:
+//   - A value is found. In this case, the found flag is set to true.
+//   - The end of the input channel is reached. In this case, the found flag is set to false.
+//   - An error is encountered in the input channel.
+//
+// If First terminates early (before the input channel is fully consumed),
+// it initiates background draining of the remaining items in the channel. This is done
+// to prevent goroutine leaks by ensuring that all goroutines feeding the channel are allowed to complete.
+// The input channel should not be used anymore after calling this function.
+func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
+	defer DrainNB(in)
+
+	for a := range in {
+		return a.Value, true, a.Error
+	}
+
+	found = false
+	return
+}
+
 // Any checks if there is an item in the input channel that satisfies the condition f.
 // This function uses n goroutines for concurrency. It blocks execution until either:
 //   - A matching item is found
