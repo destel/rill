@@ -4,7 +4,9 @@ changelog:
       labels: ["new"]
     - title: 🐛 Fixes
       labels: ["fix", "bug"]
-    - title: 📝 Dependencies
+    - title: 📖 Documentation
+      labels: ["documentation", "docs"]
+    - title: 🔗 Dependencies
       labels: ["dependencies"]
     - title: 📦 Other
       labels: ["*"]
