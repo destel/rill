@@ -55,6 +55,17 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 	return retErr
 }
 
+// onceFunc1 returns a single argument function that invokes f only once. The returned function may be called concurrently.
+func onceFunc1[T any](f func(T)) func(T) {
+	var once sync.Once
+	return func(value T) {
+		once.Do(func() {
+			f(value)
+			f = nil
+		})
+	}
+}
+
 // Any checks if there is an item in the input channel that satisfies the condition f.
 // This function uses n goroutines for concurrency. It blocks execution until either:
 //   - A matching item is found
@@ -66,7 +77,11 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 //
 // The function returns true if a match is found, false otherwise, or a first encountered error.
 func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
-	errFound := errors.New("found")
+	errBreak := errors.New("break")
+	res := false
+	setRes := onceFunc1(func(a bool) {
+		res = a
+	})
 
 	err := ForEach(in, n, func(a A) error {
 		ok, err := f(a)
@@ -75,18 +90,17 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 		}
 
 		if ok {
-			return errFound
+			setRes(true)
+			return errBreak
+
 		}
 		return nil
 	})
 
-	if err == nil {
-		return false, nil
+	if err != nil && errors.Is(err, errBreak) {
+		err = nil
 	}
-	if errors.Is(err, errFound) {
-		return true, nil
-	}
-	return false, err
+	return res, err
 }
 
 // All checks if all items in the input channel satisfy the condition function f.
@@ -100,9 +114,11 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 //
 // Returns true if all items match the condition, false otherwise, or a first encountered error.
 func All[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
+	// Idea: x && y && z is the same as !(!x || !y || !z)
+	// So we can use Any with a negated condition to implement All
 	res, err := Any(in, n, func(a A) (bool, error) {
 		ok, err := f(a)
-		return !ok, err
+		return !ok, err // negate
 	})
-	return !res, err
+	return !res, err // negate
 }
