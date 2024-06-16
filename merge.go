@@ -6,18 +6,22 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Merge combines multiple input channels into a single output channel. Items are emitted as soon as they're available,
-// so the output order is not defined.
+// Merge performs a fan-in operation on the list of input channels, returning a single output channel.
+// The resulting channel will contain all items from all input channels,
+// and will be closed when all input channels are closed.
 func Merge[A any](ins ...<-chan A) <-chan A {
 	return core.Merge(ins...)
 }
 
-// Split2 divides the input channel into two output channels based on the discriminator function f, using n goroutines for concurrency.
-// The function f takes an item from the input and decides which output channel (outTrue or outFalse) it should go to by returning a boolean.
-// If an error is encountered, either from the function f itself or from upstream it is intentionally sent
-// to one of the output channels in a non-deterministic manner.
-// The output order is not guaranteed: results are written to the outputs as soon as they're ready.
-// Use [OrderedSplit2] to preserve the input order.
+// Split2 divides the input stream into two output streams based on the predicate function f:
+// The splitting behavior is:
+//   - An error is encountered in the stream - Split2 forwards it to one of the outputs (non-deterministically).
+//   - Function f returns an error - Split2 sends it to one of the outputs (non-deterministically).
+//   - Function f returns true - Split2 sends the item to outTrue.
+//   - Function f returns false - Split2 sends the item to outFalse.
+//
+// Split2 uses n goroutines to call the user-provided function f concurrently, which means that
+// items can be written to the output channels out of order. To preserve the input order, use the [OrderedSplit2] function.
 func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
 	outs := core.MapAndSplit(in, 2, n, func(a Try[A]) (Try[A], int) {
 		if a.Error != nil {
@@ -38,7 +42,8 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-
 	return outs[0], outs[1]
 }
 
-// OrderedSplit2 is similar to [Split2], but it guarantees that the order of the outputs matches the order of the input.
+// OrderedSplit2 is the ordered version of [Split2].
+// It has the same behavior, but orders the items in the output channels will match the order of the input channel.
 func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
 	outs := core.OrderedMapAndSplit(in, 2, n, func(a Try[A]) (Try[A], int) {
 		if a.Error != nil {
