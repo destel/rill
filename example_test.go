@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"math/rand"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -47,15 +48,15 @@ func Example_batching() {
 	}
 
 	// Transform the reader into a stream of words
-	words := streamWords(reader)
+	lines := streamLines(reader)
 
 	// Parse words as integers
 	// Concurrency = 3
-	ids := rill.Map(words, 3, func(line string) (int, error) {
+	ids := rill.Map(lines, 3, func(line string) (int, error) {
 		return strconv.Atoi(line)
 	})
 
-	// Group IDs into batches of 10 for bulk processing
+	// Group IDs into batches of 5 for bulk processing
 	idBatches := rill.Batch(ids, 5, 1*time.Second)
 
 	// Fetch users for each batch of IDs
@@ -93,15 +94,16 @@ func Example_basic() {
 	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
 	// Read users from the API.
-	// Concurrency = 5
-	users := rill.Map(ids, 5, func(id int) (*User, error) {
+	// Concurrency = 3
+	users := rill.Map(ids, 3, func(id int) (*User, error) {
 		return getUser(ctx, id)
 	})
 
 	// Activate users.
-	// Concurrency = 3
-	err := rill.ForEach(users, 3, func(u *User) error {
+	// Concurrency = 2
+	err := rill.ForEach(users, 2, func(u *User) error {
 		if u.IsActive {
+			fmt.Printf("User %d is already active\n", u.ID)
 			return nil
 		}
 
@@ -146,9 +148,8 @@ func Example_ordering() {
 		fmt.Printf("%s: %.1f°C (change %+.1f°C)\n", m.Date.Format("2006-01-02"), m.Temp, change)
 		return nil
 	})
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
+
+	fmt.Println("Error:", err)
 }
 
 // This example demonstrates a concurrent [MapReduce] performed on a set of remote files.
@@ -159,18 +160,19 @@ func Example_mapReduce() {
 
 	defer cancel()
 
+	// Start with a stream of file URLs
 	urls := rill.FromSlice([]string{
 		"http://example.com/text1.txt",
 		"http://example.com/text2.txt",
 		"http://example.com/text3.txt",
 	}, nil)
 
-	// Download files concurrently and stream words from each file.
+	// Download files concurrently, and get a stream of all words from all files
 	// Concurrency = 2
 	words := rill.FlatMap(urls, 2, func(url string) <-chan rill.Try[string] {
 		reader, err := downloadFile(ctx, url)
 		if err != nil {
-			return rill.FromSlice[string](nil, err)
+			return rill.FromSlice[string](nil, err) // Wrap the error in a stream
 		}
 
 		return streamWords(reader)
@@ -205,7 +207,8 @@ func ExampleAll() {
 		return x%2 == 0, nil
 	})
 
-	fmt.Println("Error: ", err, "; Result: ", ok)
+	fmt.Println("Result:", ok)
+	fmt.Println("Error:", err)
 }
 
 func ExampleAny() {
@@ -396,6 +399,7 @@ func ExampleForEach() {
 	// Concurrency = 3; Unordered
 	err := rill.ForEach(numbers, 3, func(x int) error {
 		randomSleep(1000 * time.Millisecond) // simulate some additional work
+
 		y := x * x
 		fmt.Println(y)
 		return nil
@@ -453,10 +457,11 @@ func ExampleOrderedMap() {
 }
 
 func ExampleMapReduce() {
-	reader := io.NopCloser(strings.NewReader(`Early morning brings early birds to the early market. Birds sing, the market buzzes, and the morning shines.`))
+	var re = regexp.MustCompile(`\w+`)
+	text := "Early morning brings early birds to the early market. Birds sing, the market buzzes, and the morning shines."
 
-	// Stream words from the reader
-	words := streamWords(reader)
+	// Start with a stream of words
+	words := rill.FromSlice(re.FindAllString(text, -1), nil)
 
 	// Count the number of occurrences of each word
 	mr, err := rill.MapReduce(words,
@@ -479,9 +484,9 @@ func ExampleMapReduce() {
 func ExampleMerge() {
 	numbers1 := rill.FromSlice([]int{1, 2, 3, 4, 5}, nil)
 	numbers2 := rill.FromSlice([]int{6, 7, 8, 9, 10}, nil)
+	numbers3 := rill.FromSlice([]int{11, 12}, nil)
 
-	// Merge two streams
-	numbers := rill.Merge(numbers1, numbers2)
+	numbers := rill.Merge(numbers1, numbers2, numbers3)
 
 	printStream(numbers)
 }
@@ -498,32 +503,52 @@ func ExampleReduce() {
 	fmt.Println("Error:", err)
 }
 
+func ExampleToSlice() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Square each number
+	// Concurrency = 3; Ordered
+	squares := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
+		return x * x, nil
+	})
+
+	squaresSlice, err := rill.ToSlice(squares)
+
+	fmt.Println("Result:", squaresSlice)
+	fmt.Println("Error:", err)
+}
+
+func ExampleUnbatch() {
+	batches := rill.FromSlice([][]int{
+		{1, 2, 3},
+		{4, 5},
+		{6, 7, 8, 9},
+		{10},
+	}, nil)
+
+	numbers := rill.Unbatch(batches)
+
+	printStream(numbers)
+}
+
 // --- Helpers ---
 
-var ErrFileNotFound = errors.New("file not found")
+// streamLines converts an io.Reader into a stream of lines
+func streamLines(r io.ReadCloser) <-chan rill.Try[string] {
+	out := make(chan rill.Try[string])
+	go func() {
+		defer r.Close()
+		defer close(out)
 
-// downloadFile simulates downloading a file from a URL.
-// Returns a reader for the file content.
-func downloadFile(ctx context.Context, url string) (io.ReadCloser, error) {
-	str := ""
-	switch url {
-	case "http://example.com/user_ids1.txt":
-		str = "1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20"
-	case "http://example.com/user_ids2.txt":
-		str = "21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40"
-	case "http://example.com/user_ids3.txt":
-		str = "41 42 43 44 45"
-	case "http://example.com/text1.txt":
-		str = `Early morning brings early birds to the early market. Birds sing, the market buzzes, and the morning shines.`
-	case "http://example.com/text2.txt":
-		str = `The birds often sing at the market`
-	case "http://example.com/text3.txt":
-		str = `The market closes, the birds rest, and the night brings peace to the town.`
-	default:
-		return nil, ErrFileNotFound
-	}
-
-	return io.NopCloser(strings.NewReader(str)), nil
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			out <- rill.Wrap(scanner.Text(), nil)
+		}
+		if err := scanner.Err(); err != nil {
+			out <- rill.Wrap("", err)
+		}
+	}()
+	return out
 }
 
 // streamWords is helper function that converts an io.Reader into a stream of words.
@@ -552,12 +577,35 @@ func streamWords(r io.ReadCloser) <-chan rill.Try[string] {
 	return raw
 }
 
+var ErrFileNotFound = errors.New("file not found")
+
+var files = map[string]string{
+	"http://example.com/user_ids1.txt": strings.ReplaceAll("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20", " ", "\n"),
+	"http://example.com/user_ids2.txt": strings.ReplaceAll("21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40", " ", "\n"),
+	"http://example.com/user_ids3.txt": strings.ReplaceAll("41 42 43 44 45", " ", "\n"),
+	"http://example.com/text1.txt":     "Early morning brings early birds to the early market. Birds sing, the market buzzes, and the morning shines.",
+	"http://example.com/text2.txt":     "The birds often sing at the market",
+	"http://example.com/text3.txt":     "The market closes, the birds rest, and the night brings peace to the town.",
+}
+
+// downloadFile simulates downloading a file from a URL.
+// Returns a reader for the file content.
+func downloadFile(ctx context.Context, url string) (io.ReadCloser, error) {
+	content, ok := files[url]
+	if !ok {
+		return nil, ErrFileNotFound
+	}
+
+	// In a real-world scenario, this would be an HTTP request depending on the ctx.
+	return io.NopCloser(strings.NewReader(content)), nil
+}
+
 // getTemperature simulates fetching a temperature reading for a city and date,
 func getTemperature(city string, date time.Time) (float64, error) {
 	randomSleep(1000 * time.Millisecond) // Simulate a network delay
 
 	// Basic city hash, to make measurements unique for each city
-	cityHash := float64(h(city))
+	cityHash := float64(hash(city))
 
 	// Simulate a temperature reading, by retuning a pseudo-random, but deterministic value
 	temp := 15 - 10*math.Sin(cityHash+float64(date.Unix()))
@@ -565,23 +613,24 @@ func getTemperature(city string, date time.Time) (float64, error) {
 	return temp, nil
 }
 
-// getUsers simulates fetching multiple users from an API, introducing a randomized delay to simulate network latency.
+var adjs = []string{"big", "small", "fast", "slow", "smart", "happy", "sad", "funny", "serious", "angry"}
+var nouns = []string{"dog", "cat", "bird", "fish", "mouse", "elephant", "lion", "tiger", "bear", "wolf"}
+
+// getUsers simulates fetching multiple users from an API.
 // User fields are pseudo-random, but deterministic based on the user ID.
 func getUsers(ctx context.Context, ids ...int) ([]*User, error) {
-	adj := []string{"big", "small", "fast", "slow", "smart", "happy", "sad", "funny", "serious", "angry"}
-	noun := []string{"dog", "cat", "bird", "fish", "mouse", "elephant", "lion", "tiger", "bear", "wolf"}
-
 	randomSleep(1000 * time.Millisecond) // Simulate a network delay
 
 	users := make([]*User, 0, len(ids))
 	for _, id := range ids {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
 		user := User{
-			ID: id,
-			Username: fmt.Sprintf("%s_%s",
-				adj[h(id, "adj")%len(adj)],
-				noun[h(id, "noun")%len(noun)],
-			),
-			IsActive: h(id, "active")%2 == 1,
+			ID:       id,
+			Username: adjs[hash(id, "adj")%len(adjs)] + "_" + nouns[hash(id, "noun")%len(nouns)], // adj + noun
+			IsActive: hash(id, "active")%100 < 60,                                                // 60%
 		}
 
 		users = append(users, &user)
@@ -591,7 +640,7 @@ func getUsers(ctx context.Context, ids ...int) ([]*User, error) {
 
 var ErrUserNotFound = errors.New("user not found")
 
-// getUser simulates fetching a user from an API, introducing a randomized delay to simulate network latency.
+// getUser simulates fetching a user from an API.
 func getUser(ctx context.Context, id int) (*User, error) {
 	users, err := getUsers(ctx, id)
 	if err != nil {
@@ -605,8 +654,13 @@ func getUser(ctx context.Context, id int) (*User, error) {
 	return users[0], nil
 }
 
+// saveUser simulates saving a user through an API.
 func saveUser(ctx context.Context, user *User) error {
 	randomSleep(1000 * time.Millisecond) // Simulate a network delay
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	if user.Username == "" {
 		return fmt.Errorf("empty username")
@@ -616,7 +670,7 @@ func saveUser(ctx context.Context, user *User) error {
 	return nil
 }
 
-// printStream prints all items from a channel (one per line) and an error if any.
+// printStream prints all items from a stream (one per line) and an error if any.
 func printStream[A any](stream <-chan rill.Try[A]) {
 	fmt.Println("Result:")
 	err := rill.ForEach(stream, 1, func(x A) error {
@@ -630,10 +684,9 @@ func randomSleep(max time.Duration) {
 	time.Sleep(time.Duration(rand.Intn(int(max))))
 }
 
-// h is a simple hash function that returns a positive integer hash for a given input.
-// It uses the FNV-1a hash algorithm and returns the absolute value of the hash.
-func h(input ...any) int {
-	hasher := fnv.New32a()
-	hasher.Write([]byte(fmt.Sprint(input...)))
-	return int(hasher.Sum32() & 0x7fffffff)
+// hash is a simple hash function that returns an integer hash for a given input.
+func hash(input ...any) int {
+	hasher := fnv.New32()
+	fmt.Fprintln(hasher, input...)
+	return int(hasher.Sum32())
 }
