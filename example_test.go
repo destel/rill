@@ -242,13 +242,13 @@ func ExampleBatch() {
 }
 
 func ExampleCatch() {
-	lines := rill.FromSlice([]string{"1", "2", "3", "4", "5", "not a number 6", "7", "8", "9", "10"}, nil)
+	strs := rill.FromSlice([]string{"1", "2", "3", "4", "5", "not a number 6", "7", "8", "9", "10"}, nil)
 
 	// Convert strings to ints
 	// Concurrency = 3; Unordered
-	ids := rill.Map(lines, 3, func(a string) (int, error) {
+	ids := rill.Map(strs, 3, func(s string) (int, error) {
 		randomSleep(1000 * time.Millisecond) // simulate some additional work
-		return strconv.Atoi(a)
+		return strconv.Atoi(s)
 	})
 
 	// Catch and ignore number parsing errors
@@ -266,17 +266,17 @@ func ExampleCatch() {
 
 // The same example as for the [Catch], but using ordered versions of functions.
 func ExampleOrderedCatch() {
-	lines := rill.FromSlice([]string{"1", "2", "3", "4", "5", "not a number 6", "7", "8", "9", "10"}, nil)
+	strs := rill.FromSlice([]string{"1", "2", "3", "4", "5", "not a number 6", "7", "8", "9", "10"}, nil)
 
 	// Convert strings to ints
-	// Concurrency = 3; Ordered
-	ids := rill.OrderedMap(lines, 3, func(a string) (int, error) {
+	// Concurrency = 3; Unordered
+	ids := rill.OrderedMap(strs, 3, func(s string) (int, error) {
 		randomSleep(1000 * time.Millisecond) // simulate some additional work
-		return strconv.Atoi(a)
+		return strconv.Atoi(s)
 	})
 
 	// Catch and ignore number parsing errors
-	// Concurrency = 2; Ordered
+	// Concurrency = 2; Unordered
 	ids = rill.OrderedCatch(ids, 2, func(err error) error {
 		if errors.Is(err, strconv.ErrSyntax) {
 			return nil // Ignore this error
