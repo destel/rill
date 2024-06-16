@@ -409,8 +409,9 @@ func ExampleForEach() {
 	fmt.Println("Error:", err)
 }
 
-// There is no ordered version of the ForEach function. To achieve ordered processing,
-// move code to [OrderedMap] and then use ForEach with concurrency set to 1.
+// There is no ordered version of the ForEach function. To achieve ordered processing, use concurrency set to 1.
+// If you need a concurrent and ordered ForEach, then do all processing with the [OrderedMap],
+// and then use ForEach with concurrency set to 1 at the final stage.
 func ExampleForEach_ordered() {
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
