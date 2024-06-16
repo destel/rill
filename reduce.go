@@ -6,21 +6,25 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Reduce combines all elements from the input channel into a single value
+// Reduce combines all items from the input stream into a single value
 // using a binary function f. The function f must be commutative, meaning
-// f(x,y) == f(y,x). It is applied to pairs of elements, using n
-// goroutines, progressively reducing the channel's contents until only one value remains.
-// The order in which the function f is applied is not guaranteed due to concurrent processing.
+// f(x,y) == f(y,x). It is applied to pairs of items, progressively reducing the stream's
+// contents until only one value remains.
 //
-// Reduce blocks until all items are processed or an error is encountered,
-// either from the function f itself or from the upstream. In case of an error
-// leading to early termination, Reduce ensures the input channel is drained to
-// avoid goroutine leaks, making it safe for use in environments where cleanup
-// is crucial.
+// Reduce blocks until one of the following conditions is met:
+//   - An error is encountered in the stream - Reduce returns the error.
+//   - Function f returns an error - Reduce returns the error.
+//   - The end of the stream is reached, and it was empty - Reduce sets the hasResult flag to false.
+//   - The end of the stream is reached, and it was not empty - Reduce returns the result and sets the hasResult flag to true.
 //
-// The function returns the first encountered error, if any, or the reduction result.
-// The second return value is false if the input channel is empty, and true otherwise.
-func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (A, bool, error) {
+// Reduce uses n goroutines to call the user-provided function f concurrently, which means that the
+// order in which the function f is applied is undefined. That's the reason why function f must be commutative.
+//
+// If Reduce terminates early (before reaching the end of the input stream), it initiates
+// background draining of the remaining items. This is done to prevent goroutine
+// leaks by ensuring that all goroutines feeding the stream are allowed to complete.
+// The input stream should not be used anymore after calling this function.
+func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, hasResult bool, err error) {
 	in, earlyExit := core.Breakable(in)
 
 	res, ok := core.Reduce(in, n, func(a1, a2 Try[A]) Try[A] {
@@ -46,24 +50,26 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (A, bool, e
 	return res.Value, ok, res.Error
 }
 
-// MapReduce reduces the input channel to a map using a mapper and a reducer functions.
-// Reduction is done in two phases, both occurring concurrently. In the first phase,
-// the mapper function transforms each input item into a key-value pair.
-// As a result of this phase, we can get multiple values for the same key, so
-// in the second phase, the reducer function reduces values for the same key into a single value.
-// The order in which the reducer is applied is not guaranteed due to concurrent processing.
-// See [Reduce] documentation for more details on reduction phase semantics.
+// MapReduce transforms the input stream into a map using a mapper and a reducer functions.
+// The transformation is performed in two concurrent phases.
 //
-// The number of concurrent mappers and reducers can be controlled using nm and nr parameters respectively.
+//   - The mapper function transforms each input item into a key-value pair.
+//   - The reducer function reduces values for the same key into a single value.
+//     This phase hase the same semantics as the [Reduce] function, in particular
+//     the reducer function must be commutative.
 //
-// MapReduce blocks until all items are processed or an error is encountered,
-// either from the mapper, reducer, or the upstream. In case of an error
-// leading to early termination, MapReduce ensures the input channel is drained
-// to avoid goroutine leaks, making it safe for use in environments where
-// cleanup is crucial.
+// MapReduce blocks until one of the following conditions is met:
+//   - An error is encountered in the stream - MapReduce returns the error.
+//   - mapper function returns an error - MapReduce returns the error.
+//   - reducer function returns an error - MapReduce returns the error.
+//   - The end of the stream is reached - MapReduce returns the result.
 //
-// The function returns the first encountered error, if any, or a map where
-// each key is associated with a single reduced value
+// MapReduce calls mapper and reducer functions concurrently using nm and nr goroutines respectively.
+//
+// If MapReduce terminates early (before reaching the end of the input stream), it initiates
+// background draining of the remaining items. This is done to prevent goroutine
+// leaks by ensuring that all goroutines feeding the stream are allowed to complete.
+// The input stream should not be used anymore after calling this function.
 func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error)) (map[K]V, error) {
 	var zeroKey K
 	var zeroVal V
