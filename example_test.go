@@ -224,6 +224,7 @@ func ExampleAny() {
 	fmt.Println("Error: ", err)
 }
 
+// Also check out the package level examples to see Batch in action
 func ExampleBatch() {
 	// New number is emitted every 50ms
 	numbers := make(chan rill.Try[int])
