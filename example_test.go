@@ -30,63 +30,11 @@ type User struct {
 
 // --- Package examples ---
 
-// This example showcases the use of Rill for building a multi-stage data processing pipeline,
-// with a focus on batch processing. It streams user ids from a remote file and then fetches users from an API in batches.
-// At the end the pipeline filters out inactive users and prints the results.
-func Example_batching() {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-
+// This example demonstrates a Rill pipeline that fetches users from an API,
+// and updates their status to active and saves them back. Both operations are done concurrently.
+func Example() {
 	// In case of early exit this will cancel the file streaming,
 	// which in turn will terminate the entire pipeline.
-	defer cancel()
-
-	// Stream a file with user ids as an io.Reader
-	reader, err := downloadFile(ctx, "http://example.com/user_ids1.txt")
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	// Transform the reader into a stream of words
-	lines := streamLines(reader)
-
-	// Parse words as integers
-	// Concurrency = 3
-	ids := rill.Map(lines, 3, func(line string) (int, error) {
-		return strconv.Atoi(line)
-	})
-
-	// Group IDs into batches of 5 for bulk processing
-	idBatches := rill.Batch(ids, 5, 1*time.Second)
-
-	// Fetch users for each batch of IDs
-	// Concurrency = 3
-	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*User, error) {
-		return getUsers(ctx, ids...)
-	})
-
-	// Transform batches back into a stream of users
-	users := rill.Unbatch(userBatches)
-
-	// Exclude inactive users
-	// Concurrency = 1
-	users = rill.Filter(users, 1, func(u *User) (bool, error) {
-		return u.IsActive, nil
-	})
-
-	// Print results and errors
-	err = rill.ForEach(users, 1, func(u *User) error {
-		fmt.Printf("%+v\n", u)
-		return nil
-	})
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-}
-
-// This example demonstrates a Rill pipeline that fetches users from an API concurrently,
-// and updates their status to active. Both operations are done concurrently.
-func Example_basic() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -111,6 +59,87 @@ func Example_basic() {
 		return saveUser(ctx, u)
 	})
 
+	fmt.Println("Error:", err)
+}
+
+// This example showcases the use of Rill for building a multi-stage data processing pipeline,
+// with a focus on batch processing. It streams user ids from a remote file and then fetches users from an API in batches,
+// and updates their status to active and saves them back. All operations are done concurrently.
+func Example_batching() {
+	// In case of early exit this will cancel the file streaming,
+	// which in turn will terminate the entire pipeline.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Stream a file with user ids as an io.Reader
+	reader, err := downloadFile(ctx, "http://example.com/user_ids1.txt")
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	// Transform the reader into a stream of words
+	lines := streamLines(reader)
+
+	// Parse lines as integers
+	// Concurrency = 3
+	ids := rill.Map(lines, 3, func(line string) (int, error) {
+		return strconv.Atoi(line)
+	})
+
+	// Group IDs into batches of 5 for bulk processing
+	idBatches := rill.Batch(ids, 5, 1*time.Second)
+
+	// Fetch users for each batch of IDs
+	// Concurrency = 3
+	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*User, error) {
+		return getUsers(ctx, ids...)
+	})
+
+	// Transform batches back into a stream of users
+	users := rill.Unbatch(userBatches)
+
+	// Activate users.
+	// Concurrency = 2
+	err = rill.ForEach(users, 2, func(u *User) error {
+		if u.IsActive {
+			fmt.Printf("User %d is already active\n", u.ID)
+			return nil
+		}
+
+		u.IsActive = true
+		return saveUser(ctx, u)
+	})
+
+	fmt.Println("Error:", err)
+}
+
+// This example demonstrates how to use the Fan-in and Fan-out patterns
+// to send messages through multiple servers concurrently.
+func Example_fanIn_FanOut() {
+	messages := rill.FromSlice([]string{
+		"message1", "message2", "message3", "message4", "message5",
+		"message6", "message7", "message8", "message9", "message10",
+	}, nil)
+
+	// Fan-out the messages to three servers
+	results1 := rill.Map(messages, 2, func(message string) (string, error) {
+		return message, sendMessage(message, "server1")
+	})
+
+	results2 := rill.Map(messages, 2, func(message string) (string, error) {
+		return message, sendMessage(message, "server2")
+	})
+
+	results3 := rill.Map(messages, 2, func(message string) (string, error) {
+		return message, sendMessage(message, "server3")
+	})
+
+	// Fan-in the results from all servers into a single stream
+	results := rill.Merge(results1, results2, results3)
+
+	// Handle errors
+	err := rill.Err(results)
 	fmt.Println("Error:", err)
 }
 
@@ -194,6 +223,44 @@ func Example_mapReduce() {
 
 	fmt.Println("Result:", counts)
 	fmt.Println("Error:", err)
+}
+
+// This example demonstrates how to use context cancellation to terminate a Rill pipeline in case of an early exit.
+// The printOddSquares function initiates a pipeline that prints squares of odd numbers.
+// The infiniteNumberStream function is the initial stage of the pipeline. It generates numbers indefinitely unless the context is canceled.
+// When an error occurs in one of the pipeline stages:
+//   - The error is propagated down the pipeline and reaches the ForEach stage.
+//   - The ForEach function returns the error.
+//   - The printOddSquares function returns, and the context is canceled using defer.
+//   - The infiniteNumberStream function terminates due to context cancellation.
+//   - The entire pipeline is cleaned up gracefully.
+func Example_context() {
+	ctx := context.Background()
+
+	err := printOddSquares(ctx)
+	fmt.Println("Error:", err)
+
+	// Wait one more second to see "infiniteNumberStream terminated" printed
+	time.Sleep(1 * time.Second)
+}
+
+func printOddSquares(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	numbers := infiniteNumberStream(ctx)
+
+	odds := rill.Filter(numbers, 3, func(x int) (bool, error) {
+		if x == 20 {
+			return false, fmt.Errorf("early exit")
+		}
+		return x%2 == 1, nil
+	})
+
+	return rill.ForEach(odds, 3, func(x int) error {
+		fmt.Println(x * x)
+		return nil
+	})
 }
 
 // --- Function examples ---
@@ -602,6 +669,13 @@ func downloadFile(ctx context.Context, url string) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader(content)), nil
 }
 
+// Helper function that simulates sending a message through a server
+func sendMessage(message string, server string) error {
+	randomSleep(1000 * time.Millisecond) // simulate some additional work
+	fmt.Printf("Sent through %s: %s\n", server, message)
+	return nil
+}
+
 // getTemperature simulates fetching a temperature reading for a city and date,
 func getTemperature(city string, date time.Time) (float64, error) {
 	randomSleep(1000 * time.Millisecond) // Simulate a network delay
@@ -613,6 +687,22 @@ func getTemperature(city string, date time.Time) (float64, error) {
 	temp := 15 - 10*math.Sin(cityHash+float64(date.Unix()))
 
 	return temp, nil
+}
+
+func infiniteNumberStream(ctx context.Context) <-chan rill.Try[int] {
+	out := make(chan rill.Try[int])
+	go func() {
+		defer fmt.Println("infiniteNumberStream terminated")
+		defer close(out)
+		for i := 1; ; i++ {
+			if err := ctx.Err(); err != nil {
+				return // This can be rewritten as select, but it's not necessary
+			}
+			out <- rill.Wrap(i, nil)
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
+	return out
 }
 
 var adjs = []string{"big", "small", "fast", "slow", "smart", "happy", "sad", "funny", "serious", "angry"}
