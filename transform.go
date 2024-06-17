@@ -4,10 +4,13 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Map applies a transformation function to each item in an input channel, using n goroutines for concurrency.
-// If an error is encountered, either from the function f itself or from upstream it is forwarded to the output for further handling.
-// The output order is not guaranteed: results are written to the output as soon as they're ready.
-// Use [OrderedMap] to preserve the input order.
+// Map takes a stream of items of type A and transforms them into items of type B using a function f.
+// Returns a new stream of transformed items.
+//
+// This is a non-blocking unordered function that processes items concurrently using n goroutines.
+// An ordered version of this function, [OrderedMap], is also available.
+//
+// See the package documentation for more information on non-blocking unordered functions and error handling.
 func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
 	return core.MapOrFilter(in, n, func(a Try[A]) (Try[B], bool) {
 		if a.Error != nil {
@@ -23,7 +26,7 @@ func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] 
 	})
 }
 
-// OrderedMap is similar to [Map], but it guarantees that the output order is the same as the input order.
+// OrderedMap is the ordered version of [Map].
 func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
 	return core.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[B], bool) {
 		if a.Error != nil {
@@ -39,10 +42,13 @@ func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan 
 	})
 }
 
-// Filter removes items that do not meet a specified condition, using n goroutines for concurrency.
-// If an error is encountered, either from the function f itself or from upstream it is forwarded to the output for further handling.
-// The output order is not guaranteed: results are written to the output as soon as they're ready.
-// Use [OrderedFilter] to preserve the input order.
+// Filter takes a stream of items of type A and filters them using a predicate function f.
+// Returns a new stream of items that passed the filter.
+//
+// This is a non-blocking unordered function that processes items concurrently using n goroutines.
+// An ordered version of this function, [OrderedFilter], is also available.
+//
+// See the package documentation for more information on non-blocking unordered functions and error handling.
 func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
 	return core.MapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error != nil {
@@ -58,7 +64,7 @@ func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[
 	})
 }
 
-// OrderedFilter is similar to [Filter], but it guarantees that the output order is the same as the input order.
+// OrderedFilter is the ordered version of [Filter].
 func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
 	return core.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error != nil {
@@ -74,10 +80,13 @@ func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-ch
 	})
 }
 
-// FlatMap applies a function to each item in an input channel, where the function returns a channel of items.
-// These items are then flattened into a single output channel using n goroutines for concurrency.
-// The output order is not guaranteed: results are written to the output as soon as they're ready.
-// Use [OrderedFlatMap] to preserve the input order.
+// FlatMap takes a stream of items of type A and transforms each item into a new sub-stream of items of type B using a function f.
+// Those sub-streams are then flattened into a single output stream, which is returned.
+//
+// This is a non-blocking unordered function that processes items concurrently using n goroutines.
+// An ordered version of this function, [OrderedFlatMap], is also available.
+//
+// See the package documentation for more information on non-blocking unordered functions and error handling.
 func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
 	if in == nil {
 		return nil
@@ -100,7 +109,7 @@ func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan 
 	return out
 }
 
-// OrderedFlatMap is similar to [FlatMap], but it guarantees that the output order is the same as the input order.
+// OrderedFlatMap is the ordered version of [FlatMap].
 func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
 	if in == nil {
 		return nil
@@ -125,10 +134,17 @@ func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) 
 	return out
 }
 
-// Catch allows handling errors from the input channel using n goroutines for concurrency.
-// When f returns nil, error is considered handled and filtered out; otherwise it is replaced by the result of f.
-// The output order is not guaranteed: results are written to the output as soon as they're ready.
-// Use [OrderedCatch] to preserve the input order.
+// Catch allows handling errors in the middle of a stream processing pipeline.
+// Every error encountered in the input stream is passed to the function f for handling.
+//
+// The outcome depends on the return value of f:
+//   - If f returns nil, the error is considered handled and filtered out from the output stream.
+//   - If f returns a non-nil error, the original error is replaced by the result of f.
+//
+// This is a non-blocking unordered function that processes items concurrently using n goroutines.
+// An ordered version of this function, [OrderedCatch], is also available.
+//
+// See the package documentation for more information on non-blocking unordered functions and error handling.
 func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	return core.MapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error == nil {
@@ -144,7 +160,7 @@ func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	})
 }
 
-// OrderedCatch is similar to [Catch], but it guarantees that the output order is the same as the input order.
+// OrderedCatch is the ordered version of [Catch].
 func OrderedCatch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	return core.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error == nil {

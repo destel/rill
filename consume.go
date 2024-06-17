@@ -7,20 +7,13 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// ForEach applies a function f to each item in an input stream and returns the first encountered error, if any.
-// It blocks until one of the following conditions is met:
-//   - An error is encountered in the stream - ForEach returns the error.
-//   - Function f returns an error - ForEach returns the error.
-//   - The end of the stream is reached - ForEach returns nil.
+// ForEach applies a function f to each item in an input stream.
 //
-// ForEach uses n goroutines to call the user-provided function f concurrently, which means that
-// items can be processed out of order. The case when n = 1 is optimized: it does not spawn
-// additional goroutines and processes items sequentially.
+// This is a blocking unordered function that processes items concurrently using n goroutines.
+// The case when n = 1 is optimized: it does not spawn additional goroutines and processes items sequentially,
+// making the function ordered.
 //
-// If ForEach terminates early (before reaching the end of the input stream), it initiates
-// background draining of the remaining items. This is done to prevent goroutine
-// leaks by ensuring that all goroutines feeding the stream are allowed to complete.
-// The input stream should not be used anymore after calling this function.
+// See the package documentation for more information on blocking unordered functions and error handling.
 func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 	if n == 1 {
 		for a := range in {
@@ -73,15 +66,10 @@ func onceFunc1[T any](f func(T)) func(T) {
 	}
 }
 
-// Err returns the first error encountered in the input stream or nil There are no errors.
-// It blocks until one of the following conditions is met:
-//   - An error is encountered - Err returns the error.
-//   - The end of the stream is reached - Err returns nil.
+// Err returns the first error encountered in the input stream or nil there were no errors.
 //
-// If Err terminates early (before reaching the end of the input stream), it initiates
-// background draining of the remaining items. This is done to prevent goroutine
-// leaks by ensuring that all goroutines feeding the stream are allowed to complete.
-// The input stream should not be used anymore after calling this function.
+// This is a blocking ordered function that processes items sequentially.
+// See the package documentation for more information on blocking ordered functions and error handling.
 func Err[A any](in <-chan Try[A]) error {
 	defer DrainNB(in)
 
@@ -94,16 +82,11 @@ func Err[A any](in <-chan Try[A]) error {
 	return nil
 }
 
-// First returns the first item encountered in the input stream.
-// It blocks until one of the following conditions is met:
-//   - An error is encountered - First returns the error.
-//   - A value is encountered - First returns the value with the found flag set to true.
-//   - The end of the stream is reached - First sets the found flag to false.
+// First returns the first item or error encountered in the input stream, whi
+// The found return flag is set to false if the stream is empty, otherwise it is set to true.
 //
-// If First terminates early (before reaching the end of the input stream), it initiates
-// background draining of the remaining items. This is done to prevent goroutine
-// leaks by ensuring that all goroutines feeding the stream are allowed to complete.
-// The input stream should not be used anymore after calling this function.
+// This is a blocking ordered function that processes items sequentially.
+// See the package documentation for more information on blocking ordered functions and error handling.
 func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
 	defer DrainNB(in)
 
@@ -116,19 +99,13 @@ func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
 }
 
 // Any checks if there is an item in the input stream that satisfies the condition f.
-// It blocks until one of the following conditions is met:
-//   - An error is encountered in the stream - Any returns the error.
-//   - Function f returns an error - Any returns the error.
-//   - Function f returns true - Any returns true.
-//   - The end of the stream is reached - Any returns false.
+// This function returns true as soon as it finds such an item. Otherwise, it returns false.
 //
-// Any uses n goroutines to call the user-provided function f concurrently.
-// The case when n = 1 is optimized: it does not spawn additional goroutines.
+// Any is a blocking unordered function that processes items concurrently using n goroutines.
+// The case when n = 1 is optimized: it does not spawn additional goroutines and processes items sequentially,
+// making the function ordered.
 //
-// If Any terminates early (before reaching the end of the input stream), it initiates
-// background draining of the remaining items. This is done to prevent goroutine
-// leaks by ensuring that all goroutines feeding the stream are allowed to complete.
-// The input stream should not be used anymore after calling this function.
+// See the package documentation for more information on blocking unordered functions and error handling.
 func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
 	errBreak := errors.New("break")
 	res := false
@@ -156,20 +133,15 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 	return res, err
 }
 
-// All checks if all items in the input stream satisfy the condition function f.
-// It blocks until one of the following conditions is met:
-//   - An error is encountered in the stream - All returns the error.
-//   - Function f returns an error - All returns the error.
-//   - Function f returns false - All returns false.
-//   - The end of the stream is reached - All returns true
+// All checks if all items in the input stream that satisfy the condition f.
+// This function returns false as soon as it finds an item that does not satisfy the condition. Otherwise, it returns true,
+// including the case when the stream is empty.
 //
-// All uses n goroutines to call the user-provided function f concurrently.
-// The case when n = 1 is optimized: it does not spawn additional goroutines.
+// This is a blocking unordered function that processes items concurrently using n goroutines.
+// The case when n = 1 is optimized: it does not spawn additional goroutines and processes items sequentially,
+// making the function ordered.
 //
-// If All terminates early (before reaching the end of the input stream), it initiates
-// background draining of the remaining items. This is done to prevent goroutine
-// leaks by ensuring that all goroutines feeding the stream are allowed to complete.
-// The input stream should not be used anymore after calling this function.
+// See the package documentation for more information on blocking unordered functions and error handling.
 func All[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
 	// Idea: x && y && z is the same as !(!x || !y || !z)
 	// So we can use Any with a negated condition to implement All
