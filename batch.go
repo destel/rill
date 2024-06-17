@@ -11,10 +11,10 @@ import (
 // A batch is emitted when one of the following conditions is met:
 //   - The batch reaches the size of n items
 //   - The time since the first item was added to the batch exceeds the timeout
-//   - The input channel is closed
+//   - The input stream is closed
 //
 // This function never emits empty batches. To disable the timeout and emit batches only based on the size,
-// set the timeout to -1. Zero timeout is not supported and will result in a panic.
+// set the timeout to -1. Setting the timeout to zero is not supported and will result in a panic
 //
 // This is a non-blocking ordered function that processes items sequentially.
 //

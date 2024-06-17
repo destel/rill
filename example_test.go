@@ -63,8 +63,8 @@ func Example() {
 }
 
 // This example showcases the use of Rill for building a multi-stage data processing pipeline,
-// with a focus on batch processing. It streams user ids from a remote file and then fetches users from an API in batches,
-// and updates their status to active and saves them back. All operations are done concurrently.
+// with a focus on batch processing. It streams user ids from a remote file, then fetches users from an API in batches,
+// updates their status to active, and saves them back. All operations are done concurrently.
 func Example_batching() {
 	// In case of early exit this will cancel the file streaming,
 	// which in turn will terminate the entire pipeline.
@@ -227,7 +227,7 @@ func Example_mapReduce() {
 
 // This example demonstrates how to use context cancellation to terminate a Rill pipeline in case of an early exit.
 // The printOddSquares function initiates a pipeline that prints squares of odd numbers.
-// The infiniteNumberStream function is the initial stage of the pipeline. It generates numbers indefinitely unless the context is canceled.
+// The infiniteNumberStream function is the initial stage of the pipeline. It generates numbers indefinitely until the context is canceled.
 // When an error occurs in one of the pipeline stages:
 //   - The error is propagated down the pipeline and reaches the ForEach stage.
 //   - The ForEach function returns the error.
@@ -245,7 +245,7 @@ func Example_context() {
 }
 
 func printOddSquares(ctx context.Context) error {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	numbers := infiniteNumberStream(ctx)
@@ -622,11 +622,11 @@ func streamLines(r io.ReadCloser) <-chan rill.Try[string] {
 
 // streamWords is helper function that converts an io.Reader into a stream of words.
 func streamWords(r io.ReadCloser) <-chan rill.Try[string] {
-	raw := make(chan rill.Try[string], 1)
+	words := make(chan rill.Try[string], 1)
 
 	go func() {
 		defer r.Close()
-		defer close(raw)
+		defer close(words)
 
 		scanner := bufio.NewScanner(r)
 		scanner.Split(bufio.ScanWords)
@@ -635,15 +635,15 @@ func streamWords(r io.ReadCloser) <-chan rill.Try[string] {
 			word := scanner.Text()
 			word = strings.Trim(word, ".,;:!?&()") // strip all punctuation. it's basic and just for demonstration
 			if len(word) > 0 {
-				raw <- rill.Wrap(word, nil)
+				words <- rill.Wrap(word, nil)
 			}
 		}
 		if err := scanner.Err(); err != nil {
-			raw <- rill.Wrap("", err)
+			words <- rill.Wrap("", err)
 		}
 	}()
 
-	return raw
+	return words
 }
 
 var ErrFileNotFound = errors.New("file not found")

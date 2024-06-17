@@ -9,7 +9,7 @@ type Try[A any] struct {
 // Wrap converts a value and/or error into a [Try] container.
 // It's a convenience function to avoid creating a [Try] container manually and benefit from type inference.
 //
-// It also allows to one-line wrapping of functions returning a value and an error:
+// Such function signature also allows concise wrapping of functions that return a value and an error:
 //
 //	item := rill.Wrap(strconv.ParseInt("42"))
 func Wrap[A any](value A, err error) Try[A] {
@@ -19,7 +19,7 @@ func Wrap[A any](value A, err error) Try[A] {
 // FromSlice converts a slice into a stream.
 // If err is not nil function returns a stream with a single error.
 //
-// It also allows to one-line wrapping of functions returning a slice and an error:
+// Such function signature allows concise wrapping of functions that return a slice and an error:
 //
 //	stream := rill.FromSlice(someFunc())
 func FromSlice[A any](slice []A, err error) <-chan Try[A] {
@@ -58,9 +58,9 @@ func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 
 // FromChan converts a regular channel into a stream.
 // Additionally, this function can take an error, that will be added to the output stream alongside the values.
-// If both values and error are nil, the function returns nil.
+// Either argument can be nil, in which case it is ignored. If both arguments are nil, the function returns nil.
 //
-// It also allows to one-line wrapping of functions returning a channel and an error:
+// Such function signature allows concise wrapping of functions that return a channel and an error:
 //
 //	stream := rill.FromChan(someFunc())
 func FromChan[A any](values <-chan A, err error) <-chan Try[A] {
@@ -88,9 +88,9 @@ func FromChan[A any](values <-chan A, err error) <-chan Try[A] {
 // FromChans converts a regular channel into a stream.
 // Additionally, this function can take a channel of errors, which will be added to
 // the output stream alongside the values.
-// If both values and errors are nil, the function returns nil.
+// Either argument can be nil, in which case it is ignored. If both arguments are nil, the function returns nil.
 //
-// It also allows to one-line wrapping of functions returning two channels:
+// Such function signature allows concise wrapping of functions that return two channels:
 //
 //	stream := rill.FromChans(someFunc())
 func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {

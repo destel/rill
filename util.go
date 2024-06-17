@@ -2,7 +2,7 @@ package rill
 
 import "github.com/destel/rill/internal/core"
 
-// Drain consumes and discards all items from an input channel, blocking until the channel is closed
+// Drain consumes and discards all items from an input channel, blocking until the channel is closed.
 func Drain[A any](in <-chan A) {
 	core.Drain(in)
 }

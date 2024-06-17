@@ -13,7 +13,7 @@ import (
 //   - Associative: f(a, f(b, c)) == f(f(a, b), c)
 //   - Commutative: f(a, b) == f(b, a)
 //
-// The hasResult return flag is set to false if the stream is empty, otherwise it is set to true.
+// The hasResult return flag is set to false if the stream was empty, otherwise it is set to true.
 //
 // Reduce is a blocking unordered function that processes items concurrently using n goroutines.
 // The case when n = 1 is optimized: it does not spawn additional goroutines and processes items sequentially,

@@ -11,7 +11,7 @@ import (
 //
 // This is a blocking unordered function that processes items concurrently using n goroutines.
 // The case when n = 1 is optimized: it does not spawn additional goroutines and processes items sequentially,
-// making the function ordered.
+// making the function ordered and similar to a regular for-range loop.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
@@ -66,7 +66,7 @@ func onceFunc1[T any](f func(T)) func(T) {
 	}
 }
 
-// Err returns the first error encountered in the input stream or nil there were no errors.
+// Err returns the first error encountered in the input stream or nil if there were no errors.
 //
 // This is a blocking ordered function that processes items sequentially.
 // See the package documentation for more information on blocking ordered functions and error handling.
@@ -82,8 +82,8 @@ func Err[A any](in <-chan Try[A]) error {
 	return nil
 }
 
-// First returns the first item or error encountered in the input stream, whi
-// The found return flag is set to false if the stream is empty, otherwise it is set to true.
+// First returns the first item or error encountered in the input stream, whichever comes first.
+// The found return flag is set to false if the stream was empty, otherwise it is set to true.
 //
 // This is a blocking ordered function that processes items sequentially.
 // See the package documentation for more information on blocking ordered functions and error handling.
@@ -133,9 +133,9 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 	return res, err
 }
 
-// All checks if all items in the input stream that satisfy the condition f.
+// All checks if all items in the input stream satisfy the condition f.
 // This function returns false as soon as it finds an item that does not satisfy the condition. Otherwise, it returns true,
-// including the case when the stream is empty.
+// including the case when the stream was empty.
 //
 // This is a blocking unordered function that processes items concurrently using n goroutines.
 // The case when n = 1 is optimized: it does not spawn additional goroutines and processes items sequentially,

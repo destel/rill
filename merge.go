@@ -6,9 +6,9 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Merge performs a fan-in operation on the list of input streams, returning a single output stream.
-// The resulting stream will contain all items from all inputs,
-// and will be closed when all input streams are fully consumed.
+// Merge performs a fan-in operation on the list of input channels, returning a single output channel.
+// The resulting channel will contain all items from all inputs,
+// and will be closed when all inputs are fully consumed.
 //
 // This is a non-blocking function that processes items from each input sequentially.
 //

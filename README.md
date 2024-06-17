@@ -1,13 +1,13 @@
 # Rill [![GoDoc](https://pkg.go.dev/badge/github.com/destel/rill)](https://pkg.go.dev/github.com/destel/rill) [![Go Report Card](https://goreportcard.com/badge/github.com/destel/rill)](https://goreportcard.com/report/github.com/destel/rill) [![codecov](https://codecov.io/gh/destel/rill/graph/badge.svg?token=252K8OQ7E1)](https://codecov.io/gh/destel/rill) 
 Rill (noun: a small stream) is a Go concurrency toolkit that offers a collection of easy-to-use functions for streaming, 
-error handling and pipeline construction. It abstracts away the complexities of concurrency and reduces boilerplate, 
+parallel processing and pipeline construction. It abstracts away the complexities of concurrency and removes boilerplate, 
 enabling developers to focus on core logic. Whether you need to perform a basic concurrent ForEach or 
 construct a complex multi-stage processing pipeline, Rill has got you covered.
 
 
 ## Key Features
-- **Easy to use**: the complexity of managing goroutines, wait groups, and error handling is abstracted away
-- **Easy to integrate**: seamlessly integrates into existing projects without any setup or configuration
+- **Easy to Use**: the complexity of managing goroutines, channels, wait groups, and atomics is abstracted away
+- **Easy to Integrate**: seamlessly integrates into existing projects without any setup or configuration
 - **Concurrent**: provides control over the level of concurrency for all operations
 - **Error Handling**: provides a structured way to handle errors in concurrent applications
 - **Streaming**: handles real-time data streams or large datasets with a minimal memory footprint
@@ -26,7 +26,8 @@ go get github.com/destel/rill
 
 ## Example Usage
 Consider an example application that loads users from an API concurrently,
-updates their status to active and saves them back.
+updates their status to active and saves them back, 
+while controlling the level of concurrency for each operation.
 
 [Full runnable example](https://pkg.go.dev/github.com/destel/rill#example-package)
 
@@ -79,11 +80,9 @@ Rill has a test coverage of over 95%, with testing focused on:
 ## Design Philosophy
 At the heart of rill lies a simple yet powerful concept: operating on channels of wrapped values, encapsulated by the **Try** structure.
 This allows to propagate both values and errors through the pipeline, ensuring that errors are handled correctly at each stage.
-Such wrapped channels can be created manually or through utilities like **FromSlice** or **FromChan**, and then transformed via operations 
-such as **Map**, **Filter**, **FlatMap** and others. Finally, when all processing stages are completed, the data can be consumed by blocking functions
-**ForEach**, **ToSlice**, **Reduce**, **MapReduce** and others. Also, there's always an option to process resulting channel manually, using
-Go built-in constructs like **range-range** loop. Such channel based design is perfect for streaming data, as it allows for
-real-time processing with minimal memory overhead.
+Such wrapped channels can be created manually or through utilities like **FromSlice** or **FromChan**, and then transformed via non-blocking 
+functions like **Map** or **Filter**. Finally, the transformed stream can be consumed by a blocking function such as 
+**ForEach**, **Reduce** or **MapReduce**
 
 One of the key features of Rill is the ability to control the level of concurrency for almost all operations through the **n** parameter.
 This is possible due to the channel and goroutine orchestration that library does under the hood. Rill's built-in functions manage
@@ -161,10 +160,9 @@ func main() {
 
 ## Fan-in and Fan-out
 Go channels support both Fan-in and Fan-out patterns, meaning that multiple goroutines can write to a single channel (fan-in)
-or read from a single channel (fan-out). Rill provides a simple way to implement these patterns using its core functions.
-On top of that Rill adds a Merge function that can be used to combine multiple streams into a single one.
+or read from a single channel (fan-out). On top of that Rill adds a Merge function that can be used to combine multiple streams into a single one.
 
-Consider a basic example that send messages through multiple servers concurrently, then collects the results
+Consider a basic example application that concurrently sends messages through multiple servers, then collects the results
 into a single stream and handles errors.
 
 [Full runnable example](https://pkg.go.dev/github.com/destel/rill#example-package-FanIn_FanOut)
@@ -198,12 +196,12 @@ func main() {
 }
 ```
 
-## Termination, Error handling and Contexts
+## Errors, Termination and Contexts
 Usually rill pipelines consist of zero or more non-blocking stages that transform the input stream, 
 and one blocking stage that consumes the results. General rule is: any error happening anywhere in the pipeline is 
-propagated down the pipeline, where it is returned to the caller by the blocking function.
+propagated down the pipeline, where it is caught and returned to the caller by some blocking function.
 
-Rill provides several blocking functions out of the box that can be used to consume the stream.
+Rill provides several blocking functions out of the box:
 
 - **ForEach:** Concurrently applies a user function to each item in the stream. 
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ForEach)
@@ -211,27 +209,31 @@ Rill provides several blocking functions out of the box that can be used to cons
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ToSlice)
 - **Reduce:** Concurrently reduces the stream to a single value using a user provided reducer function.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Reduce)
-- **Err:** Returns the first error encountered in the stream.
-  [Example](https://pkg.go.dev/github.com/destel/rill#example-Err)
-- **First:** Returns the first item or error encountered in the stream.
-  [Example](https://pkg.go.dev/github.com/destel/rill#example-First)
+- **MapReduce:** Performs a concurrent MapReduce operation one the stream, reducing it to Go map.
+  Takes two user provided functions: mapper and reducer.
+  [Example](https://pkg.go.dev/github.com/destel/rill#example-MapReduce)
 - **All:** Concurrently checks if all items in the stream satisfy a user provided condition.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-All)
 - **Any:** Concurrently checks if at least one item in the stream satisfies a user provided condition.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Any)
-- **MapReduce:** Performs a concurrent MapReduce operation one the stream, reducing it to Go map. 
-  Takes two user provided functions: mapper and reducer.
-  [Example](https://pkg.go.dev/github.com/destel/rill#example-MapReduce)
+- **First:** Returns the first item or error encountered in the stream.
+  [Example](https://pkg.go.dev/github.com/destel/rill#example-First)
+- **Err:** Returns the first error encountered in the stream.
+  [Example](https://pkg.go.dev/github.com/destel/rill#example-Err)
+
+
 
 
 All blocking functions share a common behavior. In case of early termination due to an error or other conditions, 
 they keep draining the input stream in the background until it's fully consumed. This is done to prevent goroutine leaks 
-by ensuring that all goroutines feeding the input stream are allowed to complete.
+by ensuring that all goroutines feeding the input stream are allowed to complete. 
+It also possible to consume the stream manually by using the for-range loop. In this case, the caller would be responsible for
+draining the stream. See more details in the package documentation.
 
 Rill is context-agnostic, meaning that it does not enforce any specific context usage. 
-However, to optimize resource usage and prevent unnecessary work it's recommended to make use of contexts in the pipeline.
-This is especially important for the initial stage of the pipeline, as it allows allows to finish background draining
-process, described above, faster
+However, it's recommended to make user-defined pipeline stages context-aware.
+This is especially important for the initial stage, as it allows to finish background draining
+process, described above, faster.
 
 In the example below the printOddSquares function initiates a pipeline that depends on a context.
 When an error occurs in one of the pipeline stages, it propagates down the pipeline, causing an early exit, 
@@ -248,7 +250,7 @@ func main() {
 }
 
 func printOddSquares(ctx context.Context) error {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	numbers := infiniteNumberStream(ctx)
@@ -277,7 +279,7 @@ and others. These ensure that if value **x** precedes value **y** in the input c
 preserving the original order. It's important to note that these ordered functions have a small overhead compared to their unordered counterparts, 
 due to more advanced orchestration and synchronization happening under the hood.
 
-Order preservation is vital in scenarios where the sequence of data impacts the outcome, such as time-series data processing . 
+Order preservation is vital in scenarios where the sequence of data impacts the outcome, such as time-series data processing. 
 Take, for instance, an application that retrieves daily temperature measurements over a specific period and calculates the change 
 in temperature from one day to the next. Such application can benefit from concurrent data fetching, but need fetched data
 to be processed in the correct order.
@@ -323,11 +325,6 @@ func main() {
         fmt.Println("Error:", err)
     }
 }
-
-// getTemperature fetches a temperature reading for a city and date,
-func getTemperature(city string, date time.Time) (float64, error) {
-    // ...
-}
 ```
 
 
@@ -354,8 +351,8 @@ you can consider alternative approaches or libraries. For example, it's possible
 with almost zero orchestration, just by dividing the slice into n chunks and assigning each chunk to a separate goroutine.
 
 Because of the reasons mentioned above and to manage users' expectations, rill does not provide functions that operate 
-directly on slices. However, slices can still be used with rill by converting them to and from channels, and leveraging 
-ordered transformations when necessary. See [example](https://pkg.go.dev/github.com/destel/rill#example-package-Slices) 
+directly on slices. It's main focus is streaming. However, slices can still be used with rill by converting them to and from channels, and leveraging 
+ordered transformations when necessary. 
 
 Another limitation of rill is that it does not provide a way to create a global worker pool for the entire pipeline. 
 Each stage of the pipeline must have at least one alive goroutine to keep the whole pipeline running. 
