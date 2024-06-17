@@ -1,7 +1,8 @@
-// Package rill is a Go toolkit designed for efficient and straightforward streaming, concurrency, and pipeline construction.
-// It abstracts away the complexities of concurrency management, enabling developers to focus on core logic.
-// With features like lightweight integration, batch processing, error handling, and composability,
-// rill enhances productivity in building concurrent applications.
+// Package Rill is a Go toolkit designed for straightforward streaming, concurrency, batching,
+// error handling, and pipeline construction. It abstracts away the complexities of concurrency management and eliminates boilerplate,
+// enabling developers to focus on core logic. Rill is modular and can be easily integrated into existing projects:
+// it requires no setup and allows using only the necessary functions.
+// At the same time, these functions can be composed into complex, concurrent, and reusable pipelines when needed.
 //
 // # Streams and Try Containers
 //
@@ -67,4 +68,14 @@
 // This additional synchronization has some overhead, but it is negligible for i/o bound workloads.
 //
 // Some other functions, such as [ToSlice], [Batch] or [First] are not concurrent and are ordered by nature.
+//
+// # Error handling
+//
+// Error handling can be quite complex in concurrent applications. Rill simplifies this by providing a unified error handling mechanism.
+// All errors are automatically propagated through the pipeline and caught by blocking functions at the final stage.
+// This allows the pipeline to terminate after the first error is encountered and return the error to the caller.
+//
+// In cases where more complex error handling logic is required, the [Catch] function can be used.
+// It allows catching and handling errors at any point in the pipeline, providing the flexibility to handle all errors,
+// not just the first one. With Catch, developers can implement custom error handling strategies tailored to their specific needs.
 package rill
