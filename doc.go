@@ -1,5 +1,5 @@
-// Package rill is a Go concurrency toolkit that offers a collection of easy-to-use functions for streaming, parallel processing and pipeline construction.
-// It abstracts away the complexities of concurrency management, eliminates boilerplate and provides a structured approach to error handling.
+// Package rill is a collection of easy-to-use functions for concurrency, streaming, batching and pipeline construction.
+// It abstracts away the complexities of concurrency, removes boilerplate, and provides a structured way to handle errors.
 // Rill is modular and can be easily integrated into existing projects: it requires no setup and allows using only the necessary functions.
 // At the same time, rill's functions can be composed into complex, concurrent, and reusable pipelines when needed.
 //
@@ -36,7 +36,7 @@
 //   - The end of the stream is reached. In this case, the function returns the final result.
 //   - An error is encountered either in the input stream or in some user-provided function. In this case, the function returns the error.
 //
-// In case of early termination (before reaching the end of the input stream), such functions initiate
+// In case of an early termination (before reaching the end of the input stream), such functions initiate
 // background draining of the remaining items. This is done to prevent goroutine
 // leaks by ensuring that all goroutines feeding the stream are allowed to complete.
 // The input stream should not be used anymore after calling such functions.
@@ -70,10 +70,10 @@
 //
 // # Error handling
 //
-// Error handling can be quite complex in concurrent applications. Rill simplifies this by providing a unified error handling mechanism.
-// All errors are automatically propagated down the pipeline and caught by a blocking function at the final stage.
-// This allows the pipeline to terminate after the first error is encountered and return the error to the caller.
+// Error handling can be non-trivial in concurrent applications. Rill simplifies this by providing a structured error handling approach.
+// As described above, all errors are automatically propagated down the pipeline to the final stage, where they can be caught.
+// This allows the pipeline to terminate after the first error is encountered and return it to the caller.
 //
 // In cases where more complex error handling logic is required, the [Catch] function can be used.
-// It allows catching and handling errors at any point in the pipeline, providing the flexibility to handle not only the first error, but any of them.
+// It allows to catch and handle errors at any point in the pipeline, providing the flexibility to handle not only the first error, but any of them.
 package rill
