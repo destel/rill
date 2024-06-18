@@ -139,7 +139,7 @@ func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) 
 //
 // The outcome depends on the return value of f:
 //   - If f returns nil, the error is considered handled and filtered out from the output stream.
-//   - If f returns a non-nil error, the original error is replaced by the result of f.
+//   - If f returns a non-nil error, the original error is replaced with the result of f.
 //
 // This is a non-blocking unordered function that handles errors concurrently using n goroutines.
 // An ordered version of this function, [OrderedCatch], is also available.
