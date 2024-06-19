@@ -1,6 +1,6 @@
 package rill
 
-// Try is a container for a value or an error
+// Try is a container holding a value of type A or an error
 type Try[A any] struct {
 	Value A
 	Error error
@@ -8,12 +8,20 @@ type Try[A any] struct {
 
 // Wrap converts a value and/or error into a [Try] container.
 // It's a convenience function to avoid creating a [Try] container manually and benefit from type inference.
+//
+// Such function signature also allows concise wrapping of functions that return a value and an error:
+//
+//	item := rill.Wrap(strconv.ParseInt("42"))
 func Wrap[A any](value A, err error) Try[A] {
 	return Try[A]{Value: value, Error: err}
 }
 
-// FromSlice converts a slice into a channel of [Try] containers.
-// If err is not nil function returns a single [Try] container with the error.
+// FromSlice converts a slice into a stream.
+// If err is not nil function returns a stream with a single error.
+//
+// Such function signature allows concise wrapping of functions that return a slice and an error:
+//
+//	stream := rill.FromSlice(someFunc())
 func FromSlice[A any](slice []A, err error) <-chan Try[A] {
 	if err != nil {
 		out := make(chan Try[A], 1)
@@ -30,9 +38,10 @@ func FromSlice[A any](slice []A, err error) <-chan Try[A] {
 	return out
 }
 
-// ToSlice converts a channel of [Try] containers into a slice of values and an error.
-// It's an inverse of [FromSlice]. The function blocks until the whole channel is processed or an error is encountered.
-// In case of an error leading to early termination, ToSlice ensures the input channel is drained to avoid goroutine leaks.
+// ToSlice converts an input stream into a slice.
+//
+// This is a blocking ordered function that processes items sequentially.
+// See the package documentation for more information on blocking ordered functions and error handling.
 func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 	var res []A
 
@@ -47,9 +56,13 @@ func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 	return res, nil
 }
 
-// FromChan converts a regular channel into a channel of values wrapped in a [Try] container.
-// Additionally, this function can take an error, that will be added to the output channel alongside the values.
-// If both values and error are nil, the function returns nil.
+// FromChan converts a regular channel into a stream.
+// Additionally, this function can take an error, that will be added to the output stream alongside the values.
+// Either argument can be nil, in which case it is ignored. If both arguments are nil, the function returns nil.
+//
+// Such function signature allows concise wrapping of functions that return a channel and an error:
+//
+//	stream := rill.FromChan(someFunc())
 func FromChan[A any](values <-chan A, err error) <-chan Try[A] {
 	if values == nil && err == nil {
 		return nil
@@ -72,10 +85,14 @@ func FromChan[A any](values <-chan A, err error) <-chan Try[A] {
 	return out
 }
 
-// FromChans converts a regular channel into a channel of values wrapped in a [Try] container.
+// FromChans converts a regular channel into a stream.
 // Additionally, this function can take a channel of errors, which will be added to
-// the output channel alongside the values.
-// If both values and errors are nil, the function returns nil.
+// the output stream alongside the values.
+// Either argument can be nil, in which case it is ignored. If both arguments are nil, the function returns nil.
+//
+// Such function signature allows concise wrapping of functions that return two channels:
+//
+//	stream := rill.FromChans(someFunc())
 func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 	if values == nil && errs == nil {
 		return nil
@@ -115,7 +132,7 @@ func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 	return out
 }
 
-// ToChans splits a channel of [Try] containers into a channel of values and a channel of errors.
+// ToChans splits an input stream into two channels: one for values and one for errors.
 // It's an inverse of [FromChans]. Returns two nil channels if the input is nil.
 func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 	if in == nil {

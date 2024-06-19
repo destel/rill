@@ -2,21 +2,20 @@ package rill_test
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"math"
 	"math/rand"
-	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/destel/rill"
 )
-
-type KV struct {
-	Key   string
-	Value string
-}
 
 type Measurement struct {
 	Date time.Time
@@ -26,128 +25,133 @@ type Measurement struct {
 type User struct {
 	ID       int
 	Username string
+	IsActive bool
 }
 
-type Company struct {
-	ID   int
-	Name string
-}
+// --- Package examples ---
 
-// A basic example demonstrating how [ForEach] can be used to process a list of items concurrently.
-func Example_basic() {
-	items := rill.FromSlice([]string{"item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8", "item9", "item10"}, nil)
+// This example demonstrates a Rill pipeline that fetches users from an API,
+// and updates their status to active and saves them back. Both operations are done concurrently.
+func Example() {
+	// In case of early exit this will cancel the file streaming,
+	// which in turn will terminate the entire pipeline.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	err := rill.ForEach(items, 3, func(item string) error {
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
-		res := strings.ToUpper(item)
-		fmt.Println(res)
-		return nil
+	// Start with a stream of user ids
+	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Read users from the API.
+	// Concurrency = 3
+	users := rill.Map(ids, 3, func(id int) (*User, error) {
+		return getUser(ctx, id)
 	})
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
+
+	// Activate users.
+	// Concurrency = 2
+	err := rill.ForEach(users, 2, func(u *User) error {
+		if u.IsActive {
+			fmt.Printf("User %d is already active\n", u.ID)
+			return nil
+		}
+
+		u.IsActive = true
+		return saveUser(ctx, u)
+	})
+
+	fmt.Println("Error:", err)
 }
 
-// Rill is designed for channel based workflows, but it can also be used with slices, thanks to its ability
-// to do ordered processing. Example below demonstrates how you can create a **mapSLice** generic helper function that
-// does parallel slice processing. That helper is then used to fetch users from an API concurrently.
-func Example_slices() {
-	startedAt := time.Now()
-	defer func() { fmt.Println("Elapsed:", time.Since(startedAt)) }()
+// This example showcases the use of Rill for building a multi-stage data processing pipeline,
+// with a focus on batch processing. It streams user ids from a remote file, then fetches users from an API in batches,
+// updates their status to active, and saves them back. All operations are done concurrently.
+func Example_batching() {
+	// In case of early exit this will cancel the file streaming,
+	// which in turn will terminate the entire pipeline.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	ids := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-
-	users, err := mapSLice(ids, 3, getUser)
+	// Stream a file with user ids as an io.Reader
+	reader, err := downloadFile(ctx, "http://example.com/user_ids1.txt")
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
 	}
 
-	fmt.Printf("%+v\n", users)
+	// Transform the reader into a stream of words
+	lines := streamLines(reader)
+
+	// Parse lines as integers
+	// Concurrency = 3
+	ids := rill.Map(lines, 3, func(line string) (int, error) {
+		return strconv.Atoi(line)
+	})
+
+	// Group IDs into batches of 5 for bulk processing
+	idBatches := rill.Batch(ids, 5, 1*time.Second)
+
+	// Fetch users for each batch of IDs
+	// Concurrency = 3
+	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*User, error) {
+		return getUsers(ctx, ids...)
+	})
+
+	// Transform batches back into a stream of users
+	users := rill.Unbatch(userBatches)
+
+	// Activate users.
+	// Concurrency = 2
+	err = rill.ForEach(users, 2, func(u *User) error {
+		if u.IsActive {
+			fmt.Printf("User %d is already active\n", u.ID)
+			return nil
+		}
+
+		u.IsActive = true
+		return saveUser(ctx, u)
+	})
+
+	fmt.Println("Error:", err)
 }
 
-// mapSLice is a helper function that does a parallel map operation on a slice of items
-func mapSLice[A, B any](in []A, n int, f func(A) (B, error)) ([]B, error) {
-	inChan := rill.FromSlice(in, nil)
-	outChan := rill.OrderedMap(inChan, n, f)
-	return rill.ToSlice(outChan)
-}
-
-// This example fetches keys from a list of URLs, retrieves their values from a key-value database, and prints them.
-// The pipeline leverages concurrency for fetching and processing and uses batching to reduce the number of database calls.
-func Example_batching() {
-	startedAt := time.Now()
-	defer func() { fmt.Println("Elapsed:", time.Since(startedAt)) }()
-
-	urls := rill.FromSlice([]string{
-		"https://example.com/file1.txt",
-		"https://example.com/file2.txt",
-		"https://example.com/file3.txt",
-		"https://example.com/file4.txt",
+// This example demonstrates how to use the Fan-in and Fan-out patterns
+// to send messages through multiple servers concurrently.
+func Example_fanIn_FanOut() {
+	messages := rill.FromSlice([]string{
+		"message1", "message2", "message3", "message4", "message5",
+		"message6", "message7", "message8", "message9", "message10",
 	}, nil)
 
-	// Fetch keys from each URL and flatten them into a single stream
-	keys := rill.FlatMap(urls, 3, func(url string) <-chan rill.Try[string] {
-		return streamFileLines(url)
+	// Fan-out the messages to three servers
+	results1 := rill.Map(messages, 2, func(message string) (string, error) {
+		return message, sendMessage(message, "server1")
 	})
 
-	// Exclude any empty keys from the stream
-	keys = rill.Filter(keys, 3, func(key string) (bool, error) {
-		return key != "", nil
+	results2 := rill.Map(messages, 2, func(message string) (string, error) {
+		return message, sendMessage(message, "server2")
 	})
 
-	// Organize keys into manageable batches of 10 for bulk operations
-	keyBatches := rill.Batch(keys, 10, 1*time.Second)
-
-	// Fetch values from DB for each batch of keys
-	resultBatches := rill.Map(keyBatches, 3, func(keys []string) ([]KV, error) {
-		values, err := kvMultiGet(keys...)
-		if err != nil {
-			return nil, err
-		}
-
-		results := make([]KV, len(keys))
-		for i, key := range keys {
-			results[i] = KV{Key: key, Value: values[i]}
-		}
-
-		return results, nil
+	results3 := rill.Map(messages, 2, func(message string) (string, error) {
+		return message, sendMessage(message, "server3")
 	})
 
-	// Convert batches back to a single items for final processing
-	results := rill.Unbatch(resultBatches)
+	// Fan-in the results from all servers into a single stream
+	results := rill.Merge(results1, results2, results3)
 
-	// Exclude any empty values from the stream
-	results = rill.Filter(results, 3, func(kv KV) (bool, error) {
-		return kv.Value != "<nil>", nil
-	})
-
-	// Iterate over each key-value pair and print
-	cnt := 0
-	err := rill.ForEach(results, 1, func(kv KV) error {
-		fmt.Println(kv.Key, "=>", kv.Value)
-		cnt++
-		return nil
-	})
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-
-	fmt.Println("Total keys:", cnt)
+	// Handle errors
+	err := rill.Err(results)
+	fmt.Println("Error:", err)
 }
 
 // This example demonstrates how [OrderedMap] can be used to enforce ordering of processing results.
 // Pipeline below fetches temperature measurements for a city and calculates daily temperature changes.
 // Measurements are fetched concurrently, but ordered processing is used to calculate the changes.
 func Example_ordering() {
-	startedAt := time.Now()
-	defer func() { fmt.Println("Elapsed:", time.Since(startedAt)) }()
-
 	city := "New York"
 	endDate := time.Now()
 	startDate := endDate.AddDate(0, 0, -30)
 
-	// Make a channel that emits all the days between startDate and endDate
+	// Create a stream of all days between startDate and endDate
 	days := make(chan rill.Try[time.Time])
 	go func() {
 		defer close(days)
@@ -156,13 +160,15 @@ func Example_ordering() {
 		}
 	}()
 
-	// Download the temperature for each day concurrently
+	// Fetch the temperature for each day from the API
+	// Concurrency = 10; Ordered
 	measurements := rill.OrderedMap(days, 10, func(date time.Time) (Measurement, error) {
 		temp, err := getTemperature(city, date)
 		return Measurement{Date: date, Temp: temp}, err
 	})
 
-	// Iterate over the measurements, calculate and print changes. Use a single goroutine
+	// Iterate over the measurements, calculate and print changes.
+	// Concurrency = 1; Ordered
 	prev := Measurement{Temp: math.NaN()}
 	err := rill.ForEach(measurements, 1, func(m Measurement) error {
 		change := m.Temp - prev.Temp
@@ -171,36 +177,188 @@ func Example_ordering() {
 		fmt.Printf("%s: %.1f°C (change %+.1f°C)\n", m.Date.Format("2006-01-02"), m.Temp, change)
 		return nil
 	})
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
+
+	fmt.Println("Error:", err)
 }
 
-// This example demonstrates how [Reduce] can be used to calculate a sum of numbers from a channel.
-func ExampleReduce() {
-	// Create a channel with some values
+// This example demonstrates a concurrent [MapReduce] performed on a set of remote files.
+// It downloads them and calculates how many times each word appears in all the files.
+func Example_mapReduce() {
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+
+	defer cancel()
+
+	// Start with a stream of file URLs
+	urls := rill.FromSlice([]string{
+		"http://example.com/text1.txt",
+		"http://example.com/text2.txt",
+		"http://example.com/text3.txt",
+	}, nil)
+
+	// Download files concurrently, and get a stream of all words from all files
+	// Concurrency = 2
+	words := rill.FlatMap(urls, 2, func(url string) <-chan rill.Try[string] {
+		reader, err := downloadFile(ctx, url)
+		if err != nil {
+			return rill.FromSlice[string](nil, err) // Wrap the error in a stream
+		}
+
+		return streamWords(reader)
+	})
+
+	// Count the number of occurrences of each word
+	counts, err := rill.MapReduce(words,
+		// Map phase: Use the word as key and "1" as value
+		// Concurrency = 3
+		3, func(word string) (string, int, error) {
+			return strings.ToLower(word), 1, nil
+		},
+		// Reduce phase: Sum all "1" values for the same key
+		// Concurrency = 2
+		2, func(x, y int) (int, error) {
+			return x + y, nil
+		},
+	)
+
+	fmt.Println("Result:", counts)
+	fmt.Println("Error:", err)
+}
+
+// This example demonstrates how to use context cancellation to terminate a Rill pipeline in case of an early exit.
+// The printOddSquares function initiates a pipeline that prints squares of odd numbers.
+// The infiniteNumberStream function is the initial stage of the pipeline. It generates numbers indefinitely until the context is canceled.
+// When an error occurs in one of the pipeline stages:
+//   - The error is propagated down the pipeline and reaches the ForEach stage.
+//   - The ForEach function returns the error.
+//   - The printOddSquares function returns, and the context is canceled using defer.
+//   - The infiniteNumberStream function terminates due to context cancellation.
+//   - The entire pipeline is cleaned up gracefully.
+func Example_context() {
+	ctx := context.Background()
+
+	err := printOddSquares(ctx)
+	fmt.Println("Error:", err)
+
+	// Wait one more second to see "infiniteNumberStream terminated" printed
+	time.Sleep(1 * time.Second)
+}
+
+func printOddSquares(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	numbers := infiniteNumberStream(ctx)
+
+	odds := rill.Filter(numbers, 3, func(x int) (bool, error) {
+		if x == 20 {
+			return false, fmt.Errorf("early exit")
+		}
+		return x%2 == 1, nil
+	})
+
+	return rill.ForEach(odds, 3, func(x int) error {
+		fmt.Println(x * x)
+		return nil
+	})
+}
+
+// --- Function examples ---
+
+func ExampleAll() {
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Reduce the channel to a single value by summing all numbers
-	sum, ok, err := rill.Reduce(numbers, 3, func(a, b int) (int, error) {
-		return a + b, nil
+	// Are all numbers even?
+	// Concurrency = 3
+	ok, err := rill.All(numbers, 3, func(x int) (bool, error) {
+		return x%2 == 0, nil
 	})
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
 
-	fmt.Println("Sum:", sum)
-	fmt.Println("OK:", ok)
+	fmt.Println("Result:", ok)
+	fmt.Println("Error:", err)
 }
 
-// This example demonstrates how to use the combination of [Map], [Merge] and Err to catch errors from multiple concurrent
-// tasks of different types, such as saving users and companies.
-// [ForEach] can't be used here because there are two input channels.
-// Those channels can't be merged directly because their types do not match.
-// A practical solution is to perform side-effect-only processing using Map,
-// then merge the results and use Err to catch the first error that occurs.
+func ExampleAny() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Is there at least one even number?
+	// Concurrency = 3
+	ok, err := rill.Any(numbers, 3, func(x int) (bool, error) {
+		return x%2 == 0, nil
+	})
+
+	fmt.Println("Result: ", ok)
+	fmt.Println("Error: ", err)
+}
+
+// Also check out the package level examples to see Batch in action
+func ExampleBatch() {
+	// New number is emitted every 50ms
+	numbers := make(chan rill.Try[int])
+	go func() {
+		defer close(numbers)
+		for i := 0; i < 50; i++ {
+			numbers <- rill.Wrap(i, nil)
+			time.Sleep(50 * time.Millisecond)
+		}
+	}()
+
+	// Group numbers into batches of up to 5
+	batches := rill.Batch(numbers, 5, 1*time.Second)
+
+	printStream(batches)
+}
+
+func ExampleCatch() {
+	strs := rill.FromSlice([]string{"1", "2", "3", "4", "5", "not a number 6", "7", "8", "9", "10"}, nil)
+
+	// Convert strings to ints
+	// Concurrency = 3; Unordered
+	ids := rill.Map(strs, 3, func(s string) (int, error) {
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
+		return strconv.Atoi(s)
+	})
+
+	// Catch and ignore number parsing errors
+	// Concurrency = 2; Unordered
+	ids = rill.Catch(ids, 2, func(err error) error {
+		if errors.Is(err, strconv.ErrSyntax) {
+			return nil // Ignore this error
+		}
+		return err
+	})
+
+	// No error will be printed
+	printStream(ids)
+}
+
+// The same example as for the [Catch], but using ordered versions of functions.
+func ExampleOrderedCatch() {
+	strs := rill.FromSlice([]string{"1", "2", "3", "4", "5", "not a number 6", "7", "8", "9", "10"}, nil)
+
+	// Convert strings to ints
+	// Concurrency = 3; Unordered
+	ids := rill.OrderedMap(strs, 3, func(s string) (int, error) {
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
+		return strconv.Atoi(s)
+	})
+
+	// Catch and ignore number parsing errors
+	// Concurrency = 2; Unordered
+	ids = rill.OrderedCatch(ids, 2, func(err error) error {
+		if errors.Is(err, strconv.ErrSyntax) {
+			return nil // Ignore this error
+		}
+		return err
+	})
+
+	// No error will be printed
+	printStream(ids)
+}
+
 func ExampleErr() {
+	ctx := context.Background()
+
 	users := rill.FromSlice([]*User{
 		{ID: 1, Username: "foo"},
 		{ID: 2, Username: "bar"},
@@ -210,184 +368,312 @@ func ExampleErr() {
 		{ID: 6, Username: "quux"},
 	}, nil)
 
-	companies := rill.FromSlice([]*Company{
-		{ID: 1, Name: "Company 1"},
-		{ID: 2, Name: "Company 2"},
-	}, nil)
-
 	// Save users. Use struct{} as a result type
-	userResults := rill.Map(users, 2, func(user *User) (struct{}, error) {
-		return struct{}{}, saveUser(user)
+	// Concurrency = 2; Unordered
+	results := rill.Map(users, 2, func(user *User) (struct{}, error) {
+		return struct{}{}, saveUser(ctx, user)
 	})
 
-	// Save users. Use struct{} as a result type
-	companyResults := rill.Map(companies, 3, func(company *Company) (struct{}, error) {
-		return struct{}{}, saveCompany(company)
-	})
-
-	// Merge results
-	allResults := rill.Merge(userResults, companyResults)
-
-	// Use Err to wait until everything is saved and get the first error
-	err := rill.Err(allResults)
+	// We're interested only in side effects and errors from
+	// the pipeline above
+	err := rill.Err(results)
 	fmt.Println("Error:", err)
 }
 
-// This example demonstrates how to use the combination of First and [OrderedFilter] functions
-// to find the first number divisible by 4 in a channel of numbers.
+func ExampleFilter() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Keep only even numbers
+	// Concurrency = 3; Unordered
+	evens := rill.Filter(numbers, 3, func(x int) (bool, error) {
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
+		return x%2 == 0, nil
+	})
+
+	printStream(evens)
+}
+
+// The same example as for the [Filter], but using ordered versions of functions.
+func ExampleOrderedFilter() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Keep only even numbers
+	// Concurrency = 3; Ordered
+	evens := rill.OrderedFilter(numbers, 3, func(x int) (bool, error) {
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
+		return x%2 == 0, nil
+	})
+
+	printStream(evens)
+}
+
 func ExampleFirst() {
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
+	// Keep only the numbers divisible by 4
+	// Concurrency = 3; Ordered
 	dvisibleBy4 := rill.OrderedFilter(numbers, 3, func(x int) (bool, error) {
 		return x%4 == 0, nil
 	})
 
+	// Get the first number divisible by 4
 	first, ok, err := rill.First(dvisibleBy4)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
 
 	fmt.Println("Result:", first, ok)
+	fmt.Println("Error:", err)
 }
 
-// This example demonstrates using the Any function to check if there is an even number in a channel.
-// The function exits immediately after the first even number is found
-func ExampleAny() {
-	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+func ExampleFlatMap() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5}, nil)
 
-	ok, err := rill.Any(numbers, 3, func(x int) (bool, error) {
-		if x == 10 {
-			return true, fmt.Errorf("some error")
-		}
+	// Replace each number with three strings
+	// Concurrency = 3; Unordered
+	result := rill.FlatMap(numbers, 3, func(x int) <-chan rill.Try[string] {
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
 
-		return x%2 == 0, nil
+		return rill.FromSlice([]string{
+			fmt.Sprintf("foo%d", x),
+			fmt.Sprintf("bar%d", x),
+			fmt.Sprintf("baz%d", x),
+		}, nil)
 	})
 
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	fmt.Printf("Has even number: %t\n", ok)
+	printStream(result)
 }
 
-// This example demonstrates using the All function to check if all numbers in a channel are even.
-// The function exits immediately after the first odd number is found
-func ExampleAll() {
-	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+// The same example as for the [FlatMap], but using ordered versions of functions.
+func ExampleOrderedFlatMap() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5}, nil)
 
-	ok, err := rill.All(numbers, 3, func(x int) (bool, error) {
-		return x%2 == 0, nil
+	// Replace each number with three strings
+	// Concurrency = 3; Ordered
+	result := rill.OrderedFlatMap(numbers, 3, func(x int) <-chan rill.Try[string] {
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
+
+		return rill.FromSlice([]string{
+			fmt.Sprintf("foo%d", x),
+			fmt.Sprintf("bar%d", x),
+			fmt.Sprintf("baz%d", x),
+		}, nil)
 	})
 
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	fmt.Printf("All numbers are even: %t\n", ok)
+	printStream(result)
 }
 
-// This example demonstrates how MapReduce can be used to count how many times each word appears in a stream.
-// Mappers emit a count of '1' for each word, and reducers sum these counts to calculate the total occurrences of each word.
+func ExampleForEach() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Square and print each number
+	// Concurrency = 3; Unordered
+	err := rill.ForEach(numbers, 3, func(x int) error {
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
+
+		y := x * x
+		fmt.Println(y)
+		return nil
+	})
+
+	fmt.Println("Error:", err)
+}
+
+// There is no ordered version of the ForEach function. To achieve ordered processing, use concurrency set to 1.
+// If you need a concurrent and ordered ForEach, then do all processing with the [OrderedMap],
+// and then use ForEach with concurrency set to 1 at the final stage.
+func ExampleForEach_ordered() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Square each number.
+	// Concurrency = 3; Ordered
+	squares := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
+		return x * x, nil
+	})
+
+	// Print results.
+	// Concurrency = 1; Ordered
+	err := rill.ForEach(squares, 1, func(y int) error {
+		fmt.Println(y)
+		return nil
+	})
+	fmt.Println("Error:", err)
+}
+
+func ExampleMap() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Square each number.
+	// Concurrency = 3; Unordered
+	squares := rill.Map(numbers, 3, func(x int) (int, error) {
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
+		return x * x, nil
+	})
+
+	printStream(squares)
+}
+
+// The same example as for the [Map], but using ordered versions of functions.
+func ExampleOrderedMap() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Square each number.
+	// Concurrency = 3; Ordered
+	squares := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
+		return x * x, nil
+	})
+
+	printStream(squares)
+}
+
 func ExampleMapReduce() {
-	stream := strings.NewReader(`Early morning brings early birds to the early market. Birds sing, the market buzzes, and the morning shines.`)
+	var re = regexp.MustCompile(`\w+`)
+	text := "Early morning brings early birds to the early market. Birds sing, the market buzzes, and the morning shines."
 
-	words := streamWords(stream)
+	// Start with a stream of words
+	words := rill.FromSlice(re.FindAllString(text, -1), nil)
 
+	// Count the number of occurrences of each word
 	mr, err := rill.MapReduce(words,
+		// Map phase: Use the word as key and "1" as value
+		// Concurrency = 3
 		3, func(word string) (string, int, error) {
 			return strings.ToLower(word), 1, nil
 		},
+		// Reduce phase: Sum all "1" values for the same key
+		// Concurrency = 2
 		2, func(x, y int) (int, error) {
 			return x + y, nil
 		},
 	)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
 
 	fmt.Println("Result:", mr)
+	fmt.Println("Error:", err)
 }
 
-// streamFileLines simulates line-by-line streaming of a file from a URL,
-// introducing a randomized delay to simulate network latency.
-// It's a simplified placeholder for actual network-based file streaming.
-func streamFileLines(url string) <-chan rill.Try[string] {
+func ExampleMerge() {
+	numbers1 := rill.FromSlice([]int{1, 2, 3, 4, 5}, nil)
+	numbers2 := rill.FromSlice([]int{6, 7, 8, 9, 10}, nil)
+	numbers3 := rill.FromSlice([]int{11, 12}, nil)
+
+	numbers := rill.Merge(numbers1, numbers2, numbers3)
+
+	printStream(numbers)
+}
+
+func ExampleReduce() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Sum all numbers
+	sum, ok, err := rill.Reduce(numbers, 3, func(a, b int) (int, error) {
+		return a + b, nil
+	})
+
+	fmt.Println("Result:", sum, ok)
+	fmt.Println("Error:", err)
+}
+
+func ExampleToSlice() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Square each number
+	// Concurrency = 3; Ordered
+	squares := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
+		return x * x, nil
+	})
+
+	squaresSlice, err := rill.ToSlice(squares)
+
+	fmt.Println("Result:", squaresSlice)
+	fmt.Println("Error:", err)
+}
+
+func ExampleUnbatch() {
+	batches := rill.FromSlice([][]int{
+		{1, 2, 3},
+		{4, 5},
+		{6, 7, 8, 9},
+		{10},
+	}, nil)
+
+	numbers := rill.Unbatch(batches)
+
+	printStream(numbers)
+}
+
+// --- Helpers ---
+
+// streamLines converts an io.Reader into a stream of lines
+func streamLines(r io.ReadCloser) <-chan rill.Try[string] {
 	out := make(chan rill.Try[string])
 	go func() {
+		defer r.Close()
 		defer close(out)
 
-		base := filepath.Base(url)
-		base = strings.TrimSuffix(base, filepath.Ext(base))
-
-		for i := 0; i < 10; i++ {
-			randomSleep(20 * time.Millisecond) // Simulate a network delay
-			out <- rill.Wrap(fmt.Sprintf("%s:key:%d", base, i), nil)
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			out <- rill.Wrap(scanner.Text(), nil)
+		}
+		if err := scanner.Err(); err != nil {
+			out <- rill.Wrap("", err)
 		}
 	}()
 	return out
 }
 
-// streamWords is helper function that reads words from a reader and streams them as strings.
-func streamWords(r io.Reader) <-chan rill.Try[string] {
-	raw := make(chan rill.Try[string], 1)
+// streamWords is helper function that converts an io.Reader into a stream of words.
+func streamWords(r io.ReadCloser) <-chan rill.Try[string] {
+	words := make(chan rill.Try[string], 1)
 
 	go func() {
-		defer close(raw)
+		defer r.Close()
+		defer close(words)
 
 		scanner := bufio.NewScanner(r)
 		scanner.Split(bufio.ScanWords)
 
 		for scanner.Scan() {
 			word := scanner.Text()
-			word = strings.Trim(word, ".,;:!?&()") // it's basic and just for demonstration
+			word = strings.Trim(word, ".,;:!?&()") // strip all punctuation. it's basic and just for demonstration
 			if len(word) > 0 {
-				raw <- rill.Wrap(word, nil)
+				words <- rill.Wrap(word, nil)
 			}
 		}
 		if err := scanner.Err(); err != nil {
-			raw <- rill.Wrap("", err)
+			words <- rill.Wrap("", err)
 		}
 	}()
 
-	return raw
+	return words
 }
 
-// kvGet simulates fetching a value form a key-value database,
-// introducing a randomized delay to simulate network latency.
-// It's a simplified placeholder for actual database operation.
-func kvGet(key string) (string, error) {
-	randomSleep(1000 * time.Millisecond) // Simulate a network delay
+var ErrFileNotFound = errors.New("file not found")
 
-	// Simulates that some keys are missing
-	if strings.HasSuffix(key, "2") || strings.HasSuffix(key, "3") {
-		return "<nil>", nil
-	}
-
-	return strings.Replace(key, "key:", "val:", 1), nil
+var files = map[string]string{
+	"http://example.com/user_ids1.txt": strings.ReplaceAll("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20", " ", "\n"),
+	"http://example.com/user_ids2.txt": strings.ReplaceAll("21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40", " ", "\n"),
+	"http://example.com/user_ids3.txt": strings.ReplaceAll("41 42 43 44 45", " ", "\n"),
+	"http://example.com/text1.txt":     "Early morning brings early birds to the early market. Birds sing, the market buzzes, and the morning shines.",
+	"http://example.com/text2.txt":     "The birds often sing at the market",
+	"http://example.com/text3.txt":     "The market closes, the birds rest, and the night brings peace to the town.",
 }
 
-// kvMultiGet simulates a batch read from a key-value database,
-// introducing a randomized delay to simulate network latency.
-// It's a simplified placeholder for actual database operation.
-func kvMultiGet(keys ...string) ([]string, error) {
-	randomSleep(1000 * time.Millisecond) // Simulate a network delay
-
-	values := make([]string, len(keys))
-	for i, key := range keys {
-		// Simulates that some keys are missing
-		if strings.HasSuffix(key, "2") || strings.HasSuffix(key, "3") {
-			values[i] = "<nil>"
-			continue
-		}
-
-		values[i] = strings.Replace(key, "key:", "val:", 1)
+// downloadFile simulates downloading a file from a URL.
+// Returns a reader for the file content.
+func downloadFile(ctx context.Context, url string) (io.ReadCloser, error) {
+	content, ok := files[url]
+	if !ok {
+		return nil, ErrFileNotFound
 	}
 
-	return values, nil
+	// In a real-world scenario, this would be an HTTP request depending on the ctx.
+	return io.NopCloser(strings.NewReader(content)), nil
+}
+
+// Helper function that simulates sending a message through a server
+func sendMessage(message string, server string) error {
+	randomSleep(1000 * time.Millisecond) // simulate some additional work
+	fmt.Printf("Sent through %s: %s\n", server, message)
+	return nil
 }
 
 // getTemperature simulates fetching a temperature reading for a city and date,
@@ -395,35 +681,78 @@ func getTemperature(city string, date time.Time) (float64, error) {
 	randomSleep(1000 * time.Millisecond) // Simulate a network delay
 
 	// Basic city hash, to make measurements unique for each city
-	var h float64
-	for _, c := range city {
-		h += float64(c)
-	}
+	cityHash := float64(hash(city))
 
 	// Simulate a temperature reading, by retuning a pseudo-random, but deterministic value
-	temp := 15 - 10*math.Sin(h+float64(date.Unix()))
+	temp := 15 - 10*math.Sin(cityHash+float64(date.Unix()))
 
 	return temp, nil
 }
 
-func randomSleep(max time.Duration) {
-	time.Sleep(time.Duration(rand.Intn(int(max))))
+func infiniteNumberStream(ctx context.Context) <-chan rill.Try[int] {
+	out := make(chan rill.Try[int])
+	go func() {
+		defer fmt.Println("infiniteNumberStream terminated")
+		defer close(out)
+		for i := 1; ; i++ {
+			if err := ctx.Err(); err != nil {
+				return // This can be rewritten as select, but it's not necessary
+			}
+			out <- rill.Wrap(i, nil)
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
+	return out
 }
 
-// getUser simulates fetching a user from an API, introducing a randomized delay to simulate network latency.
-func getUser(id int) (User, error) {
+var adjs = []string{"big", "small", "fast", "slow", "smart", "happy", "sad", "funny", "serious", "angry"}
+var nouns = []string{"dog", "cat", "bird", "fish", "mouse", "elephant", "lion", "tiger", "bear", "wolf"}
+
+// getUsers simulates fetching multiple users from an API.
+// User fields are pseudo-random, but deterministic based on the user ID.
+func getUsers(ctx context.Context, ids ...int) ([]*User, error) {
 	randomSleep(1000 * time.Millisecond) // Simulate a network delay
 
-	// generate random name adj+noun
-	adj := []string{"big", "small", "fast", "slow", "smart", "happy", "sad", "funny", "serious"}
-	noun := []string{"dog", "cat", "bird", "fish", "mouse", "elephant", "lion", "tiger", "bear", "wolf"}
-	username := fmt.Sprintf("%s_%s", adj[rand.Intn(len(adj))], noun[rand.Intn(len(noun))])
+	users := make([]*User, 0, len(ids))
+	for _, id := range ids {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 
-	return User{ID: id, Username: username}, nil
+		user := User{
+			ID:       id,
+			Username: adjs[hash(id, "adj")%len(adjs)] + "_" + nouns[hash(id, "noun")%len(nouns)], // adj + noun
+			IsActive: hash(id, "active")%100 < 60,                                                // 60%
+		}
+
+		users = append(users, &user)
+	}
+	return users, nil
 }
 
-func saveUser(user *User) error {
+var ErrUserNotFound = errors.New("user not found")
+
+// getUser simulates fetching a user from an API.
+func getUser(ctx context.Context, id int) (*User, error) {
+	users, err := getUsers(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(users) == 0 {
+		return nil, ErrUserNotFound
+	}
+
+	return users[0], nil
+}
+
+// saveUser simulates saving a user through an API.
+func saveUser(ctx context.Context, user *User) error {
 	randomSleep(1000 * time.Millisecond) // Simulate a network delay
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	if user.Username == "" {
 		return fmt.Errorf("empty username")
@@ -433,13 +762,23 @@ func saveUser(user *User) error {
 	return nil
 }
 
-func saveCompany(comp *Company) error {
-	randomSleep(1000 * time.Millisecond) // Simulate a network delay
+// printStream prints all items from a stream (one per line) and an error if any.
+func printStream[A any](stream <-chan rill.Try[A]) {
+	fmt.Println("Result:")
+	err := rill.ForEach(stream, 1, func(x A) error {
+		fmt.Printf("%+v\n", x)
+		return nil
+	})
+	fmt.Println("Error:", err)
+}
 
-	if comp.Name == "" {
-		return fmt.Errorf("empty name")
-	}
+func randomSleep(max time.Duration) {
+	time.Sleep(time.Duration(rand.Intn(int(max))))
+}
 
-	fmt.Printf("Company saved: %+v\n", comp)
-	return nil
+// hash is a simple hash function that returns an integer hash for a given input.
+func hash(input ...any) int {
+	hasher := fnv.New32()
+	fmt.Fprintln(hasher, input...)
+	return int(hasher.Sum32())
 }

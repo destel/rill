@@ -6,21 +6,21 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Reduce combines all elements from the input channel into a single value
-// using a binary function f. The function f must be commutative, meaning
-// f(x,y) == f(y,x). It is applied to pairs of elements, using n
-// goroutines, progressively reducing the channel's contents until only one value remains.
-// The order in which the function f is applied is not guaranteed due to concurrent processing.
+// Reduce combines all items from the input stream into a single value using a binary function f.
+// The function f is called for pairs of items, progressively reducing the stream contents until only one value remains.
 //
-// Reduce blocks until all items are processed or an error is encountered,
-// either from the function f itself or from the upstream. In case of an error
-// leading to early termination, Reduce ensures the input channel is drained to
-// avoid goroutine leaks, making it safe for use in environments where cleanup
-// is crucial.
+// As an unordered function, Reduce can apply f to any pair of items in any order, which requires f to be:
+//   - Associative: f(a, f(b, c)) == f(f(a, b), c)
+//   - Commutative: f(a, b) == f(b, a)
 //
-// The function returns the first encountered error, if any, or the reduction result.
-// The second return value is false if the input channel is empty, and true otherwise.
-func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (A, bool, error) {
+// The hasResult return flag is set to false if the stream was empty, otherwise it is set to true.
+//
+// Reduce is a blocking unordered function that processes items concurrently using n goroutines.
+// The case when n = 1 is optimized: it does not spawn additional goroutines and processes items sequentially,
+// making the function ordered. This also removes the need for the function f to be commutative.
+//
+// See the package documentation for more information on blocking unordered functions and error handling.
+func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, hasResult bool, err error) {
 	in, earlyExit := core.Breakable(in)
 
 	res, ok := core.Reduce(in, n, func(a1, a2 Try[A]) Try[A] {
@@ -46,24 +46,19 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (A, bool, e
 	return res.Value, ok, res.Error
 }
 
-// MapReduce reduces the input channel to a map using a mapper and a reducer functions.
-// Reduction is done in two phases, both occurring concurrently. In the first phase,
-// the mapper function transforms each input item into a key-value pair.
-// As a result of this phase, we can get multiple values for the same key, so
-// in the second phase, the reducer function reduces values for the same key into a single value.
-// The order in which the reducer is applied is not guaranteed due to concurrent processing.
-// See [Reduce] documentation for more details on reduction phase semantics.
+// MapReduce transforms the input stream into a Go map using a mapper and a reducer functions.
+// The transformation is performed in two concurrent phases.
 //
-// The number of concurrent mappers and reducers can be controlled using nm and nr parameters respectively.
+//   - The mapper function transforms each input item into a key-value pair.
+//   - The reducer function reduces values for the same key into a single value.
+//     This phase has the same semantics as the [Reduce] function, in particular
+//     the reducer function must be commutative and associative.
 //
-// MapReduce blocks until all items are processed or an error is encountered,
-// either from the mapper, reducer, or the upstream. In case of an error
-// leading to early termination, MapReduce ensures the input channel is drained
-// to avoid goroutine leaks, making it safe for use in environments where
-// cleanup is crucial.
+// MapReduce is a blocking unordered function that processes items concurrently using nm and nr goroutines
+// for the mapper and reducer functions respectively. Setting nr = 1 will make the reduce phase sequential and ordered,
+// see [Reduce] for more information.
 //
-// The function returns the first encountered error, if any, or a map where
-// each key is associated with a single reduced value
+// See the package documentation for more information on blocking unordered functions and error handling.
 func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error)) (map[K]V, error) {
 	var zeroKey K
 	var zeroVal V
