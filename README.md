@@ -343,14 +343,13 @@ the specific use:
 
 - **I/O-bound tasks:** Channels are great for handling I/O-bound tasks, such as reading from or writing to files, 
   network communication, or database operations. The overhead of channels is typically negligible compared to 
-  the time spent waiting for I/O operations to complete
-- **Light CPU-bound tasks:** When parallelizing a large number of small CPU-bound tasks, such as simple arithmetic operations, 
-  the overhead of channels can become significant. In such cases, using channels and goroutines may not provide 
-  the desired performance benefits. Benchmarks have shown that tasks should take at least several µs to 
-  benefit from channel-based concurrency.
-- **Heavy CPU-bound tasks:** For computationally intensive tasks, such as complex string manipulation, encryption, 
+  the time spent waiting for I/O operations to complete 
+- **Heavy CPU-bound tasks:** For more computationally intensive tasks, such as complex string manipulation, parsing, encryption, 
   or hash calculation, the overhead of channels becomes less significant compared to the overall processing time. 
-  In these scenarios, using channels and rill can still provide an efficient way to parallelize the workload
+  In these scenarios, using channels and rill can still provide an efficient way to parallelize the workload. See [benchmarks](https://github.com/destel/rill/wiki/Benchmarks) for more details. 
+- **Light CPU-bound tasks:** When parallelizing a large number of small CPU-bound tasks, such as simple arithmetic operations,
+  the overhead of channels can become significant. In such cases, using channels and goroutines may not provide
+  the desired performance benefits.
 
 If your use case requires high-performance calculations and you want to minimize the overhead of channels, 
 you can consider alternative approaches or libraries. For example, it's possible to transform a slice without channels and 
