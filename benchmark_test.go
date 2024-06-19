@@ -8,6 +8,7 @@ import (
 )
 
 const benchmarkInputSize = 100000
+const benchmarkWorkDuration = 1 * time.Microsecond
 
 func runBenchmark[B any](b *testing.B, name string, body func(in <-chan Try[int]) <-chan B) {
 	b.Run(name, func(b *testing.B) {
@@ -54,10 +55,18 @@ func busySleep(d time.Duration) {
 	}
 }
 
-func BenchmarkForRanleLoop(b *testing.B) {
+func BenchmarkBasicForLoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for k := 0; k < benchmarkInputSize; k++ {
-			busySleep(1 * time.Microsecond)
+			busySleep(benchmarkWorkDuration)
+		}
+	}
+}
+
+func BenchmarkBasicForLoopWithSleep(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		for k := 0; k < benchmarkInputSize; k++ {
+			time.Sleep(benchmarkWorkDuration)
 		}
 	}
 }
@@ -66,7 +75,7 @@ func BenchmarkForEach(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
 		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
 			ForEach(in, n, func(x int) error {
-				busySleep(1 * time.Microsecond)
+				busySleep(benchmarkWorkDuration)
 				return nil
 			})
 			return nil
@@ -74,19 +83,11 @@ func BenchmarkForEach(b *testing.B) {
 	}
 }
 
-func BenchmarkForRanleLoopWithSleep(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		for k := 0; k < benchmarkInputSize; k++ {
-			time.Sleep(1 * time.Microsecond)
-		}
-	}
-}
-
 func BenchmarkForEachWithSleep(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
 		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
 			ForEach(in, n, func(x int) error {
-				time.Sleep(1 * time.Microsecond)
+				time.Sleep(benchmarkWorkDuration)
 				return nil
 			})
 			return nil
@@ -98,7 +99,7 @@ func BenchmarkMap(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
 		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
 			return Map(in, n, func(x int) (int, error) {
-				busySleep(1 * time.Microsecond)
+				busySleep(benchmarkWorkDuration)
 				return x, nil
 			})
 		})
@@ -109,7 +110,7 @@ func BenchmarkReduce(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
 		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan int {
 			Reduce(in, n, func(x, y int) (int, error) {
-				busySleep(1 * time.Microsecond)
+				busySleep(benchmarkWorkDuration)
 				return x, nil
 			})
 			return nil
