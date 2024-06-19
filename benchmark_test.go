@@ -8,7 +8,7 @@ import (
 )
 
 const benchmarkInputSize = 100000
-const benchmarkWorkDuration = 1 * time.Microsecond
+const benchmarkWorkDuration = 10 * time.Microsecond
 
 func runBenchmark[B any](b *testing.B, name string, body func(in <-chan Try[int]) <-chan B) {
 	b.Run(name, func(b *testing.B) {
@@ -106,11 +106,34 @@ func BenchmarkMap(b *testing.B) {
 	}
 }
 
+func BenchmarkMapWithSleep(b *testing.B) {
+	for _, n := range []int{1, 2, 4, 8} {
+		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
+			return Map(in, n, func(x int) (int, error) {
+				time.Sleep(benchmarkWorkDuration)
+				return x, nil
+			})
+		})
+	}
+}
+
 func BenchmarkReduce(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
 		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan int {
 			Reduce(in, n, func(x, y int) (int, error) {
 				busySleep(benchmarkWorkDuration)
+				return x, nil
+			})
+			return nil
+		})
+	}
+}
+
+func BenchmarkReduceWithSleep(b *testing.B) {
+	for _, n := range []int{1, 2, 4, 8} {
+		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan int {
+			Reduce(in, n, func(x, y int) (int, error) {
+				time.Sleep(benchmarkWorkDuration)
 				return x, nil
 			})
 			return nil
