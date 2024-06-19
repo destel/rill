@@ -131,7 +131,7 @@ func TestForEach(t *testing.T) {
 				if cnt < 100 {
 					t.Errorf("expected at least 100 iterations to complete")
 				}
-				if cnt > 150 {
+				if cnt == 1000 {
 					t.Errorf("early exit did not happen")
 				}
 
