@@ -1,6 +1,7 @@
 package rill
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -68,6 +69,44 @@ func BenchmarkBasicForLoopWithSleep(b *testing.B) {
 		for k := 0; k < benchmarkInputSize; k++ {
 			time.Sleep(benchmarkWorkDuration)
 		}
+	}
+}
+
+func BenchmarkWaitGroup(b *testing.B) {
+	for _, n := range []int{1, 2, 4, 8} {
+		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
+			var wg sync.WaitGroup
+			wg.Add(n)
+			for i := 0; i < n; i++ {
+				go func() {
+					defer wg.Done()
+					for range in {
+						busySleep(benchmarkWorkDuration)
+					}
+				}()
+			}
+			wg.Wait()
+			return nil
+		})
+	}
+}
+
+func BenchmarkWaitGroupWithSleep(b *testing.B) {
+	for _, n := range []int{1, 2, 4, 8} {
+		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
+			var wg sync.WaitGroup
+			wg.Add(n)
+			for i := 0; i < n; i++ {
+				go func() {
+					defer wg.Done()
+					for range in {
+						time.Sleep(benchmarkWorkDuration)
+					}
+				}()
+			}
+			wg.Wait()
+			return nil
+		})
 	}
 }
 
