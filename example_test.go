@@ -33,7 +33,7 @@ type User struct {
 // This example demonstrates a Rill pipeline that fetches users from an API,
 // and updates their status to active and saves them back. Both operations are done concurrently.
 func Example() {
-	// In case of early exit this will cancel the file streaming,
+	// In case of early exit this will cancel the user fetching,
 	// which in turn will terminate the entire pipeline.
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -35,7 +35,7 @@ while controlling the level of concurrency for each operation.
 
 ```go
 func main() {
-	// In case of early exit this will cancel the file streaming,
+	// In case of early exit this will cancel the user fetching,
 	// which in turn will terminate the entire pipeline.	
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -90,7 +90,7 @@ One of the key features of Rill is the ability to control the level of concurren
 This is possible due to the channel and goroutine orchestration that library does under the hood. Rill's built-in functions manage
 worker pools internally, making the number of goroutines and allocations independent of the input size.
 
-Finally, rill is designed to be modular and extensible. Most functions take streams as input and return transformed streams as output, 
+Finally, rill is designed to be modular and extensible. Most functions take streams as input and return transformed streams as output. 
 It's easy to create custom reusable higher-order operations and pipelines by combining existing ones.
 
 
@@ -121,7 +121,7 @@ func main() {
 		return
 	}
 
-	// Transform the reader into a stream of words
+	// Transform the reader into a stream of lines
 	lines := streamLines(reader)
 
 	// Parse lines as integers
@@ -221,7 +221,7 @@ Rill provides several blocking functions out of the box:
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Any)
 - **First:** Returns the first item or error encountered in the stream.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-First)
-- **Err:** Returns the first error encountered in the stream.
+- **Err:** Checks if there's an error somewhere in the stream an returns it.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Err)
 
 
@@ -343,13 +343,14 @@ the specific use:
 
 - **I/O-bound tasks:** Channels are great for handling I/O-bound tasks, such as reading from or writing to files, 
   network communication, or database operations. The overhead of channels is typically negligible compared to 
-  the time spent waiting for I/O operations to complete 
-- **Heavy CPU-bound tasks:** For more computationally intensive tasks, such as complex string manipulation, parsing, encryption, 
-  or hash calculation, the overhead of channels becomes less significant compared to the overall processing time. 
-  In these scenarios, using channels and rill can still provide an efficient way to parallelize the workload. See [benchmarks](https://github.com/destel/rill/wiki/Benchmarks) for more details. 
+  the time spent waiting for I/O operations to complete  
 - **Light CPU-bound tasks:** When parallelizing a large number of small CPU-bound tasks, such as simple arithmetic operations,
   the overhead of channels can become significant. In such cases, using channels and goroutines may not provide
   the desired performance benefits.
+- **Heavy CPU-bound tasks:** For more computationally intensive tasks, such as complex string manipulation, parsing, encryption,
+  or hash calculation, the overhead of channels becomes less significant compared to the overall processing time.
+  In these scenarios, using channels and rill can still provide an efficient way to parallelize the workload. 
+  See [benchmarks](https://github.com/destel/rill/wiki/Benchmarks) for more details.
 
 If your use case requires high-performance calculations and you want to minimize the overhead of channels, 
 you can consider alternative approaches or libraries. For example, it's possible to transform a slice without channels and 
