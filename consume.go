@@ -10,7 +10,7 @@ import (
 // ForEach applies a function f to each item in an input stream.
 //
 // This is a blocking unordered function that processes items concurrently using n goroutines.
-// The case when n = 1 is optimized: it does not spawn worker goroutines and processes items sequentially,
+// The case when n = 1 processes items sequentially,
 // making the function ordered and similar to a regular for-range loop.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
@@ -25,6 +25,11 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 
 	go func() {
 		core.ForEach(in, n, func(a Try[A]) {
+			// Draining logic
+			if once.WasCalled() {
+				return
+			}
+
 			err := a.Error
 			if err == nil {
 				err = f(a.Value)

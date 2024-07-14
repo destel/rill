@@ -8,42 +8,12 @@ import (
 	"github.com/destel/rill/internal/th"
 )
 
-/*
-// OnceWithWait is like sync.Once, but also allows waiting until the first call is complete.
-type OnceWithWait struct {
-	once     sync.Once
-	done     chan struct{}
-	initOnce sync.Once
-}
-
-func (o *OnceWithWait) init() {
-	o.initOnce.Do(func() {
-		o.done = make(chan struct{})
-	})
-}
-
-// Do executes the function f only once, no matter how many times Do is called.
-// It also signals any goroutines waiting on Wait().
-func (o *OnceWithWait) Do(f func()) {
-	o.once.Do(func() {
-		o.init()
-		f()
-		close(o.done)
-	})
-}
-
-// Wait blocks until the first call to Do is complete.
-// It returns immediately if Do has already been called.
-func (o *OnceWithWait) Wait() {
-	o.init()
-	<-o.done
-}
-*/
-
 func TestOnceWithWait(t *testing.T) {
 	t.Run("Do called once", func(t *testing.T) {
 		var o OnceWithWait
 		var calls int64
+
+		th.ExpectValue(t, o.WasCalled(), false)
 
 		for i := 0; i < 5; i++ {
 			go func() {
@@ -56,6 +26,7 @@ func TestOnceWithWait(t *testing.T) {
 		time.Sleep(1 * time.Second)
 
 		th.ExpectValue(t, atomic.LoadInt64(&calls), 1)
+		th.ExpectValue(t, o.WasCalled(), true)
 	})
 
 	t.Run("Wait after Do", func(t *testing.T) {

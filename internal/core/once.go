@@ -1,11 +1,15 @@
 package core
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // OnceWithWait is like sync.Once, but also allows waiting until the first call is complete.
 type OnceWithWait struct {
 	once     sync.Once
-	done     chan struct{}
+	done     chan struct{} // used in Wait
+	fastDone int64         // used in WasCalled
 	initOnce sync.Once
 }
 
@@ -21,6 +25,7 @@ func (o *OnceWithWait) Do(f func()) {
 	o.once.Do(func() {
 		o.init()
 		f()
+		atomic.StoreInt64(&o.fastDone, 1)
 		close(o.done)
 	})
 }
@@ -30,4 +35,9 @@ func (o *OnceWithWait) Do(f func()) {
 func (o *OnceWithWait) Wait() {
 	o.init()
 	<-o.done
+}
+
+// WasCalled returns true if Do has been called.
+func (o *OnceWithWait) WasCalled() bool {
+	return atomic.LoadInt64(&o.fastDone) == 1
 }
