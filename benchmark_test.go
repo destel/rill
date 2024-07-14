@@ -9,7 +9,24 @@ import (
 )
 
 const benchmarkInputSize = 100000
-const benchmarkWorkDuration = 10 * time.Microsecond
+
+// code called on each benchmark iteration
+func benchmarkIteration() {
+	busySleep(1 * time.Microsecond)
+	//time.Sleep(1 * time.Microsecond)
+	//busySleep(10 * time.Microsecond)
+	//time.Sleep(10 * time.Microsecond)
+}
+
+func busySleep(d time.Duration) {
+	if d == 0 {
+		return
+	}
+
+	start := time.Now()
+	for time.Since(start) < d {
+	}
+}
 
 func runBenchmark[B any](b *testing.B, name string, body func(in <-chan Try[int]) <-chan B) {
 	b.Run(name, func(b *testing.B) {
@@ -46,28 +63,10 @@ func runBenchmark[B any](b *testing.B, name string, body func(in <-chan Try[int]
 	})
 }
 
-func busySleep(d time.Duration) {
-	if d == 0 {
-		return
-	}
-
-	start := time.Now()
-	for time.Since(start) < d {
-	}
-}
-
 func BenchmarkBasicForLoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for k := 0; k < benchmarkInputSize; k++ {
-			busySleep(benchmarkWorkDuration)
-		}
-	}
-}
-
-func BenchmarkBasicForLoopWithSleep(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		for k := 0; k < benchmarkInputSize; k++ {
-			time.Sleep(benchmarkWorkDuration)
+			benchmarkIteration()
 		}
 	}
 }
@@ -81,7 +80,7 @@ func BenchmarkWaitGroup(b *testing.B) {
 				go func() {
 					defer wg.Done()
 					for range in {
-						busySleep(benchmarkWorkDuration)
+						benchmarkIteration()
 					}
 				}()
 			}
@@ -91,42 +90,57 @@ func BenchmarkWaitGroup(b *testing.B) {
 	}
 }
 
-func BenchmarkWaitGroupWithSleep(b *testing.B) {
-	for _, n := range []int{1, 2, 4, 8} {
-		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
-			var wg sync.WaitGroup
-			wg.Add(n)
-			for i := 0; i < n; i++ {
-				go func() {
-					defer wg.Done()
-					for range in {
-						time.Sleep(benchmarkWorkDuration)
-					}
-				}()
-			}
-			wg.Wait()
-			return nil
-		})
-	}
-}
+// Benchmarks below are commented out to remove dependency on errgroup
+
+//func BenchmarkErrGroup(b *testing.B) {
+//	for _, n := range []int{1, 2, 4, 8} {
+//		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
+//			var eg errgroup.Group
+//			for i := 0; i < n; i++ {
+//				eg.Go(func() error {
+//					for x := range in {
+//						if err := x.Error; err != nil {
+//							return err
+//						}
+//						benchmarkIteration()
+//					}
+//					return nil
+//				})
+//			}
+//			eg.Wait()
+//			return nil
+//		})
+//	}
+//}
+//
+//func BenchmarkErrGroupGoroutinePerItem(b *testing.B) {
+//	for _, n := range []int{1, 2, 4, 8} {
+//		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
+//			var eg errgroup.Group
+//			eg.SetLimit(n)
+//
+//			for x := range in {
+//				x := x
+//				eg.Go(func() error {
+//					if err := x.Error; err != nil {
+//						return err
+//					}
+//					benchmarkIteration()
+//					return nil
+//				})
+//			}
+//
+//			eg.Wait()
+//			return nil
+//		})
+//	}
+//}
 
 func BenchmarkForEach(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
 		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
 			ForEach(in, n, func(x int) error {
-				busySleep(benchmarkWorkDuration)
-				return nil
-			})
-			return nil
-		})
-	}
-}
-
-func BenchmarkForEachWithSleep(b *testing.B) {
-	for _, n := range []int{1, 2, 4, 8} {
-		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
-			ForEach(in, n, func(x int) error {
-				time.Sleep(benchmarkWorkDuration)
+				benchmarkIteration()
 				return nil
 			})
 			return nil
@@ -138,18 +152,7 @@ func BenchmarkMap(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
 		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
 			return Map(in, n, func(x int) (int, error) {
-				busySleep(benchmarkWorkDuration)
-				return x, nil
-			})
-		})
-	}
-}
-
-func BenchmarkMapWithSleep(b *testing.B) {
-	for _, n := range []int{1, 2, 4, 8} {
-		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
-			return Map(in, n, func(x int) (int, error) {
-				time.Sleep(benchmarkWorkDuration)
+				benchmarkIteration()
 				return x, nil
 			})
 		})
@@ -160,19 +163,7 @@ func BenchmarkReduce(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
 		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan int {
 			Reduce(in, n, func(x, y int) (int, error) {
-				busySleep(benchmarkWorkDuration)
-				return x, nil
-			})
-			return nil
-		})
-	}
-}
-
-func BenchmarkReduceWithSleep(b *testing.B) {
-	for _, n := range []int{1, 2, 4, 8} {
-		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan int {
-			Reduce(in, n, func(x, y int) (int, error) {
-				time.Sleep(benchmarkWorkDuration)
+				benchmarkIteration()
 				return x, nil
 			})
 			return nil
