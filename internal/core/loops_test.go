@@ -72,6 +72,7 @@ func TestLoop(t *testing.T) {
 	})
 }
 
+// todo: remove
 func TestBreakable(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
 		var in chan int
@@ -123,4 +124,53 @@ func TestBreakable(t *testing.T) {
 		th.ExpectDrainedChan(t, in)
 	})
 
+}
+
+func TestForEach(t *testing.T) {
+	for _, n := range []int{1, 5} {
+		t.Run(th.Name("correctness", n), func(t *testing.T) {
+			in := th.FromRange(0, 20)
+
+			sum := int64(0)
+
+			ForEach(in, n, func(x int) {
+				atomic.AddInt64(&sum, int64(x))
+			})
+
+			th.ExpectValue(t, sum, 19*20/2)
+		})
+
+		t.Run(th.Name("concurrency", n), func(t *testing.T) {
+			in := th.FromRange(0, 100)
+
+			mon := th.NewConcurrencyMonitor(1 * time.Second)
+
+			ForEach(in, n, func(x int) {
+				mon.Inc()
+				defer mon.Dec()
+			})
+
+			th.ExpectValue(t, mon.Max(), n)
+		})
+
+		t.Run(th.Name("ordering", n), func(t *testing.T) {
+			in := th.FromRange(0, 20000)
+			out := make(chan int)
+
+			go func() {
+				ForEach(in, n, func(x int) {
+					out <- x
+				})
+				close(out)
+			}()
+
+			outSlice := th.ToSlice(out)
+
+			if n == 1 {
+				th.ExpectSorted(t, outSlice)
+			} else {
+				th.ExpectUnsorted(t, outSlice)
+			}
+		})
+	}
 }

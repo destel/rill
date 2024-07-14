@@ -156,3 +156,17 @@ func Breakable[A any](in <-chan A) (res <-chan A, doBreak func()) {
 
 	return out, breakFunc
 }
+
+// todo: test and describe
+func ForEach[A any](in <-chan A, n int, f func(A)) {
+	if n == 1 {
+		for a := range in {
+			f(a)
+		}
+		return
+	}
+
+	done := make(chan struct{})
+	Loop(in, done, n, f)
+	<-done
+}

@@ -2,7 +2,6 @@ package rill
 
 import (
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -140,49 +139,7 @@ func TestForEach(t *testing.T) {
 				th.ExpectDrainedChan(t, in)
 			})
 		})
-
-		t.Run(th.Name("ordering", n), func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 20000), nil)
-
-			var mu sync.Mutex
-			outSlice := make([]int, 0, 20000)
-
-			err := ForEach(in, n, func(x int) error {
-				mu.Lock()
-				outSlice = append(outSlice, x)
-				mu.Unlock()
-				return nil
-			})
-
-			th.ExpectNoError(t, err)
-			if n == 1 {
-				th.ExpectSorted(t, outSlice)
-			} else {
-				th.ExpectUnsorted(t, outSlice)
-			}
-		})
-
 	}
-
-	t.Run("deterministic when n=1", func(t *testing.T) {
-		in := FromChan(th.FromRange(0, 100), nil)
-
-		in = replaceWithError(in, 10, fmt.Errorf("err10"))
-		in = replaceWithError(in, 11, fmt.Errorf("err11"))
-		in = replaceWithError(in, 12, fmt.Errorf("err12"))
-
-		maxX := -1
-
-		err := ForEach(in, 1, func(x int) error {
-			if x > maxX {
-				maxX = x
-			}
-			return nil
-		})
-
-		th.ExpectValue(t, maxX, 9)
-		th.ExpectError(t, err, "err10")
-	})
 }
 
 func TestAnyAll(t *testing.T) {

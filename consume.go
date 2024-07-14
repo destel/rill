@@ -10,48 +10,34 @@ import (
 // ForEach applies a function f to each item in an input stream.
 //
 // This is a blocking unordered function that processes items concurrently using n goroutines.
-// The case when n = 1 is optimized: it does not spawn additional goroutines and processes items sequentially,
+// The case when n = 1 is optimized: it does not spawn worker goroutines and processes items sequentially,
 // making the function ordered and similar to a regular for-range loop.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
-	if n == 1 {
-		for a := range in {
+	var retErr error
+	var once core.OnceWithWait
+	setReturns := func(err error) {
+		once.Do(func() {
+			retErr = err
+		})
+	}
+
+	go func() {
+		core.ForEach(in, n, func(a Try[A]) {
 			err := a.Error
 			if err == nil {
 				err = f(a.Value)
 			}
-
 			if err != nil {
-				DrainNB(in)
-				return err
+				setReturns(err)
 			}
-		}
+		})
 
-		return nil
-	}
+		setReturns(nil)
+	}()
 
-	var retErr error
-	var once sync.Once
-
-	in, earlyExit := core.Breakable(in)
-	done := make(chan struct{})
-
-	core.Loop(in, done, n, func(a Try[A]) {
-		err := a.Error
-		if err == nil {
-			err = f(a.Value)
-		}
-
-		if err != nil {
-			earlyExit()
-			once.Do(func() {
-				retErr = err
-			})
-		}
-	})
-
-	<-done
+	once.Wait()
 	return retErr
 }
 
