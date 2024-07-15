@@ -9,7 +9,7 @@ import (
 type OnceWithWait struct {
 	once     sync.Once
 	done     chan struct{} // used in Wait
-	fastDone int64         // used in WasCalled
+	fastDone atomic.Bool   // used in WasCalled
 	initOnce sync.Once
 }
 
@@ -25,7 +25,7 @@ func (o *OnceWithWait) Do(f func()) {
 	o.once.Do(func() {
 		o.init()
 		f()
-		atomic.StoreInt64(&o.fastDone, 1)
+		o.fastDone.Store(true)
 		close(o.done)
 	})
 }
@@ -39,5 +39,5 @@ func (o *OnceWithWait) Wait() {
 
 // WasCalled returns true if Do has been called.
 func (o *OnceWithWait) WasCalled() bool {
-	return atomic.LoadInt64(&o.fastDone) == 1
+	return o.fastDone.Load()
 }

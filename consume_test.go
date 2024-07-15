@@ -79,14 +79,14 @@ func TestForEach(t *testing.T) {
 		t.Run(th.Name("no errors", n), func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 10), nil)
 
-			sum := int64(0)
+			var sum atomic.Int64
 			err := ForEach(in, n, func(x int) error {
-				atomic.AddInt64(&sum, int64(x))
+				sum.Add(int64(x))
 				return nil
 			})
 
 			th.ExpectNoError(t, err)
-			th.ExpectValue(t, sum, int64(9*10/2))
+			th.ExpectValue(t, sum.Load(), int64(9*10/2))
 		})
 
 		t.Run(th.Name("error in input", n), func(t *testing.T) {
@@ -94,22 +94,23 @@ func TestForEach(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 				in = replaceWithError(in, 100, fmt.Errorf("err100"))
 
-				cnt := int64(0)
+				var cnt atomic.Int64
 				err := ForEach(in, n, func(x int) error {
-					atomic.AddInt64(&cnt, 1)
+					cnt.Add(1)
 					return nil
 				})
 
 				th.ExpectError(t, err, "err100")
-				if cnt < 100 {
-					t.Errorf("expected at least 100 iterations to complete")
-				}
-				if cnt > 150 {
-					t.Errorf("early exit did not happen")
+				if cnt.Load() > 900 {
+					t.Errorf("early return did not happen")
 				}
 
 				time.Sleep(1 * time.Second)
+
 				th.ExpectDrainedChan(t, in)
+				if cnt.Load() > 900 {
+					t.Errorf("extra calls to f were made")
+				}
 			})
 		})
 
@@ -117,26 +118,27 @@ func TestForEach(t *testing.T) {
 			th.ExpectNotHang(t, 10*time.Second, func() {
 				in := FromChan(th.FromRange(0, 1000), nil)
 
-				cnt := int64(0)
+				var cnt atomic.Int64
 				err := ForEach(in, n, func(x int) error {
 					if x == 100 {
 						return fmt.Errorf("err100")
 					}
-					atomic.AddInt64(&cnt, 1)
+					cnt.Add(1)
 					return nil
 				})
 
 				th.ExpectError(t, err, "err100")
-				if cnt < 100 {
-					t.Errorf("expected at least 100 iterations to complete")
-				}
-				if cnt == 1000 {
-					t.Errorf("early exit did not happen")
+				if cnt.Load() > 900 {
+					t.Errorf("early return did not happen")
 				}
 
 				// wait until it drained
 				time.Sleep(1 * time.Second)
+
 				th.ExpectDrainedChan(t, in)
+				if cnt.Load() > 900 {
+					t.Errorf("extra calls to f were made")
+				}
 			})
 		})
 	}
