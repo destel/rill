@@ -72,60 +72,6 @@ func TestLoop(t *testing.T) {
 	})
 }
 
-// todo: remove
-func TestBreakable(t *testing.T) {
-	t.Run("nil", func(t *testing.T) {
-		var in chan int
-		in1, earlyExit := Breakable(in)
-		th.ExpectValue(t, in1, nil)
-		th.ExpectNotPanic(t, earlyExit)
-	})
-
-	t.Run("normal", func(t *testing.T) {
-		in := th.FromRange(0, 10000)
-		in1, _ := Breakable(in)
-
-		maxSeen := -1
-
-		for x := range in1 {
-			if x > maxSeen {
-				maxSeen = x
-			}
-		}
-
-		th.ExpectValue(t, maxSeen, 9999)
-		th.ExpectDrainedChan(t, in)
-	})
-
-	t.Run("early exit", func(t *testing.T) {
-		in := th.FromRange(0, 1000)
-		in1, earlyExit := Breakable(in)
-
-		maxSeen := -1
-
-		for x := range in1 {
-			if x == 100 {
-				earlyExit()
-			}
-
-			if x > maxSeen {
-				maxSeen = x
-			}
-		}
-
-		if maxSeen != 100 && maxSeen != 101 {
-			// we can reach 101 because item #101 can be consumed by
-			// the goroutine inside Break before earlyExit is called
-			t.Errorf("expected 100 or 101, got %v", maxSeen)
-
-		}
-
-		time.Sleep(1 * time.Second)
-		th.ExpectDrainedChan(t, in)
-	})
-
-}
-
 func TestForEach(t *testing.T) {
 	for _, n := range []int{1, 5} {
 		t.Run(th.Name("correctness", n), func(t *testing.T) {
