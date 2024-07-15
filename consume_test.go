@@ -145,7 +145,7 @@ func TestForEach(t *testing.T) {
 }
 
 func TestAnyAll(t *testing.T) {
-	for _, n := range []int{1} {
+	for _, n := range []int{1, 5} {
 		t.Run(th.Name("empty", n), func(t *testing.T) {
 			in := FromSlice([]int{}, nil)
 
@@ -160,17 +160,24 @@ func TestAnyAll(t *testing.T) {
 		t.Run(th.Name("no errors,false", n), func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 
-			var cnt int64
+			var cnt atomic.Int64
 			ok, err := All(in, n, func(x int) (bool, error) {
-				atomic.AddInt64(&cnt, 1)
+				cnt.Add(1)
 				return x < 100, nil
 			})
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, ok, false)
-
-			if cnt == 1000 {
+			if cnt.Load() > 900 {
 				t.Errorf("early exit did not happen")
+			}
+
+			// wait until it drained
+			time.Sleep(1 * time.Second)
+
+			th.ExpectDrainedChan(t, in)
+			if cnt.Load() > 900 {
+				t.Errorf("extra calls to f were made")
 			}
 		})
 
@@ -178,26 +185,33 @@ func TestAnyAll(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = replaceWithError(in, 500, fmt.Errorf("err500"))
 
-			var cnt int64
+			var cnt atomic.Int64
 			ok, err := All(in, n, func(x int) (bool, error) {
-				atomic.AddInt64(&cnt, 1)
+				cnt.Add(1)
 				return x < 100, nil
 			})
 
 			th.ExpectNoError(t, err) // error was swallowed by early exit
 			th.ExpectValue(t, ok, false)
-
-			if cnt == 1000 {
+			if cnt.Load() > 900 {
 				t.Errorf("early exit did not happen")
+			}
+
+			// wait until it drained
+			time.Sleep(1 * time.Second)
+
+			th.ExpectDrainedChan(t, in)
+			if cnt.Load() > 900 {
+				t.Errorf("extra calls to f were made")
 			}
 		})
 
 		t.Run(th.Name("error in func,false", n), func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 
-			var cnt int64
+			var cnt atomic.Int64
 			ok, err := All(in, n, func(x int) (bool, error) {
-				atomic.AddInt64(&cnt, 1)
+				cnt.Add(1)
 				if x == 500 {
 					return false, fmt.Errorf("err500")
 				}
@@ -206,9 +220,16 @@ func TestAnyAll(t *testing.T) {
 
 			th.ExpectNoError(t, err) // error was swallowed by early exit
 			th.ExpectValue(t, ok, false)
-
-			if cnt == 1000 {
+			if cnt.Load() > 900 {
 				t.Errorf("early exit did not happen")
+			}
+
+			// wait until it drained
+			time.Sleep(1 * time.Second)
+
+			th.ExpectDrainedChan(t, in)
+			if cnt.Load() > 900 {
+				t.Errorf("extra calls to f were made")
 			}
 		})
 
@@ -217,50 +238,65 @@ func TestAnyAll(t *testing.T) {
 		t.Run(th.Name("no errors,true", n), func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 
-			var cnt int64
+			var cnt atomic.Int64
 			ok, err := All(in, n, func(x int) (bool, error) {
-				atomic.AddInt64(&cnt, 1)
-				return x < 1000, nil
+				cnt.Add(1)
+				return x < 10000, nil
 			})
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, ok, true)
-			th.ExpectValue(t, cnt, 1000)
+
+			th.ExpectDrainedChan(t, in)
 		})
 
 		t.Run(th.Name("error in input,true", n), func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = replaceWithError(in, 500, fmt.Errorf("err500"))
 
-			var cnt int64
+			var cnt atomic.Int64
 			_, err := All(in, n, func(x int) (bool, error) {
-				atomic.AddInt64(&cnt, 1)
-				return x < 1000, nil
+				cnt.Add(1)
+				return x < 10000, nil
 			})
 
 			th.ExpectError(t, err, "err500")
-
-			if cnt == 1000 {
+			if cnt.Load() > 900 {
 				t.Errorf("early exit did not happen")
+			}
+
+			// wait until it drained
+			time.Sleep(1 * time.Second)
+
+			th.ExpectDrainedChan(t, in)
+			if cnt.Load() > 900 {
+				t.Errorf("extra calls to f were made")
 			}
 		})
 
 		t.Run(th.Name("error in func,true", n), func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 
-			var cnt int64
+			var cnt atomic.Int64
 			_, err := All(in, n, func(x int) (bool, error) {
-				atomic.AddInt64(&cnt, 1)
+				cnt.Add(1)
 				if x == 500 {
 					return false, fmt.Errorf("err500")
 				}
-				return x < 1000, nil
+				return x < 10000, nil
 			})
 
 			th.ExpectError(t, err, "err500")
-
-			if cnt == 1000 {
+			if cnt.Load() > 900 {
 				t.Errorf("early exit did not happen")
+			}
+
+			// wait until it drained
+			time.Sleep(1 * time.Second)
+
+			th.ExpectDrainedChan(t, in)
+			if cnt.Load() > 900 {
+				t.Errorf("extra calls to f were made")
 			}
 		})
 
