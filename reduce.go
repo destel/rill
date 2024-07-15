@@ -21,29 +21,48 @@ import (
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, hasResult bool, err error) {
-	in, earlyExit := core.Breakable(in)
+	var once core.OnceWithWait
+	setReturns := func(result1 A, hasResult1 bool, err1 error) {
+		once.Do(func() {
+			result = result1
+			hasResult = hasResult1
+			err = err1
+		})
+	}
 
-	res, ok := core.Reduce(in, n, func(a1, a2 Try[A]) Try[A] {
-		if err := a1.Error; err != nil {
-			earlyExit()
-			return a1
-		}
+	go func() {
+		var zero A
+		var zeroTry Try[A]
 
-		if err := a2.Error; err != nil {
-			earlyExit()
-			return a2
-		}
+		res, ok := core.Reduce(in, n, func(a1, a2 Try[A]) Try[A] {
+			if once.WasCalled() {
+				return zeroTry
+			}
 
-		res, err := f(a1.Value, a2.Value)
-		if err != nil {
-			earlyExit()
-			return Try[A]{Error: err}
-		}
+			if err := a1.Error; err != nil {
+				setReturns(zero, false, err)
+				return zeroTry
+			}
 
-		return Try[A]{Value: res}
-	})
+			if err := a2.Error; err != nil {
+				setReturns(zero, false, err)
+				return zeroTry
+			}
 
-	return res.Value, ok, res.Error
+			res, err := f(a1.Value, a2.Value)
+			if err != nil {
+				setReturns(zero, false, err)
+				return zeroTry
+			}
+
+			return Try[A]{Value: res} // the only non-dummy return
+		})
+
+		setReturns(res.Value, ok, nil)
+	}()
+
+	once.Wait()
+	return
 }
 
 // MapReduce transforms the input stream into a Go map using a mapper and a reducer functions.
