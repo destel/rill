@@ -127,7 +127,7 @@ func OrderedLoop[A, B any](in <-chan A, done chan<- B, n int, f func(a A, canWri
 	}
 }
 
-// todo: test and describe
+// ForEach is a blocking function that processes input channel concurrently using n goroutines
 func ForEach[A any](in <-chan A, n int, f func(A)) {
 	if n == 1 {
 		for a := range in {
