@@ -333,33 +333,12 @@ func main() {
 ```
 
 
-## Limitations
-While rill provides a powerful and expressive way to build concurrent pipelines, there are certain limitations and 
-scenarios where alternative approaches might be more suitable.
 
-Go channels are a fundamental and convenient feature for handling concurrency and communication between goroutines. 
-However, it's important to note that channels come with a certain overhead. The impact of this overhead varies depending on 
-the specific use:
+## Performance
+Rill's performance is primarily bounded by the performance of channel operations. As a result, applications that
+already use channels and channel-based concurrency patterns can expect minimal overhead when adopting Rill.
+Moreover, Rill outperforms some traditional concurrency patterns that spawn a goroutine for each channel item and use a semaphore
+to control the level of concurrency. For example, Rill's ForEach function while being more concise, outperforms the errgroup.Go + errgroup.SetLimit pattern
+both in terms of speed and number of allocations. For more details, refer to the [benchmarks](https://github.com/destel/rill/wiki/Benchmarks).
 
-- **I/O-bound tasks:** Channels are great for handling I/O-bound tasks, such as reading from or writing to files, 
-  network communication, or database operations. The overhead of channels is typically negligible compared to 
-  the time spent waiting for I/O operations to complete  
-- **Light CPU-bound tasks:** When parallelizing a large number of small CPU-bound tasks, such as simple arithmetic operations,
-  the overhead of channels can become significant. In such cases, using channels and goroutines may not provide
-  the desired performance benefits.
-- **Heavy CPU-bound tasks:** For more computationally intensive tasks, such as complex string manipulation, parsing, encryption,
-  or hash calculation, the overhead of channels becomes less significant compared to the overall processing time.
-  In these scenarios, using channels and rill can still provide an efficient way to parallelize the workload. 
-  See [benchmarks](https://github.com/destel/rill/wiki/Benchmarks) for more details.
-
-If your use case requires high-performance calculations and you want to minimize the overhead of channels, 
-you can consider alternative approaches or libraries. For example, it's possible to transform a slice without channels and 
-with almost zero orchestration, just by dividing the slice into n chunks and assigning each chunk to a separate goroutine.
-
-Because of the reasons mentioned above and to avoid misleading users, rill does not provide functions that operate directly on slices. 
-It main focus is channels and streaming. However, slices can still be used with rill by converting them to and from channels, 
-and leveraging ordered transformations when necessary. 
-
-Another limitation of rill is that it does not provide a way to create a global worker pool for the entire pipeline. 
-Each stage of the pipeline must have at least one alive goroutine to keep the whole pipeline running. 
-That's why each stage has its own goroutine pool, which is created and managed internally.
+This makes Rill well-suited for a wide range of tasks, especially I/O-bound workloads where the overhead of channel operations is typically negligible.
