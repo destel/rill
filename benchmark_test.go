@@ -1,7 +1,6 @@
 package rill
 
 import (
-	"sync"
 	"testing"
 	"time"
 
@@ -33,7 +32,7 @@ func runBenchmark[B any](b *testing.B, name string, body func(in <-chan Try[int]
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
 
-			in := make(chan Try[int])
+			in := make(chan Try[int], benchmarkInputSize)
 			done := make(chan struct{})
 
 			go func() {
@@ -63,57 +62,10 @@ func runBenchmark[B any](b *testing.B, name string, body func(in <-chan Try[int]
 	})
 }
 
-func BenchmarkBasicForLoop(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		for k := 0; k < benchmarkInputSize; k++ {
-			benchmarkIteration()
-		}
-	}
-}
-
-func BenchmarkWaitGroup(b *testing.B) {
-	for _, n := range []int{1, 2, 4, 8} {
-		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
-			var wg sync.WaitGroup
-			wg.Add(n)
-			for i := 0; i < n; i++ {
-				go func() {
-					defer wg.Done()
-					for range in {
-						benchmarkIteration()
-					}
-				}()
-			}
-			wg.Wait()
-			return nil
-		})
-	}
-}
-
 // Benchmarks below are commented out to remove dependency on errgroup
 
-//func BenchmarkErrGroup(b *testing.B) {
-//	for _, n := range []int{1, 2, 4, 8} {
-//		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
-//			var eg errgroup.Group
-//			for i := 0; i < n; i++ {
-//				eg.Go(func() error {
-//					for x := range in {
-//						if err := x.Error; err != nil {
-//							return err
-//						}
-//						benchmarkIteration()
-//					}
-//					return nil
-//				})
-//			}
-//			eg.Wait()
-//			return nil
-//		})
-//	}
-//}
-//
-//func BenchmarkErrGroupGoroutinePerItem(b *testing.B) {
+//// This benchmark uses classic goroutine-per-item + semaphore pattern.
+//func BenchmarkErrGroupWithSetLimit(b *testing.B) {
 //	for _, n := range []int{1, 2, 4, 8} {
 //		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
 //			var eg errgroup.Group
@@ -130,7 +82,29 @@ func BenchmarkWaitGroup(b *testing.B) {
 //				})
 //			}
 //
-//			eg.Wait()
+//			_ = eg.Wait()
+//			return nil
+//		})
+//	}
+//}
+//
+//// This benchmark uses much less common pattern of creating a worker pool with errgroup.
+//func BenchmarkErrGroupWithWorkerPool(b *testing.B) {
+//	for _, n := range []int{1, 2, 4, 8} {
+//		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
+//			var eg errgroup.Group
+//			for i := 0; i < n; i++ {
+//				eg.Go(func() error {
+//					for x := range in {
+//						if err := x.Error; err != nil {
+//							return err
+//						}
+//						benchmarkIteration()
+//					}
+//					return nil
+//				})
+//			}
+//			_ = eg.Wait()
 //			return nil
 //		})
 //	}
@@ -139,7 +113,7 @@ func BenchmarkWaitGroup(b *testing.B) {
 func BenchmarkForEach(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
 		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
-			ForEach(in, n, func(x int) error {
+			_ = ForEach(in, n, func(x int) error {
 				benchmarkIteration()
 				return nil
 			})
@@ -148,7 +122,7 @@ func BenchmarkForEach(b *testing.B) {
 	}
 }
 
-func BenchmarkMap(b *testing.B) {
+func BenchmarkMapAndDrain(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
 		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
 			return Map(in, n, func(x int) (int, error) {
@@ -162,7 +136,7 @@ func BenchmarkMap(b *testing.B) {
 func BenchmarkReduce(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
 		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan int {
-			Reduce(in, n, func(x, y int) (int, error) {
+			_, _, _ = Reduce(in, n, func(x, y int) (int, error) {
 				benchmarkIteration()
 				return x, nil
 			})
