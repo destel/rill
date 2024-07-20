@@ -32,7 +32,7 @@ func runBenchmark[B any](b *testing.B, name string, body func(in <-chan Try[int]
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
 
-			in := make(chan Try[int], benchmarkInputSize)
+			in := make(chan Try[int])
 			done := make(chan struct{})
 
 			go func() {
