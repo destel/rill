@@ -20,6 +20,31 @@ Rill has got you covered.
 - **Generic**: all operations are type-safe and can be used with any data type
 
 
+
+## Motivation
+Rill is not an iterator library or a functional programming library, though it may look like one. 
+It's a concurrency library built specifically for Go channels.
+
+There is a consensus in the Go community that functional programming style operations like Map, Filter, ForEach and others are 
+not idiomatic in Go, and that basic for-loops are better, faster, and more concise. This is true for slices, 
+but for channels, the complexity can quickly escalate beyond a basic for-loop as requirements are added:
+
+- A basic for-range loop is sufficient to iterate over a channel
+- Adding concurrency requires goroutines and a WaitGroup
+- Adding error handling means replacing WaitGroup with ErrGroup
+- Controlling concurrency level is often done with a semaphore
+- If the above approach becomes a bottleneck, worker pools must be introduced and managed manually
+- For a multi-stage pipeline, everything must be manually managed at each stage, causing complexity to grow non-linearly
+- Requirements like ordered fan-in introduce yet another level of orchestration and synchronization complexity
+
+The list can be continued. And while tools like channels, ErrGroups or semaphores are powerful on their own, 
+combining them into a complex logic, can lead to code with lots of boilerplate that's difficult to write, read, and maintain. 
+
+Rill was born out of the desire to encapsulate all this complexity in a library with a simple, composable, 
+and expressive API. The introduction of generics in Go 1.18 opened the door to creating functional-style 
+operations on channels, providing a natural way to achieve this goal.
+
+
 ## Installation
 ```bash
 go get github.com/destel/rill
