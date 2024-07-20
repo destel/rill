@@ -104,7 +104,7 @@ Rill has a test coverage of over 95%, with testing focused on:
 
 
 
-## Design Philosophy
+## How Rill Works
 At the heart of rill lies a simple yet powerful concept: operating on channels of wrapped values, encapsulated by the **Try** container.
 This allows to propagate both values and errors through the pipeline, ensuring that errors are handled correctly at each stage.
 Such wrapped channels can be created manually or through utilities like **FromSlice** or **FromChan**, and then transformed via non-blocking 
