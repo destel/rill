@@ -38,11 +38,11 @@ but for channels, the complexity can quickly escalate beyond a basic for-loop as
 - Features like ordered fan-in require even more complex orchestration and synchronization
 
 The list can be continued. And while tools like channels, ErrGroups or semaphores are powerful on their own, 
-combining them into a complex logic, can lead to code with lots of boilerplate that's difficult to write, read, and maintain. 
+combining them into a more complex logic, can lead to code with lots of boilerplate that's difficult to write, read, and maintain. 
 
-Rill was born out of the desire to encapsulate all this complexity in a library with a simple, composable, 
-and expressive API. The introduction of generics in Go 1.18 opened the door to creating functional-style 
-operations on channels, providing a natural way to achieve this goal.
+Rill was born out of the desire to remove code duplication and to encapsulate all this complexity in a library with a 
+simple, composable, and expressive API. The introduction of generics in Go 1.18 opened the door to creating 
+functional-style operations on channels, providing a natural way to achieve this goal.
 
 
 
