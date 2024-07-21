@@ -2,7 +2,6 @@ package core
 
 import (
 	"sync"
-	"sync/atomic"
 )
 
 // Loop allows to process items from the input channel concurrently using n goroutines.
@@ -128,31 +127,16 @@ func OrderedLoop[A, B any](in <-chan A, done chan<- B, n int, f func(a A, canWri
 	}
 }
 
-// Breakable creates a new channel from channel in, copying elements until doBreak function is called.
-// doBreak halts copying and discards any remaining elements from in, closing the resulting channel.
-// Use this to stop channel processing when needed.
-func Breakable[A any](in <-chan A) (res <-chan A, doBreak func()) {
-	if in == nil {
-		return nil, func() {}
-	}
-
-	breakCalled := int64(0)
-	breakFunc := func() {
-		atomic.StoreInt64(&breakCalled, 1)
-	}
-
-	out := make(chan A)
-	go func() {
-		defer Drain(in) // discard unconsumed items
-		defer close(out)
-
-		for x := range in {
-			if atomic.LoadInt64(&breakCalled) == 1 {
-				break
-			}
-			out <- x
+// ForEach is a blocking function that processes input channel concurrently using n goroutines
+func ForEach[A any](in <-chan A, n int, f func(A)) {
+	if n == 1 {
+		for a := range in {
+			f(a)
 		}
-	}()
+		return
+	}
 
-	return out, breakFunc
+	done := make(chan struct{})
+	Loop(in, done, n, f)
+	<-done
 }

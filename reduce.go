@@ -1,8 +1,6 @@
 package rill
 
 import (
-	"sync"
-
 	"github.com/destel/rill/internal/core"
 )
 
@@ -21,29 +19,48 @@ import (
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, hasResult bool, err error) {
-	in, earlyExit := core.Breakable(in)
+	var once core.OnceWithWait
+	setReturns := func(result1 A, hasResult1 bool, err1 error) {
+		once.Do(func() {
+			result = result1
+			hasResult = hasResult1
+			err = err1
+		})
+	}
 
-	res, ok := core.Reduce(in, n, func(a1, a2 Try[A]) Try[A] {
-		if err := a1.Error; err != nil {
-			earlyExit()
-			return a1
-		}
+	go func() {
+		var zero A
+		var zeroTry Try[A]
 
-		if err := a2.Error; err != nil {
-			earlyExit()
-			return a2
-		}
+		res, ok := core.Reduce(in, n, func(a1, a2 Try[A]) Try[A] {
+			if once.WasCalled() {
+				return zeroTry
+			}
 
-		res, err := f(a1.Value, a2.Value)
-		if err != nil {
-			earlyExit()
-			return Try[A]{Error: err}
-		}
+			if err := a1.Error; err != nil {
+				setReturns(zero, false, err)
+				return zeroTry
+			}
 
-		return Try[A]{Value: res}
-	})
+			if err := a2.Error; err != nil {
+				setReturns(zero, false, err)
+				return zeroTry
+			}
 
-	return res.Value, ok, res.Error
+			res, err := f(a1.Value, a2.Value)
+			if err != nil {
+				setReturns(zero, false, err)
+				return zeroTry
+			}
+
+			return Try[A]{Value: res} // the only non-dummy return
+		})
+
+		setReturns(res.Value, ok, nil)
+	}()
+
+	once.Wait()
+	return
 }
 
 // MapReduce transforms the input stream into a Go map using a mapper and a reducer functions.
@@ -60,46 +77,57 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error)) (map[K]V, error) {
-	var zeroKey K
-	var zeroVal V
-
-	in, earlyExit := core.Breakable(in)
-
+	var retMap map[K]V
 	var retErr error
-	var once sync.Once
-
-	reportError := func(err error) {
-		earlyExit()
+	var once core.OnceWithWait
+	setReturns := func(m map[K]V, err error) {
 		once.Do(func() {
+			retMap = m
 			retErr = err
 		})
 	}
 
-	res := core.MapReduce(in,
-		nm, func(a Try[A]) (K, V) {
-			if a.Error != nil {
-				reportError(a.Error)
-				return zeroKey, zeroVal
-			}
+	go func() {
+		var zeroKey K
+		var zeroVal V
 
-			k, v, err := mapper(a.Value)
-			if err != nil {
-				reportError(err)
-				return zeroKey, zeroVal
-			}
+		res := core.MapReduce(in,
+			nm, func(a Try[A]) (K, V) {
+				if once.WasCalled() {
+					return zeroKey, zeroVal
+				}
 
-			return k, v
-		},
-		nr, func(v1, v2 V) V {
-			res, err := reducer(v1, v2)
-			if err != nil {
-				reportError(err)
-				return zeroVal
-			}
+				if a.Error != nil {
+					setReturns(nil, a.Error)
+					return zeroKey, zeroVal
+				}
 
-			return res
-		},
-	)
+				k, v, err := mapper(a.Value)
+				if err != nil {
+					setReturns(nil, err)
+					return zeroKey, zeroVal
+				}
 
-	return res, retErr
+				return k, v
+			},
+			nr, func(v1, v2 V) V {
+				if once.WasCalled() {
+					return zeroVal
+				}
+
+				res, err := reducer(v1, v2)
+				if err != nil {
+					setReturns(nil, err)
+					return zeroVal
+				}
+
+				return res
+			},
+		)
+
+		setReturns(res, nil)
+	}()
+
+	once.Wait()
+	return retMap, retErr
 }
