@@ -72,55 +72,51 @@ func TestLoop(t *testing.T) {
 	})
 }
 
-func TestBreakable(t *testing.T) {
-	t.Run("nil", func(t *testing.T) {
-		var in chan int
-		in1, earlyExit := Breakable(in)
-		th.ExpectValue(t, in1, nil)
-		th.ExpectNotPanic(t, earlyExit)
-	})
+func TestForEach(t *testing.T) {
+	for _, n := range []int{1, 5} {
+		t.Run(th.Name("correctness", n), func(t *testing.T) {
+			in := th.FromRange(0, 20)
 
-	t.Run("normal", func(t *testing.T) {
-		in := th.FromRange(0, 10000)
-		in1, _ := Breakable(in)
+			sum := int64(0)
 
-		maxSeen := -1
+			ForEach(in, n, func(x int) {
+				atomic.AddInt64(&sum, int64(x))
+			})
 
-		for x := range in1 {
-			if x > maxSeen {
-				maxSeen = x
+			th.ExpectValue(t, sum, 19*20/2)
+		})
+
+		t.Run(th.Name("concurrency", n), func(t *testing.T) {
+			in := th.FromRange(0, 100)
+
+			mon := th.NewConcurrencyMonitor(1 * time.Second)
+
+			ForEach(in, n, func(x int) {
+				mon.Inc()
+				defer mon.Dec()
+			})
+
+			th.ExpectValue(t, mon.Max(), n)
+		})
+
+		t.Run(th.Name("ordering", n), func(t *testing.T) {
+			in := th.FromRange(0, 20000)
+			out := make(chan int)
+
+			go func() {
+				ForEach(in, n, func(x int) {
+					out <- x
+				})
+				close(out)
+			}()
+
+			outSlice := th.ToSlice(out)
+
+			if n == 1 {
+				th.ExpectSorted(t, outSlice)
+			} else {
+				th.ExpectUnsorted(t, outSlice)
 			}
-		}
-
-		th.ExpectValue(t, maxSeen, 9999)
-		th.ExpectDrainedChan(t, in)
-	})
-
-	t.Run("early exit", func(t *testing.T) {
-		in := th.FromRange(0, 1000)
-		in1, earlyExit := Breakable(in)
-
-		maxSeen := -1
-
-		for x := range in1 {
-			if x == 100 {
-				earlyExit()
-			}
-
-			if x > maxSeen {
-				maxSeen = x
-			}
-		}
-
-		if maxSeen != 100 && maxSeen != 101 {
-			// we can reach 101 because item #101 can be consumed by
-			// the goroutine inside Break before earlyExit is called
-			t.Errorf("expected 100 or 101, got %v", maxSeen)
-
-		}
-
-		time.Sleep(1 * time.Second)
-		th.ExpectDrainedChan(t, in)
-	})
-
+		})
+	}
 }

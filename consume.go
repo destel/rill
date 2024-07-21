@@ -1,69 +1,44 @@
 package rill
 
 import (
-	"errors"
-	"sync"
-
 	"github.com/destel/rill/internal/core"
 )
 
 // ForEach applies a function f to each item in an input stream.
 //
 // This is a blocking unordered function that processes items concurrently using n goroutines.
-// The case when n = 1 is optimized: it does not spawn additional goroutines and processes items sequentially,
-// making the function ordered and similar to a regular for-range loop.
+// When n = 1, processing becomes sequential, making the function ordered and similar to a regular for-range loop.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
-	if n == 1 {
-		for a := range in {
+	var retErr error
+	var once core.OnceWithWait
+	setReturns := func(err error) {
+		once.Do(func() {
+			retErr = err
+		})
+	}
+
+	go func() {
+		core.ForEach(in, n, func(a Try[A]) {
+			if once.WasCalled() {
+				return // drain
+			}
+
 			err := a.Error
 			if err == nil {
 				err = f(a.Value)
 			}
-
 			if err != nil {
-				DrainNB(in)
-				return err
+				setReturns(err)
 			}
-		}
-
-		return nil
-	}
-
-	var retErr error
-	var once sync.Once
-
-	in, earlyExit := core.Breakable(in)
-	done := make(chan struct{})
-
-	core.Loop(in, done, n, func(a Try[A]) {
-		err := a.Error
-		if err == nil {
-			err = f(a.Value)
-		}
-
-		if err != nil {
-			earlyExit()
-			once.Do(func() {
-				retErr = err
-			})
-		}
-	})
-
-	<-done
-	return retErr
-}
-
-// onceFunc1 returns a single argument function that invokes f only once. The returned function may be called concurrently.
-func onceFunc1[T any](f func(T)) func(T) {
-	var once sync.Once
-	return func(value T) {
-		once.Do(func() {
-			f(value)
-			f = nil
 		})
-	}
+
+		setReturns(nil)
+	}()
+
+	once.Wait()
+	return retErr
 }
 
 // Err returns the first error encountered in the input stream or nil if there were no errors.
@@ -102,35 +77,47 @@ func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
 // This function returns true as soon as it finds such an item. Otherwise, it returns false.
 //
 // Any is a blocking unordered function that processes items concurrently using n goroutines.
-// The case when n = 1 is optimized: it does not spawn additional goroutines and processes items sequentially,
-// making the function ordered.
+// When n = 1, processing becomes sequential, making the function ordered.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
-	errBreak := errors.New("break")
-	res := false
-	setRes := onceFunc1(func(a bool) {
-		res = a
-	})
-
-	err := ForEach(in, n, func(a A) error {
-		ok, err := f(a)
-		if err != nil {
-			return err
-		}
-
-		if ok {
-			setRes(true)
-			return errBreak
-
-		}
-		return nil
-	})
-
-	if err != nil && errors.Is(err, errBreak) {
-		err = nil
+	var retFound bool
+	var retErr error
+	var once core.OnceWithWait
+	setReturns := func(found bool, err error) {
+		once.Do(func() {
+			retFound = found
+			retErr = err
+		})
 	}
-	return res, err
+
+	go func() {
+		core.ForEach(in, n, func(a Try[A]) {
+			if once.WasCalled() {
+				return // drain
+			}
+
+			if err := a.Error; err != nil {
+				setReturns(false, err)
+				return
+			}
+
+			ok, err := f(a.Value)
+			if err != nil {
+				setReturns(false, err)
+				return
+			}
+			if ok {
+				setReturns(true, nil)
+				return
+			}
+		})
+
+		setReturns(false, nil)
+	}()
+
+	once.Wait()
+	return retFound, retErr
 }
 
 // All checks if all items in the input stream satisfy the condition f.
@@ -138,8 +125,7 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 // including the case when the stream was empty.
 //
 // This is a blocking unordered function that processes items concurrently using n goroutines.
-// The case when n = 1 is optimized: it does not spawn additional goroutines and processes items sequentially,
-// making the function ordered.
+// When n = 1, processing becomes sequential, making the function ordered.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func All[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
