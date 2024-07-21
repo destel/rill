@@ -45,10 +45,6 @@ and expressive API. The introduction of generics in Go 1.18 opened the door to c
 operations on channels, providing a natural way to achieve this goal.
 
 
-## Installation
-```bash
-go get github.com/destel/rill
-```
 
 
 ## Example Usage
@@ -91,6 +87,10 @@ func main() {
 ```
 
 
+## Installation
+```bash
+go get -u github.com/destel/rill
+```
 
 
 ## Testing Strategy
@@ -98,8 +98,6 @@ Rill has a test coverage of over 95%, with testing focused on:
 - **Correctness**: ensuring that functions produce accurate results at different levels of concurrency
 - **Concurrency**: confirming that correct number of goroutines is spawned and utilized
 - **Ordering**: ensuring that ordered versions of functions preserve the order, while basic versions do not
-
-
 
 
 
