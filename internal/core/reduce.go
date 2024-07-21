@@ -92,7 +92,7 @@ func MapReduce[A any, K comparable, V any](in <-chan A, nm int, mapper func(A) (
 	}
 
 	// Phase 1: Map
-	mapped := MapOrFilter(in, nm, func(a A) (keyValue[K, V], bool) {
+	mapped := FilterMap(in, nm, func(a A) (keyValue[K, V], bool) {
 		k, v := mapper(a)
 		return keyValue[K, V]{k, v}, true
 	})

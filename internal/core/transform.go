@@ -1,6 +1,6 @@
 package core
 
-func MapOrFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
+func FilterMap[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
 	if in == nil {
 		return nil
 	}
@@ -17,7 +17,7 @@ func MapOrFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
 	return out
 }
 
-func OrderedMapOrFilter[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
+func OrderedFilterMap[A, B any](in <-chan A, n int, f func(A) (B, bool)) <-chan B {
 	if in == nil {
 		return nil
 	}
