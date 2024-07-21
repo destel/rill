@@ -35,7 +35,7 @@ but for channels, the complexity can quickly escalate beyond a basic for-loop as
 - Controlling concurrency level is often done with a semaphore
 - If the above approach becomes a bottleneck, worker pools must be introduced and managed manually
 - For a multi-stage pipeline, everything must be manually managed at each stage, causing complexity to grow non-linearly
-- Requirements like ordered fan-in introduce yet another level of orchestration and synchronization complexity
+- Features like ordered fan-in require even more complex orchestration and synchronization
 
 The list can be continued. And while tools like channels, ErrGroups or semaphores are powerful on their own, 
 combining them into a complex logic, can lead to code with lots of boilerplate that's difficult to write, read, and maintain. 
