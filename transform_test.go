@@ -161,6 +161,85 @@ func TestFilter(t *testing.T) {
 	})
 }
 
+func universalFilterMap[A, B any](ord bool, in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
+	if ord {
+		return OrderedFilterMap(in, n, f)
+	}
+	return FilterMap(in, n, f)
+}
+
+func TestFilterMap(t *testing.T) {
+	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
+		for _, n := range []int{1, 5} {
+
+			t.Run(th.Name("nil", n), func(t *testing.T) {
+				out := universalFilterMap(ord, nil, n, func(x int) (int, bool, error) { return x, true, nil })
+				th.ExpectValue(t, out, nil)
+			})
+
+			t.Run(th.Name("correctness", n), func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 20), nil)
+				in = replaceWithError(in, 15, fmt.Errorf("err15"))
+
+				out := universalFilterMap(ord, in, n, func(x int) (string, bool, error) {
+					if x == 5 {
+						return "", false, fmt.Errorf("err05")
+					}
+					if x == 6 {
+						return "", true, fmt.Errorf("err06")
+					}
+
+					return fmt.Sprintf("%03d", x), x%2 == 0, nil
+				})
+
+				outSlice, errSlice := toSliceAndErrors(out)
+
+				expectedSlice := make([]string, 0, 20)
+				for i := 0; i < 20; i++ {
+					if i == 5 || i == 6 || i == 15 || i%2 == 1 {
+						continue
+					}
+					expectedSlice = append(expectedSlice, fmt.Sprintf("%03d", i))
+				}
+
+				sort.Strings(outSlice)
+				sort.Strings(errSlice)
+
+				th.ExpectSlice(t, outSlice, expectedSlice)
+				th.ExpectSlice(t, errSlice, []string{"err05", "err06", "err15"})
+			})
+
+			t.Run(th.Name("ordering", n), func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 20000), nil)
+
+				out := universalFilterMap(ord, in, n, func(x int) (int, bool, error) {
+					switch x % 3 {
+					case 2:
+						return x, false, fmt.Errorf("err%06d", x)
+					case 1:
+						return x, false, nil
+					default:
+						return x, true, nil
+
+					}
+				})
+
+				outSlice, errSlice := toSliceAndErrors(out)
+
+				if ord || n == 1 {
+					th.ExpectSorted(t, outSlice)
+					th.ExpectSorted(t, errSlice)
+				} else {
+					th.ExpectUnsorted(t, outSlice)
+					th.ExpectUnsorted(t, errSlice)
+				}
+
+			})
+
+		}
+	})
+}
+
 func universalFlatMap[A, B any](ord bool, in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
 	if ord {
 		return OrderedFlatMap(in, n, f)

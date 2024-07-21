@@ -12,7 +12,7 @@ import (
 //
 // See the package documentation for more information on non-blocking unordered functions and error handling.
 func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
-	return core.MapOrFilter(in, n, func(a Try[A]) (Try[B], bool) {
+	return core.FilterMap(in, n, func(a Try[A]) (Try[B], bool) {
 		if a.Error != nil {
 			return Try[B]{Error: a.Error}, true
 		}
@@ -28,7 +28,7 @@ func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] 
 
 // OrderedMap is the ordered version of [Map].
 func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
-	return core.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[B], bool) {
+	return core.OrderedFilterMap(in, n, func(a Try[A]) (Try[B], bool) {
 		if a.Error != nil {
 			return Try[B]{Error: a.Error}, true
 		}
@@ -50,7 +50,7 @@ func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan 
 //
 // See the package documentation for more information on non-blocking unordered functions and error handling.
 func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
-	return core.MapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
+	return core.FilterMap(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error != nil {
 			return a, true // never filter out errors
 		}
@@ -66,7 +66,7 @@ func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[
 
 // OrderedFilter is the ordered version of [Filter].
 func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
-	return core.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
+	return core.OrderedFilterMap(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error != nil {
 			return a, true // never filter out errors
 		}
@@ -77,6 +77,45 @@ func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-ch
 		}
 
 		return a, keep
+	})
+}
+
+// FilterMap takes a stream of items of type A, applies a function f that can filter and transform them into items of type B.
+// Returns a new stream of transformed items that passed the filter. This operation is equivalent to a
+// [Filter] followed by a [Map].
+//
+// This is a non-blocking unordered function that processes items concurrently using n goroutines.
+// An ordered version of this function, [OrderedFilterMap], is also available.
+//
+// See the package documentation for more information on non-blocking unordered functions and error handling.
+func FilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
+	return core.FilterMap(in, n, func(a Try[A]) (Try[B], bool) {
+		if a.Error != nil {
+			return Try[B]{Error: a.Error}, true
+		}
+
+		b, keep, err := f(a.Value)
+		if err != nil {
+			return Try[B]{Error: err}, true
+		}
+
+		return Try[B]{Value: b}, keep
+	})
+}
+
+// OrderedFilterMap is the ordered version of [FilterMap].
+func OrderedFilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
+	return core.OrderedFilterMap(in, n, func(a Try[A]) (Try[B], bool) {
+		if a.Error != nil {
+			return Try[B]{Error: a.Error}, true
+		}
+
+		b, keep, err := f(a.Value)
+		if err != nil {
+			return Try[B]{Error: err}, true
+		}
+
+		return Try[B]{Value: b}, keep
 	})
 }
 
@@ -146,7 +185,7 @@ func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) 
 //
 // See the package documentation for more information on non-blocking unordered functions and error handling.
 func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
-	return core.MapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
+	return core.FilterMap(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error == nil {
 			return a, true
 		}
@@ -162,7 +201,7 @@ func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 
 // OrderedCatch is the ordered version of [Catch].
 func OrderedCatch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
-	return core.OrderedMapOrFilter(in, n, func(a Try[A]) (Try[A], bool) {
+	return core.OrderedFilterMap(in, n, func(a Try[A]) (Try[A], bool) {
 		if a.Error == nil {
 			return a, true
 		}

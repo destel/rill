@@ -407,6 +407,41 @@ func ExampleOrderedFilter() {
 	printStream(evens)
 }
 
+func ExampleFilterMap() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Keep only odd numbers and square them
+	// Concurrency = 3; Unordered
+	squares := rill.FilterMap(numbers, 3, func(x int) (int, bool, error) {
+		if x%2 == 0 {
+			return 0, false, nil
+		}
+
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
+		return x * x, true, nil
+	})
+
+	printStream(squares)
+}
+
+// The same example as for the [FilterMap], but using ordered versions of functions.
+func ExampleOrderedFilterMap() {
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Keep only odd numbers and square them
+	// Concurrency = 3; Ordered
+	squares := rill.OrderedFilterMap(numbers, 3, func(x int) (int, bool, error) {
+		if x%2 == 0 {
+			return 0, false, nil
+		}
+
+		randomSleep(1000 * time.Millisecond) // simulate some additional work
+		return x * x, true, nil
+	})
+
+	printStream(squares)
+}
+
 func ExampleFirst() {
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
