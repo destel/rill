@@ -63,6 +63,31 @@ func TestReduce(t *testing.T) {
 			}
 		})
 
+		// This one is needed to cover the case when the first argument
+		// of user function is an error.
+		t.Run(th.Name("error in first input item", n), func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 1000), nil)
+			in = replaceWithError(in, 0, fmt.Errorf("err0"))
+
+			var cnt atomic.Int64
+			_, _, err := Reduce(in, n, func(x, y int) (int, error) {
+				cnt.Add(1)
+				return x + y, nil
+			})
+
+			th.ExpectError(t, err, "err0")
+			if cnt.Load() > 100 {
+				t.Errorf("early exit did not happen")
+			}
+
+			time.Sleep(1 * time.Second)
+
+			th.ExpectDrainedChan(t, in)
+			if cnt.Load() > 100 {
+				t.Errorf("extra calls to f were made")
+			}
+		})
+
 		t.Run(th.Name("error in func", n), func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 
