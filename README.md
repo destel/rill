@@ -360,8 +360,7 @@ func main() {
 ## Performance
 Rill's performance is primarily bounded by the performance of channel operations. As a result, applications that
 already use channels and channel-based concurrency patterns can expect minimal overhead when adopting Rill.
-Moreover, Rill outperforms some traditional concurrency patterns that spawn a goroutine for each channel item and use a semaphore
-to control the level of concurrency. For example, Rill's ForEach function while being more concise, outperforms the errgroup.Go + errgroup.SetLimit pattern
-both in terms of speed and number of allocations. For more details, refer to the [benchmarks](https://github.com/destel/rill/wiki/Benchmarks).
+Additionally, Rill does fewer allocations compared to some traditional concurrency patterns that spawn a goroutine 
+for each channel item and use a semaphore to control the level of concurrency. For more details, refer to the [benchmarks](https://github.com/destel/rill/wiki/Benchmarks).
 
 This makes Rill well-suited for a wide range of tasks, especially I/O-bound workloads where the overhead of channel operations is typically negligible.
