@@ -27,7 +27,7 @@ func busySleep(d time.Duration) {
 	}
 }
 
-func runBenchmark[B any](b *testing.B, name string, body func(in <-chan Try[int]) <-chan B) {
+func runBenchmark(b *testing.B, name string, body func(in <-chan Try[int])) {
 	b.Run(name, func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			b.StopTimer()
@@ -37,11 +37,7 @@ func runBenchmark[B any](b *testing.B, name string, body func(in <-chan Try[int]
 
 			go func() {
 				defer close(done)
-				out := body(in)
-
-				if out != nil {
-					Drain(out)
-				}
+				body(in)
 			}()
 
 			// Give body a some time to spawn goroutines
@@ -67,7 +63,7 @@ func runBenchmark[B any](b *testing.B, name string, body func(in <-chan Try[int]
 //// This benchmark uses classic goroutine-per-item + semaphore pattern.
 //func BenchmarkErrGroupWithSetLimit(b *testing.B) {
 //	for _, n := range []int{1, 2, 4, 8} {
-//		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
+//		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) {
 //			var eg errgroup.Group
 //			eg.SetLimit(n)
 //
@@ -83,15 +79,14 @@ func runBenchmark[B any](b *testing.B, name string, body func(in <-chan Try[int]
 //			}
 //
 //			_ = eg.Wait()
-//			return nil
 //		})
 //	}
 //}
 //
-//// This benchmark uses much less common pattern of creating a worker pool with errgroup.
+//// This benchmark uses much less common worker pool pattern.
 //func BenchmarkErrGroupWithWorkerPool(b *testing.B) {
 //	for _, n := range []int{1, 2, 4, 8} {
-//		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
+//		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) {
 //			var eg errgroup.Group
 //			for i := 0; i < n; i++ {
 //				eg.Go(func() error {
@@ -105,42 +100,41 @@ func runBenchmark[B any](b *testing.B, name string, body func(in <-chan Try[int]
 //				})
 //			}
 //			_ = eg.Wait()
-//			return nil
 //		})
 //	}
 //}
 
 func BenchmarkForEach(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
-		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
+		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) {
 			_ = ForEach(in, n, func(x int) error {
 				benchmarkIteration()
 				return nil
 			})
-			return nil
 		})
 	}
 }
 
 func BenchmarkMapAndDrain(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
-		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan Try[int] {
-			return Map(in, n, func(x int) (int, error) {
+		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) {
+			out := Map(in, n, func(x int) (int, error) {
 				benchmarkIteration()
 				return x, nil
 			})
+
+			Drain(out)
 		})
 	}
 }
 
 func BenchmarkReduce(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
-		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) <-chan int {
+		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) {
 			_, _, _ = Reduce(in, n, func(x, y int) (int, error) {
 				benchmarkIteration()
 				return x, nil
 			})
-			return nil
 		})
 	}
 }
