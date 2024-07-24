@@ -1,5 +1,7 @@
 package rill
 
+import "github.com/destel/rill/internal/core"
+
 // Try is a container holding a value of type A or an error
 type Try[A any] struct {
 	Value A
@@ -156,4 +158,50 @@ func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 	}()
 
 	return out, errs
+}
+
+// FromIterSeq converts a iterator into a stream.
+// If err is not nil function returns a stream with a single error.
+//
+// Such function signature allows concise wrapping of functions that return an iterator and an error:
+//
+//	stream := rill.FromIterSeq(someFunc())
+func FromIterSeq[A any](seq func(func(A) bool), err error) <-chan Try[A] {
+	if seq == nil && err == nil {
+		return nil
+	}
+	if err != nil {
+		out := make(chan Try[A], 1)
+		out <- Try[A]{Error: err}
+		close(out)
+		return out
+
+	}
+
+	out := make(chan Try[A])
+	go func() {
+		seq(func(a A) bool {
+			out <- Try[A]{Value: a}
+			return true
+		})
+		close(out)
+	}()
+	return out
+}
+
+// ToIterSeq converts an input stream into a Iterator over sequence of value and error.
+//
+// This is a blocking ordered function that processes items sequentially.
+// For error handling, ToIterSeq is different from ToSlice; it does not simply return the
+// first encountered error. Instead, ToIterSeq will iterate all values along with error if any,
+// allowing the client to determine when to stop.
+func ToIterSeq[A any](in <-chan Try[A]) func(func(A, error) bool) {
+	return func(yield func(A, error) bool) {
+		defer core.DrainNB(in)
+		for x := range in {
+			if !yield(x.Value, x.Error) {
+				return
+			}
+		}
+	}
 }
