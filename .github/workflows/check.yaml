@@ -2,8 +2,9 @@ name: Check
 
 on:
   push:
-    branches: [ "**" ]
+    branches: [ "main" ]
     tags-ignore: [ "**" ]
+  pull_request:
 
 
 jobs:
