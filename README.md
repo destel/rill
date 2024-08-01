@@ -233,6 +233,8 @@ Rill provides several blocking functions out of the box:
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ForEach)
 - **ToSlice:** Collects all stream items into a slice.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ToSlice)
+- **ToSeq2:**: Convert the stream items to a value-errors paris iterator.
+  [Example](https://pkg.go.dev/github.com/destel/rill#example-ToSeq2)
 - **Reduce:** Concurrently reduces the stream to a single value, using a user provided reducer function.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Reduce)
 - **MapReduce:** Performs a concurrent MapReduce operation one the stream, reducing it to Go map,
@@ -354,6 +356,40 @@ func main() {
 	fmt.Println("Error:", err)
 }
 ```
+
+## 1.23 iterator integration
+Starting from Golang 1.23, the language supports the "for-range" function. This
+allows users to directly use a for loop on an iterator in the iter package.
+
+The Rill library supports using FromSeq2 or FromSeq to convert an iterator into
+a stream. It also supports using ToSeq2 to convert a stream into value-error
+pairs iterator.
+
+```go
+func genPositive(to int) iter.Seq2[int, error] {
+	return func(yield func(i int, err error) bool) {
+		for i := 1; i <= to; i++ {
+			if !yield(i, nil) {
+				return
+			}
+		}
+	}
+}
+
+func main() {
+	nums := rill.FromSeq2(genPositive(40))
+	doubleNums := rill.Map(nums, 4, func(x int) (int, error) {
+		return x * x, nil
+	})
+	for val, err := range rill.ToSeq2(doubleNums) {
+		fmt.Println(val, err)
+        // Just want to print the first result and discard the other values.
+        // Don't worry about goroutine leak here. rill handle it for you.
+        break
+	}
+}
+```
+
 
 
 
