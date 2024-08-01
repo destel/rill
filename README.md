@@ -383,9 +383,9 @@ func main() {
 	})
 	for val, err := range rill.ToSeq2(doubleNums) {
 		fmt.Println(val, err)
-        // Just want to print the first result and discard the other values.
-        // Don't worry about goroutine leak here. rill handle it for you.
-        break
+		// Just want to print the first result and discard the other values.
+		// Don't worry about goroutine leak here. rill handle it for you.
+		break
 	}
 }
 ```
