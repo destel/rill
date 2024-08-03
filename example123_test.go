@@ -10,12 +10,12 @@ import (
 	"github.com/destel/rill"
 )
 
-func Example_ToSeq2() {
+func ExampleToSeq2() {
 	nums := rill.FromSeq2(genPositive(40))
-	doubleNums := rill.Map(nums, 4, func(x int) (int, error) {
+	squares := rill.Map(nums, 4, func(x int) (int, error) {
 		return x * x, nil
 	})
-	for val, err := range rill.ToSeq2(doubleNums) {
+	for val, err := range rill.ToSeq2(squares) {
 		fmt.Println(val, err)
 	}
 }
