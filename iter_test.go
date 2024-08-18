@@ -72,6 +72,11 @@ func TestToSeq2(t *testing.T) {
 }
 
 func TestFromSeq(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		in := FromSeq[int](nil, nil)
+		th.ExpectValue(t, in, nil)
+	})
+
 	t.Run("normal ", func(t *testing.T) {
 		in := FromSeq(rangeInt(0, 20), nil)
 
@@ -91,29 +96,36 @@ func TestFromSeq(t *testing.T) {
 }
 
 func TestFromSeq2(t *testing.T) {
-	// generate from 0 to 7, and when the value is  5, yield error
-	err5 := errors.New("err5")
-	gen := func(yield func(x int, err error) bool) {
-		for i := 0; i < 8; i++ {
-			var err error
-			if i == 5 {
-				err = err5
-			}
-			if !yield(i, err) {
-				break
+	t.Run("nil", func(t *testing.T) {
+		in := FromSeq2[int](nil)
+		th.ExpectValue(t, in, nil)
+	})
+
+	t.Run("normal", func(t *testing.T) {
+		// generate from 0 to 7, and when the value is  5, yield error
+		err5 := errors.New("err5")
+		gen := func(yield func(x int, err error) bool) {
+			for i := 0; i < 8; i++ {
+				var err error
+				if i == 5 {
+					err = err5
+				}
+				if !yield(i, err) {
+					break
+				}
 			}
 		}
-	}
 
-	in := FromSeq2(gen)
+		in := FromSeq2(gen)
 
-	var outSlice []int
-	var outError []error
-	for a := range in {
-		outSlice = append(outSlice, a.Value)
-		outError = append(outError, a.Error)
-	}
+		var outSlice []int
+		var outError []error
+		for a := range in {
+			outSlice = append(outSlice, a.Value)
+			outError = append(outError, a.Error)
+		}
 
-	th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7})
-	th.ExpectSlice(t, outError, []error{nil, nil, nil, nil, nil, err5, nil, nil})
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7})
+		th.ExpectSlice(t, outError, []error{nil, nil, nil, nil, nil, err5, nil, nil})
+	})
 }
