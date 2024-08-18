@@ -365,7 +365,7 @@ Rill provides **FromSeq** and **FromSeq2** functions to convert an iterator into
 a stream. Additionally, there's a **ToSeq2** function to convert a stream back into an iterator.
 
 **ToSeq2** can be a good alternative to **ForEach** when concurrency is not needed. 
-It gives more control and performs all necessary cleanup and draining, even if the loop is terminated early using break or return.
+It gives more control and performs all necessary cleanup and draining, even if the loop is terminated early using *break* or *return*.
 
 [Full runnable example](https://pkg.go.dev/github.com/destel/rill#example-ToSeq2)
 
