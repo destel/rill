@@ -232,7 +232,7 @@ Rill provides several blocking functions out of the box:
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ForEach)
 - **ToSlice:** Collects all stream items into a slice.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ToSlice)
-- **ToSeq2:**: Convert the stream items to a value-errors paris iterator.
+- **ToSeq2:**: Converts a stream into an iterator of value-error pairs.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ToSeq2)
 - **Reduce:** Concurrently reduces the stream to a single value, using a user provided reducer function.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Reduce)
@@ -362,7 +362,7 @@ for use in for-range loops. This feature enables Rill to integrate seamlessly wi
 in the standard library and third-party packages.
 
 Rill provides **FromSeq** and **FromSeq2** functions to convert an iterator into
-a stream. Additionally there's **ToSeq2** function to convert a stream back into an iterator.
+a stream. Additionally, there's a **ToSeq2** function to convert a stream back into an iterator.
 
 **ToSeq2** can be a good alternative to **ForEach** when concurrency is not needed. 
 It gives more control and performs all necessary cleanup and draining, even if the loop is terminated early using break or return.
