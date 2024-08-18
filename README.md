@@ -368,7 +368,7 @@ a stream. Additionally, there's a **ToSeq2** function to convert a stream back i
 **ToSeq2** can be a good alternative to **ForEach** when concurrency is not needed. 
 It gives more control and performs all necessary cleanup and draining, even if the loop is terminated early using *break* or *return*.
 
-> Note: Due to a temporary issue, the documentation for these new functions may not be visible on https://pkg.go.dev.
+> Note: Due to a temporary issue, the documentation and examples for these new functions may not be visible on [pkg.go.dev](https://pkg.go.dev).
 > In the meantime, you can view the documentation by inspecting the source code or by running
 > `go doc -all github.com/destel/rill` in your project directory.
 
