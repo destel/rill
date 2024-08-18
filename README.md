@@ -1,10 +1,11 @@
-# Rill [![GoDoc](https://pkg.go.dev/badge/github.com/destel/rill)](https://pkg.go.dev/github.com/destel/rill) [![Go Report Card](https://goreportcard.com/badge/github.com/destel/rill)](https://goreportcard.com/report/github.com/destel/rill) [![codecov](https://codecov.io/gh/destel/rill/graph/badge.svg?token=252K8OQ7E1)](https://codecov.io/gh/destel/rill) 
+# Rill [![GoDoc](https://pkg.go.dev/badge/github.com/destel/rill)](https://pkg.go.dev/github.com/destel/rill) [![Go Report Card](https://goreportcard.com/badge/github.com/destel/rill)](https://goreportcard.com/report/github.com/destel/rill) [![codecov](https://codecov.io/gh/destel/rill/graph/badge.svg?token=252K8OQ7E1)](https://codecov.io/gh/destel/rill) [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go) 
 Rill (noun: a small stream) is a Go toolkit that offers a collection of easy-to-use functions for concurrency, streaming,
 batching and pipeline construction. It abstracts away the complexities of concurrency, removes boilerplate, 
 provides a structured way to handle errors and allows developers to focus on core logic.
 Whether you need to perform a basic concurrent ForEach or construct a complex multi-stage processing pipeline,
 Rill has got you covered.
 
+  
 
 
 ## Key Features
