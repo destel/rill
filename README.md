@@ -232,7 +232,7 @@ Rill provides several blocking functions out of the box:
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ForEach)
 - **ToSlice:** Collects all stream items into a slice.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ToSlice)
-- **ToSeq2:**: Converts a stream into an iterator of value-error pairs.
+- **ToSeq2:** Converts a stream into an iterator of value-error pairs.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ToSeq2)
 - **Reduce:** Concurrently reduces the stream to a single value, using a user provided reducer function.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Reduce)
