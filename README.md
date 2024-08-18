@@ -22,8 +22,8 @@ Rill has got you covered.
 
 
 ## Motivation
-Rill is not an iterator library or a functional programming library, though it may look like one. 
-It's a concurrency library built specifically for Go channels.
+Rill might look like an iterator or functional programming library, but 
+at its core it's a concurrency library made specifically for Go channels.
 
 There is a consensus in the Go community that functional programming style operations like Map, Filter, ForEach and others are 
 not idiomatic in Go, and that basic for-loops are better, faster, and more concise. This is true for slices, 
@@ -37,13 +37,12 @@ but for channels, the complexity can quickly escalate beyond a basic for-loop as
 - For a multi-stage pipeline, everything must be manually managed at each stage, causing complexity to grow non-linearly
 - Features like batching or ordered fan-in require even more complex orchestration and synchronization
 
-The list can be continued. And while tools like channels, ErrGroups or semaphores are powerful on their own, 
+These increasing levels of complexity introduce several challenges. While tools like channels, ErrGroups or semaphores are powerful on their own, 
 combining them into a more complex logic, can lead to code with lots of boilerplate that's difficult to write, read, and maintain. 
 
 Rill was born out of the desire to remove code duplication and to encapsulate all this complexity in a library with a 
 simple, composable, and expressive API. The introduction of generics in Go 1.18 opened the door to creating 
 functional-style operations on channels, providing a natural way to achieve this goal.
-
 
 
 
@@ -357,15 +356,30 @@ func main() {
 }
 ```
 
-## 1.23 iterator integration
-Starting from Golang 1.23, the language supports the "for-range" function. This
-allows users to directly use a for loop on an iterator in the iter package.
+## Go 1.23 iterators integration
+Starting from Go 1.23, the language supports *range over function*, allowing users to define custom iterators 
+for use in for-range loops. This feature enables Rill to integrate seamlessly with existing iterator-based functions
+in the standard library and third-party packages.
 
-The Rill library supports using FromSeq2 or FromSeq to convert an iterator into
-a stream. It also supports using ToSeq2 to convert a stream into value-error
-pairs iterator.
+Rill provides **FromSeq** and **FromSeq2** functions to convert an iterator into
+a stream. Additionally there's **ToSeq2** function to convert a stream back into an iterator.
+
+**ToSeq2** can be a good alternative to ForEach when concurrency is not needed. 
+It performs all necessary cleanup and draining, even if the loop is terminated early using break or return.
+
+[Full runnable example](https://pkg.go.dev/github.com/destel/rill#example-ToSeq2)
 
 ```go
+func main() {
+	nums := rill.FromSeq2(genPositive(40))
+	squares := rill.Map(nums, 4, func(x int) (int, error) {
+		return x * x, nil
+	})
+	for val, err := range rill.ToSeq2(squares) {
+		fmt.Println(val, err)
+	}
+}
+
 func genPositive(to int) iter.Seq2[int, error] {
 	return func(yield func(i int, err error) bool) {
 		for i := 1; i <= to; i++ {
@@ -373,19 +387,6 @@ func genPositive(to int) iter.Seq2[int, error] {
 				return
 			}
 		}
-	}
-}
-
-func main() {
-	nums := rill.FromSeq2(genPositive(40))
-	doubleNums := rill.Map(nums, 4, func(x int) (int, error) {
-		return x * x, nil
-	})
-	for val, err := range rill.ToSeq2(doubleNums) {
-		fmt.Println(val, err)
-		// Just want to print the first result and discard the other values.
-		// Don't worry about goroutine leak here. rill handle it for you.
-		break
 	}
 }
 ```
