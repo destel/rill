@@ -1,5 +1,4 @@
 //go:build go1.23
-// +build go1.23
 
 package rill
 
@@ -7,7 +6,7 @@ import (
 	"iter"
 )
 
-// FromSeq converts a iterator into a stream.
+// FromSeq converts an iterator into a stream.
 // If err is not nil function returns a stream with a single error.
 //
 // Such function signature allows concise wrapping of functions that return an
@@ -36,7 +35,7 @@ func FromSeq[A any](seq iter.Seq[A], err error) <-chan Try[A] {
 	return out
 }
 
-// FromSeq2 converts a value-error pairs sequence into a stream.
+// FromSeq2 converts an iterator of value-error pairs into a stream.
 func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 	if seq == nil {
 		return nil
@@ -52,12 +51,14 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 	return out
 }
 
-// ToSeq2 converts an input stream into a sequence of value-error paris.
+// ToSeq2 converts an input stream into an iterator of value-error pairs.
 //
-// This is a blocking ordered function that processes items sequentially. For
-// error handling, ToSeq2 is different from ToSlice; it does not simply return
-// the first encountered error. Instead, ToIterSeq will iterate all value-error
-// paris, allowing the client to decide when to stop.
+// This is a blocking ordered function that processes items sequentially.
+// It does not return on the first encountered error. Instead, it iterates over all value-error
+// pairs, either until the input stream is fully consumed or the loop is broken by the caller.
+// So all error handling, if needed, should be done inside the iterator (for-range loop body).
+//
+// See the package documentation for more information on blocking ordered functions.
 func ToSeq2[A any](in <-chan Try[A]) iter.Seq2[A, error] {
 	return func(yield func(A, error) bool) {
 		defer DrainNB(in)
