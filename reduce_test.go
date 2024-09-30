@@ -138,15 +138,15 @@ func TestMapReduce(t *testing.T) {
 			t.Run(th.Name("no errors", nm, nr), func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 
-				var cntMap, cntReduce int64
+				var cntMap, cntReduce atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						atomic.AddInt64(&cntMap, 1)
+						cntMap.Add(1)
 						s := fmt.Sprint(x)
 						return fmt.Sprintf("%d-digit", len(s)), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						atomic.AddInt64(&cntReduce, 1)
+						cntReduce.Add(1)
 						return x + y, nil
 					},
 				)
@@ -157,8 +157,8 @@ func TestMapReduce(t *testing.T) {
 					"2-digit": (10 + 99) * 90 / 2,
 					"3-digit": (100 + 999) * 900 / 2,
 				})
-				th.ExpectValue(t, cntMap, 1000)
-				th.ExpectValue(t, cntReduce, 9+89+899)
+				th.ExpectValue(t, cntMap.Load(), 1000)
+				th.ExpectValue(t, cntReduce.Load(), 9+89+899)
 				th.ExpectDrainedChan(t, in)
 			})
 
