@@ -31,7 +31,20 @@ func TestFromSlice(t *testing.T) {
 
 	t.Run("no errors", func(t *testing.T) {
 		inSlice := make([]int, 20)
-		for i := 0; i < 20; i++ {
+		for i := range inSlice {
+			inSlice[i] = i
+		}
+
+		in := FromSlice(inSlice, nil)
+		outSlice, err := ToSlice(in)
+
+		th.ExpectSlice(t, outSlice, inSlice)
+		th.ExpectNoError(t, err)
+	})
+
+	t.Run("no errors large", func(t *testing.T) {
+		inSlice := make([]int, 4000)
+		for i := range inSlice {
 			inSlice[i] = i
 		}
 
