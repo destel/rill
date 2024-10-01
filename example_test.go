@@ -720,6 +720,7 @@ func getTemperature(city string, date time.Time) (float64, error) {
 
 	// Simulate a temperature reading, by retuning a pseudo-random, but deterministic value
 	temp := 15 - 10*math.Sin(cityHash+float64(date.Unix()))
+	temp = math.Round(temp*10) / 10 // Round to one decimal place
 
 	return temp, nil
 }
