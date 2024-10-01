@@ -9,7 +9,7 @@ import (
 // A batch is emitted when it reaches the maximum size, the timeout expires, or the input channel closes.
 // This function never emits empty batches. The timeout countdown starts when the first item is added to a new batch.
 // To emit batches only when full, set the timeout to -1. Zero timeout is not supported and will panic.
-func Batch[A any](in <-chan A, n int, timeout time.Duration) <-chan []A {
+func Batch[A any](in <-chan A, size int, timeout time.Duration) <-chan []A {
 	if in == nil {
 		return nil
 	}
@@ -27,9 +27,9 @@ func Batch[A any](in <-chan A, n int, timeout time.Duration) <-chan []A {
 			var batch []A
 			for a := range in {
 				batch = append(batch, a)
-				if len(batch) >= n {
+				if len(batch) >= size {
 					out <- batch
-					batch = make([]A, 0, n)
+					batch = make([]A, 0, size)
 				}
 			}
 			if len(batch) > 0 {
@@ -40,14 +40,14 @@ func Batch[A any](in <-chan A, n int, timeout time.Duration) <-chan []A {
 	default:
 		// finite timeout
 		go func() {
-			batch := make([]A, 0, n)
+			batch := make([]A, 0, size)
 			t := time.NewTicker(1 * time.Hour)
 			t.Stop()
 
 			flush := func() {
 				if len(batch) > 0 {
 					out <- batch
-					batch = make([]A, 0, n)
+					batch = make([]A, 0, size)
 				}
 
 				t.Stop()
@@ -81,7 +81,7 @@ func Batch[A any](in <-chan A, n int, timeout time.Duration) <-chan []A {
 						t.Reset(timeout)
 					}
 
-					if len(batch) >= n {
+					if len(batch) >= size {
 						// batch is full
 						flush()
 					}
