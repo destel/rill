@@ -11,21 +11,21 @@ import (
 func TestOnceWithWait(t *testing.T) {
 	t.Run("Do called once", func(t *testing.T) {
 		var o OnceWithWait
-		var calls int64
+		var calls atomic.Int64
 
 		th.ExpectValue(t, o.WasCalled(), false)
 
 		for i := 0; i < 5; i++ {
 			go func() {
 				o.Do(func() {
-					atomic.AddInt64(&calls, 1)
+					calls.Add(1)
 				})
 			}()
 		}
 
 		time.Sleep(1 * time.Second)
 
-		th.ExpectValue(t, atomic.LoadInt64(&calls), 1)
+		th.ExpectValue(t, calls.Load(), 1)
 		th.ExpectValue(t, o.WasCalled(), true)
 	})
 

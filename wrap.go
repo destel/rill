@@ -23,6 +23,8 @@ func Wrap[A any](value A, err error) Try[A] {
 //
 //	stream := rill.FromSlice(someFunc())
 func FromSlice[A any](slice []A, err error) <-chan Try[A] {
+	const maxBufferSize = 512
+
 	if err != nil {
 		out := make(chan Try[A], 1)
 		out <- Try[A]{Error: err}
@@ -30,11 +32,21 @@ func FromSlice[A any](slice []A, err error) <-chan Try[A] {
 		return out
 	}
 
-	out := make(chan Try[A], len(slice))
-	for _, a := range slice {
-		out <- Try[A]{Value: a}
+	sendAll := func(in []A, out chan Try[A]) {
+		for _, a := range in {
+			out <- Try[A]{Value: a}
+		}
+		close(out)
 	}
-	close(out)
+
+	if len(slice) <= maxBufferSize {
+		out := make(chan Try[A], len(slice))
+		sendAll(slice, out)
+		return out
+	}
+
+	out := make(chan Try[A], maxBufferSize)
+	go sendAll(slice, out)
 	return out
 }
 

@@ -9,7 +9,7 @@ import (
 // Batch take a stream of items and returns a stream of batches based on a maximum size and a timeout.
 //
 // A batch is emitted when one of the following conditions is met:
-//   - The batch reaches the size of n items
+//   - The batch reaches the maximum size
 //   - The time since the first item was added to the batch exceeds the timeout
 //   - The input stream is closed
 //
@@ -19,9 +19,9 @@ import (
 // This is a non-blocking ordered function that processes items sequentially.
 //
 // See the package documentation for more information on non-blocking ordered functions and error handling.
-func Batch[A any](in <-chan Try[A], n int, timeout time.Duration) <-chan Try[[]A] {
+func Batch[A any](in <-chan Try[A], size int, timeout time.Duration) <-chan Try[[]A] {
 	values, errs := ToChans(in)
-	batches := core.Batch(values, n, timeout)
+	batches := core.Batch(values, size, timeout)
 	return FromChans(batches, errs)
 }
 

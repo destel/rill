@@ -1,7 +1,6 @@
 package core
 
 import (
-	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -29,27 +28,42 @@ func TestLoop(t *testing.T) {
 				in := th.FromRange(0, 20)
 				done := make(chan struct{})
 
-				sum := int64(0)
+				var sum atomic.Int64
 
 				universalLoop(ord, in, done, n, func(x int, canWrite <-chan struct{}) {
 					<-canWrite
-					atomic.AddInt64(&sum, int64(x))
+					sum.Add(int64(x))
 				})
 
 				<-done
-				th.ExpectValue(t, sum, 19*20/2)
+				th.ExpectValue(t, sum.Load(), 19*20/2)
 			})
 
-			t.Run(th.Name("concurrency and ordering", n), func(t *testing.T) {
+			t.Run(th.Name("concurrency", n), func(t *testing.T) {
+				in := th.FromRange(0, 100)
+				out := make(chan int)
+
+				monitor := th.NewConcurrencyMonitor(1 * time.Second)
+
+				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
+					monitor.Inc()
+					defer monitor.Dec()
+
+					<-canWrite
+
+					out <- x
+				})
+
+				Drain(out)
+
+				th.ExpectValue(t, monitor.Max(), n)
+			})
+
+			t.Run(th.Name("ordering", n), func(t *testing.T) {
 				in := th.FromRange(0, 20000)
 				out := make(chan int)
 
-				var inProgress th.InProgressCounter
-
 				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
-					inProgress.Inc()
-					runtime.Gosched()
-					inProgress.Dec()
 
 					<-canWrite
 
@@ -57,8 +71,6 @@ func TestLoop(t *testing.T) {
 				})
 
 				outSlice := th.ToSlice(out)
-
-				th.ExpectValue(t, inProgress.Max(), n)
 
 				if ord || n == 1 {
 					th.ExpectSorted(t, outSlice)
@@ -77,13 +89,13 @@ func TestForEach(t *testing.T) {
 		t.Run(th.Name("correctness", n), func(t *testing.T) {
 			in := th.FromRange(0, 20)
 
-			sum := int64(0)
+			var sum atomic.Int64
 
 			ForEach(in, n, func(x int) {
-				atomic.AddInt64(&sum, int64(x))
+				sum.Add(int64(x))
 			})
 
-			th.ExpectValue(t, sum, 19*20/2)
+			th.ExpectValue(t, sum.Load(), 19*20/2)
 		})
 
 		t.Run(th.Name("concurrency", n), func(t *testing.T) {
