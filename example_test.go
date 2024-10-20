@@ -1,13 +1,10 @@
 package rill_test
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"hash/fnv"
-	"io"
-	"math"
 	"math/rand"
 	"regexp"
 	"strconv"
@@ -16,11 +13,6 @@ import (
 
 	"github.com/destel/rill"
 )
-
-type Measurement struct {
-	Date time.Time
-	Temp float64
-}
 
 type User struct {
 	ID       int
@@ -33,10 +25,7 @@ type User struct {
 // This example demonstrates a Rill pipeline that fetches users from an API,
 // and updates their status to active and saves them back. Both operations are done concurrently.
 func Example() {
-	// In case of early exit this will cancel the user fetching,
-	// which in turn will terminate the entire pipeline.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
 
 	// Start with a stream of user ids
 	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
@@ -59,33 +48,21 @@ func Example() {
 		return saveUser(ctx, u)
 	})
 
+	// Handle errors
 	fmt.Println("Error:", err)
 }
 
-// This example showcases the use of Rill for building a multi-stage data processing pipeline,
-// with a focus on batch processing. It streams user ids from a remote file, then fetches users from an API in batches,
-// updates their status to active, and saves them back. All operations are done concurrently.
+// This example demonstrates a Rill pipeline that fetches users from an API,
+// and updates their status to active and saves them back.
+// Users are fetched concurrently and in batches to reduce the number of API calls.
 func Example_batching() {
-	// In case of early exit this will cancel the file streaming,
-	// which in turn will terminate the entire pipeline.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
 
-	// Stream a file with user ids as an io.Reader
-	reader, err := downloadFile(ctx, "http://example.com/user_ids1.txt")
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	// Transform the reader into a stream of words
-	lines := streamLines(reader)
-
-	// Parse lines as integers
-	// Concurrency = 3
-	ids := rill.Map(lines, 3, func(line string) (int, error) {
-		return strconv.Atoi(line)
-	})
+	// Start with a stream of user ids
+	ids := rill.FromSlice([]int{
+		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+		21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+	}, nil)
 
 	// Group IDs into batches of 5 for bulk processing
 	idBatches := rill.Batch(ids, 5, 1*time.Second)
@@ -93,15 +70,15 @@ func Example_batching() {
 	// Fetch users for each batch of IDs
 	// Concurrency = 3
 	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*User, error) {
-		return getUsers(ctx, ids...)
+		return getUsers(ctx, ids)
 	})
 
-	// Transform batches back into a stream of users
+	// Transform stream of batches back into a stream of users
 	users := rill.Unbatch(userBatches)
 
 	// Activate users.
 	// Concurrency = 2
-	err = rill.ForEach(users, 2, func(u *User) error {
+	err := rill.ForEach(users, 2, func(u *User) error {
 		if u.IsActive {
 			fmt.Printf("User %d is already active\n", u.ID)
 			return nil
@@ -109,6 +86,94 @@ func Example_batching() {
 
 		u.IsActive = true
 		return saveUser(ctx, u)
+	})
+
+	// Handle errors
+	fmt.Println("Error:", err)
+}
+
+// This example demonstrates how batching can be used to group similar concurrent database updates into a single query.
+// The UpdateUserTimestamp function is used to update the last_active_at column in the users table. Updates are not
+// executed immediately, but rather queued and then sent to the database in batches of up to 5.
+// When updates are sparse it can take some time to collect a full batch. In this case the [Batch] function
+// emits partial batches, ensuring that updates are delayed by at most 100ms.
+//
+// For simplicity, this example does not have retries, error handling and synchronization
+func Example_batching_updatesGrouping() {
+	// Start the background worker that will process the updates
+	go updateUserTimestampWorker()
+
+	// Do some updates. They'll be grouped and sent in the background.
+	UpdateUserTimestamp(1)
+	UpdateUserTimestamp(2)
+	UpdateUserTimestamp(3)
+	UpdateUserTimestamp(4)
+	UpdateUserTimestamp(5)
+	UpdateUserTimestamp(6)
+	UpdateUserTimestamp(7)
+
+	// Wait for the updates to be processed
+	// In real-world applications, different synchronization mechanisms would be used.
+	time.Sleep(2 * time.Second)
+}
+
+// This is the queue of user IDs to update.
+var userIDsToUpdate = make(chan int)
+
+// UpdateUserTimestamp is the public function to update the last_active_at column in the users table.
+func UpdateUserTimestamp(userID int) {
+	userIDsToUpdate <- userID
+}
+
+func updateUserTimestampWorker() {
+	// convert channel of userIDsStream into a stream
+	ids := rill.FromChan(userIDsToUpdate, nil)
+
+	// Group IDs into batches of 5 for bulk processing
+	// In case of sparse updates, we want to send them to the database no later than 100ms after they were queued.
+	idBatches := rill.Batch(ids, 5, 100*time.Millisecond)
+
+	// Send updates to the database
+	// Concurrency = 1 (this controls max number of concurrent updates)
+	_ = rill.ForEach(idBatches, 1, func(batch []int) error {
+		randomSleep(1 * time.Second)
+		fmt.Printf("Executed: UPDATE users SET last_active_at = NOW() WHERE id IN (%v)\n", batch)
+		return nil
+	})
+}
+
+// Imagine a situation where it's needed to download and process a list of 50 large files, and
+// then write processing results in the same order as in the original list.
+// Downloading files one-by-one would be slow, and downloading all files at once would consume too much memory.
+// The solution is to download some fixed number of files concurrently, but then it becomes a challenging to
+// write the results in the correct order.
+//
+// In this example [OrderedMap] is used to download up to 5 files concurrently, and then [ForEach] is used to
+// process (print) the results
+func Example_ordering() {
+	ctx := context.Background()
+
+	// Generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-49.txt
+	urls := make(chan rill.Try[string])
+	go func() {
+		defer close(urls)
+		for i := 0; i < 50; i++ {
+			urls <- rill.Try[string]{
+				Value: fmt.Sprintf("http://example.com/file-%d.txt", i),
+			}
+		}
+	}()
+
+	// Download files
+	// At most 5 files are downloaded and held in memory at the same time
+	files := rill.OrderedMap(urls, 5, func(url string) ([]byte, error) {
+		return downloadFile(ctx, url)
+	})
+
+	// Process (print) files in the correct order
+	err := rill.ForEach(files, 1, func(file []byte) error {
+		fmt.Println(string(file))
+		return nil
 	})
 
 	fmt.Println("Error:", err)
@@ -143,69 +208,14 @@ func Example_fanIn_FanOut() {
 	fmt.Println("Error:", err)
 }
 
-// This example demonstrates how [OrderedMap] can be used to enforce ordering of processing results.
-// Pipeline below fetches temperature measurements for a city and calculates daily temperature changes.
-// Measurements are fetched concurrently, but ordered processing is used to calculate the changes.
-func Example_ordering() {
-	city := "New York"
-	endDate := time.Now()
-	startDate := endDate.AddDate(0, 0, -30)
-
-	// Create a stream of all days between startDate and endDate
-	days := make(chan rill.Try[time.Time])
-	go func() {
-		defer close(days)
-		for date := startDate; date.Before(endDate); date = date.AddDate(0, 0, 1) {
-			days <- rill.Wrap(date, nil)
-		}
-	}()
-
-	// Fetch the temperature for each day from the API
-	// Concurrency = 10; Ordered
-	measurements := rill.OrderedMap(days, 10, func(date time.Time) (Measurement, error) {
-		temp, err := getTemperature(city, date)
-		return Measurement{Date: date, Temp: temp}, err
-	})
-
-	// Iterate over the measurements, calculate and print changes.
-	// Concurrency = 1; Ordered
-	prev := Measurement{Temp: math.NaN()}
-	err := rill.ForEach(measurements, 1, func(m Measurement) error {
-		change := m.Temp - prev.Temp
-		prev = m
-
-		fmt.Printf("%s: %.1f°C (change %+.1f°C)\n", m.Date.Format("2006-01-02"), m.Temp, change)
-		return nil
-	})
-
-	fmt.Println("Error:", err)
-}
-
 // This example demonstrates a concurrent [MapReduce] performed on a set of remote files.
 // It downloads them and calculates how many times each word appears in all the files.
 func Example_mapReduce() {
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
+	text := "Early morning brings early birds to the early market. Birds sing, the market buzzes, and the morning shines"
 
-	defer cancel()
-
-	// Start with a stream of file URLs
-	urls := rill.FromSlice([]string{
-		"http://example.com/text1.txt",
-		"http://example.com/text2.txt",
-		"http://example.com/text3.txt",
-	}, nil)
-
-	// Download files concurrently, and get a stream of all words from all files
-	// Concurrency = 2
-	words := rill.FlatMap(urls, 2, func(url string) <-chan rill.Try[string] {
-		reader, err := downloadFile(ctx, url)
-		if err != nil {
-			return rill.FromSlice[string](nil, err) // Wrap the error in a stream
-		}
-
-		return streamWords(reader)
-	})
+	// Convert the sentence into a stream of words
+	reSep := regexp.MustCompile(`[,.\s]+`)
+	words := rill.FromSlice(reSep.Split(text, -1), nil)
 
 	// Count the number of occurrences of each word
 	counts, err := rill.MapReduce(words,
@@ -637,73 +647,6 @@ func ExampleUnbatch() {
 
 // --- Helpers ---
 
-// streamLines converts an io.Reader into a stream of lines
-func streamLines(r io.ReadCloser) <-chan rill.Try[string] {
-	out := make(chan rill.Try[string])
-	go func() {
-		defer r.Close()
-		defer close(out)
-
-		scanner := bufio.NewScanner(r)
-		for scanner.Scan() {
-			out <- rill.Wrap(scanner.Text(), nil)
-		}
-		if err := scanner.Err(); err != nil {
-			out <- rill.Wrap("", err)
-		}
-	}()
-	return out
-}
-
-// streamWords is helper function that converts an io.Reader into a stream of words.
-func streamWords(r io.ReadCloser) <-chan rill.Try[string] {
-	words := make(chan rill.Try[string], 1)
-
-	go func() {
-		defer r.Close()
-		defer close(words)
-
-		scanner := bufio.NewScanner(r)
-		scanner.Split(bufio.ScanWords)
-
-		for scanner.Scan() {
-			word := scanner.Text()
-			word = strings.Trim(word, ".,;:!?&()") // strip all punctuation. it's basic and just for demonstration
-			if len(word) > 0 {
-				words <- rill.Wrap(word, nil)
-			}
-		}
-		if err := scanner.Err(); err != nil {
-			words <- rill.Wrap("", err)
-		}
-	}()
-
-	return words
-}
-
-var ErrFileNotFound = errors.New("file not found")
-
-var files = map[string]string{
-	"http://example.com/user_ids1.txt": strings.ReplaceAll("1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20", " ", "\n"),
-	"http://example.com/user_ids2.txt": strings.ReplaceAll("21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40", " ", "\n"),
-	"http://example.com/user_ids3.txt": strings.ReplaceAll("41 42 43 44 45", " ", "\n"),
-	"http://example.com/text1.txt":     "Early morning brings early birds to the early market. Birds sing, the market buzzes, and the morning shines.",
-	"http://example.com/text2.txt":     "The birds often sing at the market",
-	"http://example.com/text3.txt":     "The market closes, the birds rest, and the night brings peace to the town.",
-}
-
-// downloadFile simulates downloading a file from a URL.
-// Returns a reader for the file content.
-func downloadFile(ctx context.Context, url string) (io.ReadCloser, error) {
-	content, ok := files[url]
-	if !ok {
-		return nil, ErrFileNotFound
-	}
-
-	// In a real-world scenario, this would be an HTTP request depending on the ctx.
-	return io.NopCloser(strings.NewReader(content)), nil
-}
-
 // Helper function that simulates sending a message through a server
 func sendMessage(message string, server string) error {
 	randomSleep(1000 * time.Millisecond) // simulate some additional work
@@ -711,20 +654,7 @@ func sendMessage(message string, server string) error {
 	return nil
 }
 
-// getTemperature simulates fetching a temperature reading for a city and date,
-func getTemperature(city string, date time.Time) (float64, error) {
-	randomSleep(1000 * time.Millisecond) // Simulate a network delay
-
-	// Basic city hash, to make measurements unique for each city
-	cityHash := float64(hash(city))
-
-	// Simulate a temperature reading, by retuning a pseudo-random, but deterministic value
-	temp := 15 - 10*math.Sin(cityHash+float64(date.Unix()))
-	temp = math.Round(temp*10) / 10 // Round to one decimal place
-
-	return temp, nil
-}
-
+// Helper function that generates a stream of numbers from 1 to infinity
 func infiniteNumberStream(ctx context.Context) <-chan rill.Try[int] {
 	out := make(chan rill.Try[int])
 	go func() {
@@ -746,7 +676,7 @@ var nouns = []string{"dog", "cat", "bird", "fish", "mouse", "elephant", "lion", 
 
 // getUsers simulates fetching multiple users from an API.
 // User fields are pseudo-random, but deterministic based on the user ID.
-func getUsers(ctx context.Context, ids ...int) ([]*User, error) {
+func getUsers(ctx context.Context, ids []int) ([]*User, error) {
 	randomSleep(1000 * time.Millisecond) // Simulate a network delay
 
 	users := make([]*User, 0, len(ids))
@@ -770,7 +700,7 @@ var ErrUserNotFound = errors.New("user not found")
 
 // getUser simulates fetching a user from an API.
 func getUser(ctx context.Context, id int) (*User, error) {
-	users, err := getUsers(ctx, id)
+	users, err := getUsers(ctx, []int{id})
 	if err != nil {
 		return nil, err
 	}
@@ -796,6 +726,12 @@ func saveUser(ctx context.Context, user *User) error {
 
 	fmt.Printf("User saved: %+v\n", user)
 	return nil
+}
+
+// downloadFile simulates downloading a file from a URL.
+func downloadFile(ctx context.Context, url string) ([]byte, error) {
+	randomSleep(1 * time.Second)
+	return []byte("Content of the file " + url), nil
 }
 
 // printStream prints all items from a stream (one per line) and an error if any.
