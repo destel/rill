@@ -87,16 +87,16 @@ func Example_batching() {
 		21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
 	}, nil)
 
-	// Group IDs into batches of 5 for bulk processing
+	// Group IDs into batches of 5
 	idBatches := rill.Batch(ids, 5, 1*time.Second)
 
-	// Bulk read user for each batch of IDs
+	// Bulk fetch users from the API
 	// Concurrency = 3
 	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*mockapi.User, error) {
 		return mockapi.GetUsers(ctx, ids)
 	})
 
-	// Transform the stream of batches back into a stream of users
+	// Transform the stream of batches back into a flat stream of users
 	users := rill.Unbatch(userBatches)
 
 	// Activate users.
@@ -148,7 +148,8 @@ func UpdateUserTimestamp(userID int) {
 	userIDsToUpdate <- userID
 }
 
-// This is a background worker that sends queued updates to the database in batches
+// This is a background worker that sends queued updates to the database in batches.
+// For simplicity, there are no retries, error handling and synchronization
 func updateUserTimestampWorker() {
 	// convert channel of userIDsStream into a stream
 	ids := rill.FromChan(userIDsToUpdate, nil)
@@ -269,7 +270,7 @@ func sendMessage(message string, server string) error {
 func Example_parallelStreams() {
 	ctx := context.Background()
 
-	// Convert a list of departments into a stream
+	// Convert a list of all departments into a stream
 	departments := rill.FromSlice(mockapi.GetDepartments())
 
 	// Use FlatMap to stream users from 3 departments concurrently.

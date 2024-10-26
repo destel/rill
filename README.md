@@ -16,8 +16,8 @@ processing slices and channels, calling APIs, or making DB queries in parallel.
 It removes boilerplate and abstracts away the complexities of goroutine orchestration and error handling.
 At the same time, developers retain full control over the concurrency level of all operations.
 
-- **Make concurrent code clean and composable.**  
-Most built-in functions take Go channels as inputs and return new, transformed channels as outputs.
+- **Make concurrent code composable and clean.**  
+Most functions in the library take Go channels as inputs and return new, transformed channels as outputs.
 This allows them to be chained in various ways to build reusable pipelines from simpler parts,
 similar to Unix pipes.
 As a result, concurrent tasks become clear sequences of reusable operations.
@@ -28,7 +28,7 @@ For more complex scenarios, Rill also provides tools to intercept and handle err
 
 - **Simplify stream processing.**    
 Thanks to Go channels, built-in functions can handle potentially infinite streams, processing items as they arrive.
-This makes Rill suitable for real-time data processing, handling large datasets that don't fit in memory,
+This makes Rill a convenient tool for real-time data processing, handling large datasets that don't fit in memory,
 or building responsive data pipelines.
 
 - **Provide solutions for advanced tasks.**  
@@ -47,7 +47,7 @@ does not grow with the input size.
 
 ## Quick Start
 Rill makes it easy to process data concurrently. 
-Here's a simple example using ForEach to process items in parallel while handling errors:
+Here's a simple example using **ForEach** to process items in parallel while handling errors:
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-ForEach)
 ```go
@@ -55,7 +55,7 @@ func main() {
 	// Convert a slice of numbers into a channel
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Process the numbers with concurrency level of 3
+	// Process the numbers with the concurrency level of 3
 	err := rill.ForEach(numbers, 3, func(x int) error {
 		return doSomethingWithNumber(x)
 	})
@@ -67,10 +67,10 @@ func main() {
 
 
 ## Multi-Stage Pipelines
-While the similar result as in the previous example can be achieved with WaitGroup or ErrGroup,
+While a similar result as in the previous example can be achieved with WaitGroup or ErrGroup,
 Rill shines when building complex concurrent pipelines.
 
-This example demonstrates a multi-stage pipeline that fetches users from an external API in batches, 
+The next example demonstrates a multi-stage pipeline that fetches users from an external API in batches, 
 updates their status to active, and saves them back, while controlling the level of concurrency at each step.
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Batching)
@@ -84,16 +84,16 @@ func main() {
 		21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
 	}, nil)
 
-	// Group IDs into batches of 5 for bulk processing
+	// Group IDs into batches of 5
 	idBatches := rill.Batch(ids, 5, 1*time.Second)
 
-	// Bulk read user for each batch of IDs
+	// Bulk fetch users from the API
 	// Concurrency = 3
 	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*mockapi.User, error) {
 		return mockapi.GetUsers(ctx, ids)
 	})
 
-	// Transform the stream of batches back into a stream of users
+	// Transform the stream of batches back into a flat stream of users
 	users := rill.Unbatch(userBatches)
 
 	// Activate users.
@@ -120,10 +120,10 @@ Rill provides a **Batch** function that transforms a stream of items into a stre
 to specify a timeout, after which a batch is emitted even if it's not full. This is useful for keeping an application reactive
 when the input stream is slow or sparse.
 
-Previous examples have already shown how to use **Batch** to group user IDs for bulk processing.
-Let's now look at a case where batching with timeout becomes especially useful.
+Previous examples have already shown how to use **Batch** to group user IDs for bulk fetching.
+Let's examine a case where batching with timeout is particularly useful.
 
-In the code below, the `UpdateUserTimestamp` function updates the _last_active_at_ column in the _users_ table with the current timestamp.
+In the example below, the `UpdateUserTimestamp` function updates the _last_active_at_ column in the _users_ table with the current timestamp.
 This function is called concurrently from multiple places in the application, such as HTTP handlers. 
 A large number of such calls would cause a large number of concurrent SQL queries, potentially overwhelming the database.
 
@@ -155,7 +155,8 @@ func UpdateUserTimestamp(userID int) {
 	userIDsToUpdate <- userID
 }
 
-// This is a background worker that sends queued updates to the database in batches
+// This is a background worker that sends queued updates to the database in batches.
+// For simplicity, there are no retries, error handling and synchronization
 func updateUserTimestampWorker() {
 
 	ids := rill.FromChan(userIDsToUpdate, nil)
@@ -238,26 +239,26 @@ func FindFirstPrime(after int, concurrency int) int {
 ```
 
 
-## Accelerating Operations with Parallel Streams
-There is a technique that allows to significantly accelerate some seemingly sequential operations by 
-splitting them into multiple parallel streams. Common examples include listing S3 objects, 
-querying APIs, or reading from databases.
+## Boosting Sequential Operations
+There is a technique that significantly accelerates some seemingly sequential operations by 
+branching them into multiple parallel streams and merging the results. 
+Common examples include listing S3 objects, querying APIs, or reading from databases.
 
 Example below fetches all users from an external paginated API. Doing it sequentially, page-by-page,
 would take a long time since the API is slow and the number of pages is large.
 One way to speed this up is to fetch users from multiple departments at the same time.
-The code uses **FlatMap** to stream users from 3 departments concurrently and merge the results as they arrive, 
+The code below uses **FlatMap** to stream users from 3 departments concurrently and merge the results as they arrive, 
 achieving up to 3x speedup compared to sequential processing.
 
 Additionally, it demonstrates how to write a custom reusable streaming wrapper around an existing API function.
-The `StreamUsers` function is useful on its own, but can also be used as a part of a larger pipeline.
+The `StreamUsers` function is useful on its own, but can also be a part of a larger pipeline.
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Context)
 ```go
 func main() {
 	ctx := context.Background()
 
-	// Convert a list of departments into a stream
+	// Convert a list of all departments into a stream
 	departments := rill.FromSlice(mockapi.GetDepartments())
 
 	// Use FlatMap to stream users from 3 departments concurrently.
@@ -384,8 +385,8 @@ Starting from Go 1.23, the language adds *range-over-function* feature, allowing
 for use in for-range loops. This feature enables Rill to integrate seamlessly with existing iterator-based functions
 in the standard library and third-party packages.
 
-Rill provides **FromSeq** and **FromSeq2** functions to convert an iterator into a stream. 
-Additionally, there's a **ToSeq2** function to convert a stream back into an iterator.
+Rill provides **FromSeq** and **FromSeq2** functions to convert an iterator into a stream, 
+and **ToSeq2** function to convert a stream back into an iterator.
 
 **ToSeq2** can be a good alternative to **ForEach** when concurrency is not needed. 
 It gives more control and performs all necessary cleanup and draining, even if the loop is terminated early using *break* or *return*.
