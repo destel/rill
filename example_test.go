@@ -39,7 +39,8 @@ func doSomethingWithNumber(x int) error {
 }
 
 // This example demonstrates a Rill pipeline that fetches users from an API,
-// and updates their status to active and saves them back. Both operations are done concurrently.
+// updates their status to active and saves them back.
+// Both operations are performed concurrently
 func Example() {
 	ctx := context.Background()
 
@@ -293,7 +294,6 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 	if query == nil {
 		query = &mockapi.UserQuery{}
 	}
-	query.Page = 0
 
 	go func() {
 		defer close(res)
@@ -321,7 +321,7 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 // Internally it creates a pipeline that starts from an infinite stream of numbers. When the first prime number is found
 // in that stream, the context gets canceled, and the pipeline terminates gracefully.
 func Example_context() {
-	p := FindFirstPrime(10000, 3) // Concurrency = 3
+	p := FindFirstPrime(10000, 3) // Using 3 concurrent workers
 	fmt.Println("The first prime after 10000 is", p)
 }
 
@@ -348,7 +348,8 @@ func FindFirstPrime(after int, concurrency int) int {
 		return isPrime(x), nil
 	})
 
-	// Find the first prime number
+	// Get the first prime and cancel the context
+	// This stops number generation and allows goroutines to exit
 	result, _, _ := rill.First(primes)
 	return result
 }
