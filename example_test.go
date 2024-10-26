@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"hash/fnv"
 	"math/rand"
 	"regexp"
 	"strconv"
@@ -13,15 +12,31 @@ import (
 	"time"
 
 	"github.com/destel/rill"
+	"github.com/destel/rill/internal/mockapi"
 )
 
-type User struct {
-	ID       int
-	Username string
-	IsActive bool
+// --- Package examples ---
+
+func Example_basic() {
+	// Convert a slice of numbers into a stream
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Process the numbers with concurrency level of 3
+	err := rill.ForEach(numbers, 3, func(x int) error {
+		return doSomethingWithNumber(x)
+	})
+
+	// Handle errors
+	fmt.Println("Error:", err)
 }
 
-// --- Package examples ---
+func doSomethingWithNumber(x int) error {
+	randomSleep(1000 * time.Millisecond) // simulate some additional work
+
+	// Square and print the number
+	fmt.Println(x * x)
+	return nil
+}
 
 // This example demonstrates a Rill pipeline that fetches users from an API,
 // and updates their status to active and saves them back. Both operations are done concurrently.
@@ -33,20 +48,26 @@ func Example() {
 
 	// Read users from the API.
 	// Concurrency = 3
-	users := rill.Map(ids, 3, func(id int) (*User, error) {
-		return getUser(ctx, id)
+	users := rill.Map(ids, 3, func(id int) (*mockapi.User, error) {
+		return mockapi.GetUser(ctx, id)
 	})
 
 	// Activate users.
 	// Concurrency = 2
-	err := rill.ForEach(users, 2, func(u *User) error {
+	err := rill.ForEach(users, 2, func(u *mockapi.User) error {
 		if u.IsActive {
 			fmt.Printf("User %d is already active\n", u.ID)
 			return nil
 		}
 
 		u.IsActive = true
-		return saveUser(ctx, u)
+		err := mockapi.SaveUser(ctx, u)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("User saved: %+v\n", u)
+		return nil
 	})
 
 	// Handle errors
@@ -70,8 +91,8 @@ func Example_batching() {
 
 	// Bulk read user for each batch of IDs
 	// Concurrency = 3
-	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*User, error) {
-		return getUsers(ctx, ids)
+	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*mockapi.User, error) {
+		return mockapi.GetUsers(ctx, ids)
 	})
 
 	// Transform the stream of batches back into a stream of users
@@ -79,14 +100,14 @@ func Example_batching() {
 
 	// Activate users.
 	// Concurrency = 2
-	err := rill.ForEach(users, 2, func(u *User) error {
+	err := rill.ForEach(users, 2, func(u *mockapi.User) error {
 		if u.IsActive {
 			fmt.Printf("User %d is already active\n", u.ID)
 			return nil
 		}
 
 		u.IsActive = true
-		return saveUser(ctx, u)
+		return mockapi.SaveUser(ctx, u)
 	})
 
 	// Handle errors
@@ -100,7 +121,7 @@ func Example_batching() {
 // emits partial batches, ensuring that updates are delayed by at most 100ms.
 //
 // For simplicity, this example does not have retries, error handling and synchronization
-func Example_batching_updatesGrouping() {
+func Example_batchingWithTimeout() {
 	// Start the background worker that processes the updates
 	go updateUserTimestampWorker()
 
@@ -121,11 +142,12 @@ func Example_batching_updatesGrouping() {
 // This is the queue of user IDs to update.
 var userIDsToUpdate = make(chan int)
 
-// UpdateUserTimestamp is the public API to update the last_active_at column in the users table.
+// UpdateUserTimestamp is the public API for updating the last_active_at column in the users table
 func UpdateUserTimestamp(userID int) {
 	userIDsToUpdate <- userID
 }
 
+// This is a background worker that sends queued updates to the database in batches
 func updateUserTimestampWorker() {
 	// convert channel of userIDsStream into a stream
 	ids := rill.FromChan(userIDsToUpdate, nil)
@@ -153,8 +175,7 @@ func updateUserTimestampWorker() {
 // The combination of [OrderedFilter] and [First] functions solves the problem,
 // while downloading and holding in memory at most 5 files at the same time.
 func Example_ordering() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
 
 	// The string to search for in the downloaded files
 	needle := []byte("26")
@@ -179,9 +200,9 @@ func Example_ordering() {
 	matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
 		fmt.Println("Downloading:", url)
 
-		content, err := downloadFile(ctx, url)
+		content, err := mockapi.DownloadFile(ctx, url)
 		if err != nil {
-			return false, nil
+			return false, err
 		}
 
 		// keep only URLs of files that contain the needle
@@ -233,17 +254,79 @@ func Example_fanIn_FanOut() {
 	fmt.Println("Error:", err)
 }
 
-// This example demonstrates how to use a context for pipeline termination.
-// The findFirstPrime function uses several concurrent workers to find the first prime number after a given number.
-// Internally it creates a pipeline that starts from an infinite stream of numbers. When the first prime number is found,
-// in that stream, the context gets canceled, and the pipeline terminates gracefully.
-func Example_context() {
-	p := findFirstPrime(10000, 3) // Concurrency = 3
-	fmt.Println("First prime after 10000:", p)
+// Helper function that simulates sending a message through a server
+func sendMessage(message string, server string) error {
+	randomSleep(1000 * time.Millisecond) // simulate some additional work
+	fmt.Printf("Sent through %s: %s\n", server, message)
+	return nil
 }
 
-// findFirstPrime finds the first prime number after the given number, using several concurrent workers.
-func findFirstPrime(after int, concurrency int) int {
+// This example demonstrates using [FlatMap] to accelerate paginated API calls. Instead of fetching all users sequentially,
+// page-by-page (which would take a long time since the API is slow and the number of pages is large), it fetches users from
+// multiple departments in parallel. The example also shows how to write a reusable streaming wrapper around an existing
+// API function that can be used on its own or as part of a larger pipeline.
+func Example_parallelStreams() {
+	ctx := context.Background()
+
+	// Convert a list of departments into a stream
+	departments := rill.FromSlice(mockapi.GetDepartments())
+
+	// Use FlatMap to stream users from 3 departments concurrently.
+	users := rill.FlatMap(departments, 3, func(department string) <-chan rill.Try[*mockapi.User] {
+		return StreamUsers(ctx, &mockapi.UserQuery{Department: department})
+	})
+
+	// Print the users from the combined stream
+	err := rill.ForEach(users, 1, func(user *mockapi.User) error {
+		fmt.Printf("%+v\n", user)
+		return nil
+	})
+	fmt.Println("Error:", err)
+}
+
+// StreamUsers is a reusable streaming wrapper around the mockapi.ListUsers function.
+// It iterates through all listing pages and returns a stream of users.
+// This function is useful on its own or as a building block for more complex pipelines.
+func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[*mockapi.User] {
+	res := make(chan rill.Try[*mockapi.User])
+
+	if query == nil {
+		query = &mockapi.UserQuery{}
+	}
+	query.Page = 0
+
+	go func() {
+		defer close(res)
+
+		for page := 0; ; page++ {
+			query.Page = page
+
+			users, err := mockapi.ListUsers(ctx, query)
+			if err != nil {
+				res <- rill.Wrap[*mockapi.User](nil, err)
+				return
+			}
+
+			for _, user := range users {
+				res <- rill.Wrap(user, nil)
+			}
+		}
+	}()
+
+	return res
+}
+
+// This example demonstrates how to use a context for pipeline termination.
+// The FindFirstPrime function uses several concurrent workers to find the first prime number after a given number.
+// Internally it creates a pipeline that starts from an infinite stream of numbers. When the first prime number is found
+// in that stream, the context gets canceled, and the pipeline terminates gracefully.
+func Example_context() {
+	p := FindFirstPrime(10000, 3) // Concurrency = 3
+	fmt.Println("The first prime after 10000 is", p)
+}
+
+// FindFirstPrime finds the first prime number after the given number, using several concurrent workers.
+func FindFirstPrime(after int, concurrency int) int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -268,6 +351,19 @@ func findFirstPrime(after int, concurrency int) int {
 	// Find the first prime number
 	result, _, _ := rill.First(primes)
 	return result
+}
+
+// naive prime number check
+func isPrime(n int) bool {
+	if n < 2 {
+		return false
+	}
+	for i := 2; i*i <= n; i++ {
+		if n%i == 0 {
+			return false
+		}
+	}
+	return true
 }
 
 // --- Function examples ---
@@ -371,19 +467,19 @@ func ExampleErr() {
 	ctx := context.Background()
 
 	// Convert a slice of users into a stream
-	users := rill.FromSlice([]*User{
-		{ID: 1, Username: "foo"},
-		{ID: 2, Username: "bar"},
-		{ID: 3},
-		{ID: 4, Username: "baz"},
-		{ID: 5, Username: "qux"},
-		{ID: 6, Username: "quux"},
+	users := rill.FromSlice([]*mockapi.User{
+		{ID: 1, Name: "foo", Age: 25},
+		{ID: 2, Name: "bar", Age: 30},
+		{ID: 3}, // empty username is invalid
+		{ID: 4, Name: "baz", Age: 35},
+		{ID: 5, Name: "qux", Age: 26},
+		{ID: 6, Name: "quux", Age: 27},
 	}, nil)
 
 	// Save users. Use struct{} as a result type
 	// Concurrency = 2
-	results := rill.Map(users, 2, func(user *User) (struct{}, error) {
-		return struct{}{}, saveUser(ctx, user)
+	results := rill.Map(users, 2, func(user *mockapi.User) (struct{}, error) {
+		return struct{}{}, mockapi.SaveUser(ctx, user)
 	})
 
 	// We're interested only in side effects and errors from
@@ -664,76 +760,6 @@ func ExampleUnbatch() {
 
 // --- Helpers ---
 
-// Helper function that simulates sending a message through a server
-func sendMessage(message string, server string) error {
-	randomSleep(1000 * time.Millisecond) // simulate some additional work
-	fmt.Printf("Sent through %s: %s\n", server, message)
-	return nil
-}
-
-var adjs = []string{"big", "small", "fast", "slow", "smart", "happy", "sad", "funny", "serious", "angry"}
-var nouns = []string{"dog", "cat", "bird", "fish", "mouse", "elephant", "lion", "tiger", "bear", "wolf"}
-
-// getUsers simulates fetching multiple users from an API.
-// User fields are pseudo-random, but deterministic based on the user ID.
-func getUsers(ctx context.Context, ids []int) ([]*User, error) {
-	randomSleep(1000 * time.Millisecond) // Simulate a network delay
-
-	users := make([]*User, 0, len(ids))
-	for _, id := range ids {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-
-		user := User{
-			ID:       id,
-			Username: adjs[hash(id, "adj")%len(adjs)] + "_" + nouns[hash(id, "noun")%len(nouns)], // adj + noun
-			IsActive: hash(id, "active")%100 < 60,                                                // 60%
-		}
-
-		users = append(users, &user)
-	}
-	return users, nil
-}
-
-var ErrUserNotFound = errors.New("user not found")
-
-// getUser simulates fetching a user from an API.
-func getUser(ctx context.Context, id int) (*User, error) {
-	users, err := getUsers(ctx, []int{id})
-	if err != nil {
-		return nil, err
-	}
-
-	if len(users) == 0 {
-		return nil, ErrUserNotFound
-	}
-
-	return users[0], nil
-}
-
-// saveUser simulates saving a user through an API.
-func saveUser(ctx context.Context, user *User) error {
-	randomSleep(1000 * time.Millisecond) // Simulate a network delay
-
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-
-	if user.Username == "" {
-		return fmt.Errorf("empty username")
-	}
-
-	fmt.Printf("User saved: %+v\n", user)
-	return nil
-}
-
-// downloadFile simulates downloading a file from a URL.
-func downloadFile(ctx context.Context, url string) ([]byte, error) {
-	randomSleep(1 * time.Second)
-	return []byte("Content of the file " + url), nil
-}
-
 // printStream prints all items from a stream (one per line) and an error if any.
 func printStream[A any](stream <-chan rill.Try[A]) {
 	fmt.Println("Result:")
@@ -746,24 +772,4 @@ func printStream[A any](stream <-chan rill.Try[A]) {
 
 func randomSleep(max time.Duration) {
 	time.Sleep(time.Duration(rand.Intn(int(max))))
-}
-
-// hash is a simple hash function that returns an integer hash for a given input.
-func hash(input ...any) int {
-	hasher := fnv.New32()
-	fmt.Fprintln(hasher, input...)
-	return int(hasher.Sum32())
-}
-
-// naive prime number check
-func isPrime(n int) bool {
-	if n < 2 {
-		return false
-	}
-	for i := 2; i*i <= n; i++ {
-		if n%i == 0 {
-			return false
-		}
-	}
-	return true
 }
