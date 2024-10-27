@@ -126,7 +126,8 @@ func Example_batchingWithTimeout() {
 	// Start the background worker that processes the updates
 	go updateUserTimestampWorker()
 
-	// Do some updates. They'll be grouped and sent in the background.
+	// Do some updates. They'll be automatically grouped into
+	// batches: [1,2,3,4,5], [6,7], [8]
 	UpdateUserTimestamp(1)
 	UpdateUserTimestamp(2)
 	UpdateUserTimestamp(3)
@@ -134,10 +135,12 @@ func Example_batchingWithTimeout() {
 	UpdateUserTimestamp(5)
 	UpdateUserTimestamp(6)
 	UpdateUserTimestamp(7)
+	time.Sleep(500 * time.Millisecond) // simulate sparse updates
+	UpdateUserTimestamp(8)
 
 	// Wait for the updates to be processed
 	// In real-world application, different synchronization mechanisms would be used.
-	time.Sleep(2 * time.Second)
+	time.Sleep(1 * time.Second)
 }
 
 // This is the queue of user IDs to update.
@@ -182,7 +185,7 @@ func Example_ordering() {
 	// The string to search for in the downloaded files
 	needle := []byte("26")
 
-	// Generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-999.txt
+	// Manually generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-999.txt
 	urls := make(chan rill.Try[string])
 	go func() {
 		defer close(urls)

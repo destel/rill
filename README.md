@@ -67,8 +67,8 @@ func main() {
 
 
 ## Multi-Stage Pipelines
-While a similar result as in the previous example can be achieved with WaitGroup or ErrGroup,
-Rill shines when building complex concurrent pipelines.
+The result as above can also be achieved with WaitGroup or ErrGroup, 
+but Rill shines when building complex multi-stage concurrent pipelines.
 
 The next example demonstrates a multi-stage pipeline that fetches users from an external API in batches, 
 updates their status to active, and saves them back, while controlling the level of concurrency at each step.
@@ -137,7 +137,8 @@ func main() {
 	// Start the background worker that processes the updates
 	go updateUserTimestampWorker()
 
-	// Do some updates. They'll be grouped and sent in the background.
+	// Do some updates. They'll be automatically grouped into
+	// batches: [1,2,3,4,5], [6,7], [8]
 	UpdateUserTimestamp(1)
 	UpdateUserTimestamp(2)
 	UpdateUserTimestamp(3)
@@ -145,6 +146,8 @@ func main() {
 	UpdateUserTimestamp(5)
 	UpdateUserTimestamp(6)
 	UpdateUserTimestamp(7)
+	time.Sleep(500 * time.Millisecond) // simulate sparse updates
+	UpdateUserTimestamp(8)
 }
 
 // This is the queue of user IDs to update.
@@ -175,7 +178,7 @@ func updateUserTimestampWorker() {
 
 ## Errors, Termination and Contexts
 Error handling can be non-trivial in concurrent applications. Rill simplifies this by providing a structured approach to the problem.
-Pipelines typically consist of a sequence of non-blocking channel transformations, followed by a blocking stage that returns the final result.
+Pipelines typically consist of a sequence of non-blocking channel transformations, followed by a blocking stage that returns a final result and an error.
 The general rule is: any error occurring anywhere in a pipeline is propagated down to the final stage,
 where it's caught by some blocking function and returned to the caller.
 
@@ -241,7 +244,7 @@ func FindFirstPrime(after int, concurrency int) int {
 
 ## Boosting Sequential Operations
 There is a technique that significantly accelerates some seemingly sequential operations by 
-branching them into multiple parallel streams and merging the results. 
+branching them into multiple parallel streams and then merging the results. 
 Common examples include listing S3 objects, querying APIs, or reading from databases.
 
 Example below fetches all users from an external paginated API. Doing it sequentially, page-by-page,
@@ -335,7 +338,7 @@ func main() {
 	// The string to search for in the downloaded files
 	needle := []byte("26")
 
-	// Generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-999.txt
+	// Manually generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-999.txt
 	urls := make(chan rill.Try[string])
 	go func() {
 		defer close(urls)
