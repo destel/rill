@@ -1,4 +1,5 @@
-// Package mockapi package provides a mock API client for examples and demos.
+// Package mockapi package provides a naive mock API client for examples and demos.
+// Unfortunately it should live outside internal folder to be available in runnable examples and playground.
 package mockapi
 
 import (
@@ -32,7 +33,7 @@ func init() {
 	defer mu.Unlock()
 
 	// Generate users
-	for i := 1; i <= 500; i++ {
+	for i := 1; i <= 150; i++ {
 		user := User{
 			ID:         i,
 			Name:       adjs[hash(i, "name1")%len(adjs)] + "_" + nouns[hash(i, "name2")%len(nouns)], // adj + noun
@@ -70,7 +71,7 @@ func GetUser(ctx context.Context, id int) (*User, error) {
 }
 
 // GetUsers returns a list of users by IDs.
-// If user is not found, nil is returned in the corresponding position.
+// If a user is not found, nil is returned in the corresponding position.
 func GetUsers(ctx context.Context, ids []int) ([]*User, error) {
 	randomSleep(ctx, 2*time.Second)
 	if err := ctx.Err(); err != nil {

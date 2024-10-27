@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/destel/rill"
-	"github.com/destel/rill/internal/mockapi"
+	"github.com/destel/rill/mockapi"
 )
 
 // --- Package examples ---
