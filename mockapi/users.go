@@ -33,10 +33,10 @@ func init() {
 	defer mu.Unlock()
 
 	// Generate users
-	for i := 1; i <= 150; i++ {
+	for i := 1; i <= 100; i++ {
 		user := User{
 			ID:         i,
-			Name:       adjs[hash(i, "name1")%len(adjs)] + "_" + nouns[hash(i, "name2")%len(nouns)], // adj + noun
+			Name:       adjs[hash(i, "name1")%len(adjs)] + " " + nouns[hash(i, "name2")%len(nouns)], // adj + noun
 			Age:        hash(i, "age")%20 + 30,                                                      // 20-50
 			Department: departments[hash(i, "dep")%len(departments)],                                // one of
 			IsActive:   hash(i, "active")%100 < 60,                                                  // 60%
@@ -54,7 +54,7 @@ func GetDepartments() ([]string, error) {
 
 // GetUser returns a user by ID.
 func GetUser(ctx context.Context, id int) (*User, error) {
-	randomSleep(ctx, 1*time.Second)
+	randomSleep(ctx, 500*time.Millisecond)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func GetUser(ctx context.Context, id int) (*User, error) {
 // GetUsers returns a list of users by IDs.
 // If a user is not found, nil is returned in the corresponding position.
 func GetUsers(ctx context.Context, ids []int) ([]*User, error) {
-	randomSleep(ctx, 2*time.Second)
+	randomSleep(ctx, 1000*time.Millisecond)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ type UserQuery struct {
 
 // ListUsers returns a paginated list of users optionally filtered by department.
 func ListUsers(ctx context.Context, query *UserQuery) ([]*User, error) {
-	randomSleep(ctx, 3*time.Second)
+	randomSleep(ctx, 1000*time.Millisecond)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func ListUsers(ctx context.Context, query *UserQuery) ([]*User, error) {
 
 // SaveUser saves a user.
 func SaveUser(ctx context.Context, user *User) error {
-	randomSleep(ctx, 3*time.Second)
+	randomSleep(ctx, 1000*time.Millisecond)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
