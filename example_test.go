@@ -17,27 +17,6 @@ import (
 
 // --- Package examples ---
 
-func Example_basic() {
-	// Convert a slice of numbers into a stream
-	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
-
-	// Process the numbers with concurrency level of 3
-	err := rill.ForEach(numbers, 3, func(x int) error {
-		return doSomethingWithNumber(x)
-	})
-
-	// Handle errors
-	fmt.Println("Error:", err)
-}
-
-func doSomethingWithNumber(x int) error {
-	randomSleep(1000 * time.Millisecond) // simulate some additional work
-
-	// Square and print the number
-	fmt.Println(x * x)
-	return nil
-}
-
 // This example demonstrates a Rill pipeline that fetches users from an API,
 // updates their status to active and saves them back.
 // Both operations are performed concurrently
@@ -164,7 +143,6 @@ func updateUserTimestampWorker() {
 	// Send updates to the database
 	// Concurrency = 1 (this controls max number of concurrent updates)
 	_ = rill.ForEach(idBatches, 1, func(batch []int) error {
-		randomSleep(1 * time.Second)
 		fmt.Printf("Executed: UPDATE users SET last_active_at = NOW() WHERE id IN (%v)\n", batch)
 		return nil
 	})
@@ -261,7 +239,7 @@ func Example_fanIn_FanOut() {
 
 // Helper function that simulates sending a message through a server
 func sendMessage(message string, server string) error {
-	randomSleep(1000 * time.Millisecond) // simulate some additional work
+	randomSleep(500 * time.Millisecond) // simulate some additional work
 	fmt.Printf("Sent through %s: %s\n", server, message)
 	return nil
 }
@@ -358,29 +336,16 @@ func FindFirstPrime(after int, concurrency int) int {
 	return result
 }
 
-// naive prime number check
-func isPrime(n int) bool {
-	if n < 2 {
-		return false
-	}
-	for i := 2; i*i <= n; i++ {
-		if n%i == 0 {
-			return false
-		}
-	}
-	return true
-}
-
 // --- Function examples ---
 
 func ExampleAll() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Are all numbers even?
+	// Are all numbers prime?
 	// Concurrency = 3
 	ok, err := rill.All(numbers, 3, func(x int) (bool, error) {
-		return x%2 == 0, nil
+		return isPrime(x), nil
 	})
 
 	fmt.Println("Result:", ok)
@@ -391,10 +356,10 @@ func ExampleAny() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Is there at least one even number?
+	// Is there at least one prime number?
 	// Concurrency = 3
 	ok, err := rill.Any(numbers, 3, func(x int) (bool, error) {
-		return x%2 == 0, nil
+		return isPrime(x), nil
 	})
 
 	fmt.Println("Result: ", ok)
@@ -426,7 +391,7 @@ func ExampleCatch() {
 	// Convert strings to ints
 	// Concurrency = 3
 	ids := rill.Map(strs, 3, func(s string) (int, error) {
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
+		randomSleep(500 * time.Millisecond) // simulate some additional work
 		return strconv.Atoi(s)
 	})
 
@@ -451,7 +416,7 @@ func ExampleOrderedCatch() {
 	// Convert strings to ints
 	// Concurrency = 3; Ordered
 	ids := rill.OrderedMap(strs, 3, func(s string) (int, error) {
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
+		randomSleep(500 * time.Millisecond) // simulate some additional work
 		return strconv.Atoi(s)
 	})
 
@@ -487,8 +452,7 @@ func ExampleErr() {
 		return struct{}{}, mockapi.SaveUser(ctx, user)
 	})
 
-	// We're interested only in side effects and errors from
-	// the pipeline above
+	// We're only need to know if all users were saved successfully
 	err := rill.Err(results)
 	fmt.Println("Error:", err)
 }
@@ -497,14 +461,13 @@ func ExampleFilter() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Keep only even numbers
+	// Keep only prime numbers
 	// Concurrency = 3
-	evens := rill.Filter(numbers, 3, func(x int) (bool, error) {
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
-		return x%2 == 0, nil
+	primes := rill.Filter(numbers, 3, func(x int) (bool, error) {
+		return isPrime(x), nil
 	})
 
-	printStream(evens)
+	printStream(primes)
 }
 
 // The same example as for the [Filter], but using ordered versions of functions.
@@ -512,28 +475,26 @@ func ExampleOrderedFilter() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Keep only even numbers
+	// Keep only prime numbers
 	// Concurrency = 3; Ordered
-	evens := rill.OrderedFilter(numbers, 3, func(x int) (bool, error) {
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
-		return x%2 == 0, nil
+	primes := rill.OrderedFilter(numbers, 3, func(x int) (bool, error) {
+		return isPrime(x), nil
 	})
 
-	printStream(evens)
+	printStream(primes)
 }
 
 func ExampleFilterMap() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Keep only odd numbers and square them
+	// Keep only prime numbers and square them
 	// Concurrency = 3
 	squares := rill.FilterMap(numbers, 3, func(x int) (int, bool, error) {
-		if x%2 == 0 {
+		if !isPrime(x) {
 			return 0, false, nil
 		}
 
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
 		return x * x, true, nil
 	})
 
@@ -545,14 +506,13 @@ func ExampleOrderedFilterMap() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Keep only odd numbers and square them
-	// Concurrency = 3; Ordered
+	// Keep only prime numbers and square them
+	// Concurrency = 3
 	squares := rill.OrderedFilterMap(numbers, 3, func(x int) (int, bool, error) {
-		if x%2 == 0 {
+		if !isPrime(x) {
 			return 0, false, nil
 		}
 
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
 		return x * x, true, nil
 	})
 
@@ -580,10 +540,10 @@ func ExampleFlatMap() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5}, nil)
 
-	// Replace each number with three strings
-	// Concurrency = 3
-	result := rill.FlatMap(numbers, 3, func(x int) <-chan rill.Try[string] {
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
+	// Replace each number in the input stream with three strings
+	// Concurrency = 2
+	result := rill.FlatMap(numbers, 2, func(x int) <-chan rill.Try[string] {
+		randomSleep(500 * time.Millisecond) // simulate some additional work
 
 		return rill.FromSlice([]string{
 			fmt.Sprintf("foo%d", x),
@@ -600,10 +560,10 @@ func ExampleOrderedFlatMap() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5}, nil)
 
-	// Replace each number with three strings
-	// Concurrency = 3; Ordered
-	result := rill.OrderedFlatMap(numbers, 3, func(x int) <-chan rill.Try[string] {
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
+	// Replace each number in the input stream with three strings
+	// Concurrency = 2; Ordered
+	result := rill.OrderedFlatMap(numbers, 2, func(x int) <-chan rill.Try[string] {
+		randomSleep(500 * time.Millisecond) // simulate some additional work
 
 		return rill.FromSlice([]string{
 			fmt.Sprintf("foo%d", x),
@@ -619,16 +579,15 @@ func ExampleForEach() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Square and print each number
+	// Do something with each number and print the result
 	// Concurrency = 3
 	err := rill.ForEach(numbers, 3, func(x int) error {
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
-
-		y := x * x
+		y := doSomethingWithNumber(x)
 		fmt.Println(y)
 		return nil
 	})
 
+	// Handle errors
 	fmt.Println("Error:", err)
 }
 
@@ -639,19 +598,20 @@ func ExampleForEach_ordered() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Square each number.
+	// Do something with each number
 	// Concurrency = 3; Ordered
-	squares := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
-		return x * x, nil
+	results := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
+		return doSomethingWithNumber(x), nil
 	})
 
 	// Print results.
 	// Concurrency = 1; Ordered
-	err := rill.ForEach(squares, 1, func(y int) error {
+	err := rill.ForEach(results, 1, func(y int) error {
 		fmt.Println(y)
 		return nil
 	})
+
+	// Handle errors
 	fmt.Println("Error:", err)
 }
 
@@ -659,14 +619,13 @@ func ExampleMap() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Square each number.
+	// Transform each number
 	// Concurrency = 3
-	squares := rill.Map(numbers, 3, func(x int) (int, error) {
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
-		return x * x, nil
+	results := rill.Map(numbers, 3, func(x int) (int, error) {
+		return doSomethingWithNumber(x), nil
 	})
 
-	printStream(squares)
+	printStream(results)
 }
 
 // The same example as for the [Map], but using ordered versions of functions.
@@ -674,14 +633,13 @@ func ExampleOrderedMap() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Square each number.
+	// Transform each number
 	// Concurrency = 3; Ordered
-	squares := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
-		randomSleep(1000 * time.Millisecond) // simulate some additional work
-		return x * x, nil
+	results := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
+		return doSomethingWithNumber(x), nil
 	})
 
-	printStream(squares)
+	printStream(results)
 }
 
 func ExampleMapReduce() {
@@ -737,15 +695,15 @@ func ExampleToSlice() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Square each number
+	// Transform each number
 	// Concurrency = 3; Ordered
-	squares := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
-		return x * x, nil
+	results := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
+		return doSomethingWithNumber(x), nil
 	})
 
-	squaresSlice, err := rill.ToSlice(squares)
+	resultsSlice, err := rill.ToSlice(results)
 
-	fmt.Println("Result:", squaresSlice)
+	fmt.Println("Result:", resultsSlice)
 	fmt.Println("Error:", err)
 }
 
@@ -764,6 +722,29 @@ func ExampleUnbatch() {
 }
 
 // --- Helpers ---
+
+// helper function that squares the number
+// and simulates some additional work using sleep
+func doSomethingWithNumber(x int) int {
+	randomSleep(500 * time.Millisecond) // simulate some additional work
+	return x * x
+}
+
+// naive prime number check.
+// also simulates some additional work using sleep
+func isPrime(n int) bool {
+	randomSleep(500 * time.Millisecond) // simulate some additional work
+
+	if n < 2 {
+		return false
+	}
+	for i := 2; i*i <= n; i++ {
+		if n%i == 0 {
+			return false
+		}
+	}
+	return true
+}
 
 // printStream prints all items from a stream (one per line) and an error if any.
 func printStream[A any](stream <-chan rill.Try[A]) {
