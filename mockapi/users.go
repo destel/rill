@@ -1,5 +1,5 @@
-// Package mockapi package provides a naive mock API client for examples and demos.
-// Unfortunately it should live outside internal folder to be available in runnable examples and playground.
+// Package mockapi provides a very basic mock API client for examples and demos.
+// Unfortunately it must live outside the internal folder to be accessible from runnable examples and go playground.
 package mockapi
 
 import (
