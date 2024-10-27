@@ -314,7 +314,7 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 // Internally it creates a pipeline that starts from an infinite stream of numbers. When the first prime number is found
 // in that stream, the context gets canceled, and the pipeline terminates gracefully.
 func Example_context() {
-	p := FindFirstPrime(10000, 3) // Using 3 concurrent workers
+	p := FindFirstPrime(10000, 3) // Use 3 concurrent workers
 	fmt.Println("The first prime after 10000 is", p)
 }
 

@@ -55,9 +55,12 @@ func main() {
 	// Convert a slice of numbers into a channel
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Process the numbers with the concurrency level of 3
+	// Do something with each number and print the result
+	// Concurrency = 3
 	err := rill.ForEach(numbers, 3, func(x int) error {
-		return doSomethingWithNumber(x)
+		y := doSomethingWithNumber(x)
+		fmt.Println(y)
+		return nil
 	})
 
 	// Handle errors
@@ -105,7 +108,13 @@ func main() {
 		}
 
 		u.IsActive = true
-		return mockapi.SaveUser(ctx, u)
+		err := mockapi.SaveUser(ctx, u)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("User saved: %+v\n", u)
+		return nil
 	})
 
 	// Handle errors
@@ -131,7 +140,7 @@ To mitigate this, it's possible to group the updates and send them to the databa
 And when updates are sparse, the _timeout_ setting makes sure they're delayed by at most 100ms,
 balancing between reducing database load and data freshness.
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Batching_updatesGrouping)
+[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-BatchingWithTimeout)
 ```go
 func main() {
 	// Start the background worker that processes the updates
@@ -167,7 +176,6 @@ func updateUserTimestampWorker() {
 	idBatches := rill.Batch(ids, 5, 100*time.Millisecond)
 
 	_ = rill.ForEach(idBatches, 1, func(batch []int) error {
-		randomSleep(1 * time.Second)
 		fmt.Printf("Executed: UPDATE users SET last_active_at = NOW() WHERE id IN (%v)\n", batch)
 		return nil
 	})
@@ -211,7 +219,7 @@ in that stream, the context gets canceled, and the pipeline terminates gracefull
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Context)
 ```go
 func main() {
-	p := FindFirstPrime(10000, 3) // Concurrency = 3
+	p := FindFirstPrime(10000, 3) // Use 3 concurrent workers
 	fmt.Println("The first prime after 10000 is", p)
 }
 
@@ -233,6 +241,7 @@ func FindFirstPrime(after int, concurrency int) int {
 	}()
 
 	primes := rill.OrderedFilter(numbers, concurrency, func(x int) (bool, error) {
+		fmt.Println("Checking", x)
 		return isPrime(x), nil
 	})
 
@@ -256,7 +265,7 @@ achieving up to 3x speedup compared to sequential processing.
 Additionally, it demonstrates how to write a custom reusable streaming wrapper around an existing API function.
 The `StreamUsers` function is useful on its own, but can also be a part of a larger pipeline.
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Context)
+[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-ParallelStreams)
 ```go
 func main() {
 	ctx := context.Background()
@@ -297,6 +306,10 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 			if err != nil {
 				res <- rill.Wrap[*mockapi.User](nil, err)
 				return
+			}
+
+			if len(users) == 0 {
+				break
 			}
 
 			for _, user := range users {
@@ -394,25 +407,7 @@ and **ToSeq2** function to convert a stream back into an iterator.
 **ToSeq2** can be a good alternative to **ForEach** when concurrency is not needed. 
 It gives more control and performs all necessary cleanup and draining, even if the loop is terminated early using *break* or *return*.
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-ToSeq2)
 
-```go
-func main() {
-	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
-
-	squares := rill.Map(numbers, 1, func(x int) (int, error) {
-		return x * x, nil
-	})
-
-	for val, err := range rill.ToSeq2(squares) {
-		if err != nil {
-			fmt.Println("Error:", err)
-			break // cleanup and early exit 
-		}
-		fmt.Printf("%+v\n", val)
-	}
-}
-```
 
 
 ## Testing Strategy
