@@ -1,7 +1,7 @@
 // Package rill provides composable channel-based concurrency primitives for Go that simplify parallel processing,
-// batching, and stream handling. It reduces boilerplate and abstracts away the complexities of goroutine orchestration
-// while offering a clean API for building concurrent pipelines from reusable parts.
-// The library centralizes error handling, maintains precise control over concurrency levels, and has zero external dependencies.
+// batching, and stream handling. It offers building blocks for constructing concurrent pipelines from
+// reusable parts while maintaining precise control over concurrency levels. The package reduces boilerplate,
+// abstracts away goroutine orchestration, features centralized error handling, and has zero external dependencies.
 //
 // # Streams and Try Containers
 //
