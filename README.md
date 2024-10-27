@@ -407,7 +407,29 @@ and **ToSeq2** function to convert a stream back into an iterator.
 **ToSeq2** can be a good alternative to **ForEach** when concurrency is not needed. 
 It gives more control and performs all necessary cleanup and draining, even if the loop is terminated early using *break* or *return*.
 
+[Try it](https://pkg.go.dev/github.com/destel/rill#example-ToSeq2)
 
+```go
+func main() {
+	// Convert a slice of numbers into a stream
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Transform each number
+	// Concurrency = 3
+	results := rill.Map(numbers, 3, func(x int) (int, error) {
+		return doSomethingWithNumber(x), nil
+	})
+
+	// Convert the stream into an iterator and use for-range to print the results
+	for val, err := range rill.ToSeq2(results) {
+		if err != nil {
+			fmt.Println("Error:", err)
+			break // cleanup is done regardless of early exit
+		}
+		fmt.Printf("%+v\n", val)
+	}
+}
+```
 
 
 ## Testing Strategy

@@ -10,16 +10,19 @@ import (
 )
 
 func ExampleFromSeq() {
-	// Convert a slice of numbers into an iterator
+	// Start with an iterator that yields numbers from 1 to 10
 	numbersSeq := slices.Values([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 
+	// Convert the iterator into a stream
 	numbers := rill.FromSeq(numbersSeq, nil)
 
-	squares := rill.Map(numbers, 1, func(x int) (int, error) {
-		return x * x, nil
+	// Transform each number
+	// Concurrency = 3
+	results := rill.Map(numbers, 3, func(x int) (int, error) {
+		return doSomethingWithNumber(x), nil
 	})
 
-	printStream(squares)
+	printStream(results)
 }
 
 func ExampleFromSeq2() {
@@ -32,24 +35,30 @@ func ExampleFromSeq2() {
 		}
 	}
 
+	// Convert the iterator into a stream
 	numbers := rill.FromSeq2(numberSeq)
 
-	squares := rill.Map(numbers, 1, func(x int) (int, error) {
-		return x * x, nil
+	// Transform each number
+	// Concurrency = 3
+	results := rill.Map(numbers, 3, func(x int) (int, error) {
+		return doSomethingWithNumber(x), nil
 	})
 
-	printStream(squares)
+	printStream(results)
 }
 
 func ExampleToSeq2() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	squares := rill.Map(numbers, 1, func(x int) (int, error) {
-		return x * x, nil
+	// Transform each number
+	// Concurrency = 3
+	results := rill.Map(numbers, 3, func(x int) (int, error) {
+		return doSomethingWithNumber(x), nil
 	})
 
-	for val, err := range rill.ToSeq2(squares) {
+	// Convert the stream into an iterator and use for-range to print the results
+	for val, err := range rill.ToSeq2(results) {
 		if err != nil {
 			fmt.Println("Error:", err)
 			break // cleanup is done regardless of early exit
