@@ -103,6 +103,7 @@ func Example_batching() {
 // This example demonstrates how batching can be used to group similar concurrent database updates into a single query.
 // The UpdateUserTimestamp function is used to update the last_active_at column in the users table. Updates are not
 // executed immediately, but are rather queued and then sent to the database in batches of up to 5.
+//
 // When updates are sparse, it can take some time to collect a full batch. In this case the [Batch] function
 // emits partial batches, ensuring that updates are delayed by at most 100ms.
 //

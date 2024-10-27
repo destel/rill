@@ -1,7 +1,7 @@
-// Package rill is a collection of easy-to-use functions for concurrency, streaming, batching and pipeline construction.
-// It abstracts away the complexities of concurrency, removes boilerplate, and provides a structured way to handle errors.
-// Rill is modular and can be easily integrated into existing projects: it requires no setup and allows using only the necessary functions.
-// At the same time, rill's functions can be composed into complex, concurrent, and reusable pipelines when needed.
+// Package rill provides composable channel-based concurrency primitives for Go that simplify parallel processing,
+// batching, and stream handling. It reduces boilerplate and abstracts away the complexities of goroutine orchestration
+// while offering a clean API for building concurrent pipelines from reusable parts.
+// The library centralizes error handling, maintains precise control over concurrency levels, and has zero external dependencies.
 //
 // # Streams and Try Containers
 //
@@ -17,7 +17,7 @@
 // They do not block and return the output stream immediately. All the processing is done in the background by the goroutine pools they spawn.
 // These functions forward all errors from the input stream to the output stream.
 // Any errors returned by the user-provided functions are also sent to the output stream.
-// When such function reaches the end of the input stream, it closes the output stream, stops processing and cleans up resources.
+// When such a function reaches the end of the input stream, it closes the output stream, stops processing and cleans up resources.
 //
 // Such functions are designed to be composed together to build complex processing pipelines:
 //
@@ -55,7 +55,7 @@
 //
 // # Unordered functions
 //
-// Functions such as [Map], [Filter] and [FlatMap] write items to the output stream as soon as they become available.
+// Functions such as [Map], [Filter], and [FlatMap] write items to the output stream as soon as they become available.
 // Due to the concurrent nature of these functions, the order of items in the output stream may not match the order of items in the input stream.
 // These functions prioritize performance and concurrency over maintaining the original order.
 //
@@ -75,5 +75,5 @@
 // This allows the pipeline to terminate after the first error is encountered and return it to the caller.
 //
 // In cases where more complex error handling logic is required, the [Catch] function can be used.
-// It allows to catch and handle errors at any point in the pipeline, providing the flexibility to handle not only the first error, but any of them.
+// It can catch and handle errors at any point in the pipeline, providing the flexibility to handle not only the first error, but any of them.
 package rill

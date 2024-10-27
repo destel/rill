@@ -318,13 +318,13 @@ the results' order usually differs from the input order. This seemingly simple p
 especially at scale.
 While out-of-order results are acceptable in many scenarios, some cases require preserving the original order.
 
-To address this, rill provides ordered versions of its core functions, such as **OrderedMap** and **OrderedFilter**.
+To address this, rill provides ordered versions of its core functions, such as **OrderedMap** or **OrderedFilter**.
 These functions perform additional synchronization under the hood to ensure that if value **x** precedes value **y** in the input channel,
 then **f(x)** will precede **f(y)** in the output.
 
 Here's a practical example: finding the first occurrence of a specific string among 1000 large files hosted online.
 Downloading all files at once would consume too much memory, processing them sequentially would be too slow,
-and traditional concurrency patterns would lose file order.
+and traditional concurrency patterns do not preserve the order of files, making it challenging to find the first match.
 
 The combination of **OrderedFilter** and **First** functions solves this elegantly,
 while downloading and keeping in memory at most 5 files at a time.
