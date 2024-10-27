@@ -87,7 +87,13 @@ func Example_batching() {
 		}
 
 		u.IsActive = true
-		return mockapi.SaveUser(ctx, u)
+		err := mockapi.SaveUser(ctx, u)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("User saved: %+v\n", u)
+		return nil
 	})
 
 	// Handle errors
@@ -289,6 +295,10 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 				return
 			}
 
+			if len(users) == 0 {
+				break
+			}
+
 			for _, user := range users {
 				res <- rill.Wrap(user, nil)
 			}
@@ -327,6 +337,7 @@ func FindFirstPrime(after int, concurrency int) int {
 
 	// Filter out non-prime numbers, preserve the order
 	primes := rill.OrderedFilter(numbers, concurrency, func(x int) (bool, error) {
+		fmt.Println("Checking", x)
 		return isPrime(x), nil
 	})
 
