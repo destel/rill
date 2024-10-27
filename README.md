@@ -326,7 +326,7 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 
 
 ## Order Preservation (Ordered Fan-In)
-Concurrent task processing can boost performance, but since tasks take different amounts of time to complete,
+Concurrent processing can boost performance, but since tasks take different amounts of time to complete,
 the results' order usually differs from the input order. This seemingly simple problem is deceptively challenging to solve correctly,
 especially at scale.
 While out-of-order results are acceptable in many scenarios, some cases require preserving the original order.
@@ -356,7 +356,7 @@ func main() {
 	go func() {
 		defer close(urls)
 		for i := 0; i < 1000; i++ {
-			// Stop generating URLs after the context is canceled (when file is found)
+			// Stop generating URLs after the context is canceled (when the file is found)
 			// This can be rewritten as a select statement, but it's not necessary
 			if err := ctx.Err(); err != nil {
 				return

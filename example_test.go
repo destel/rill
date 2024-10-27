@@ -175,7 +175,7 @@ func Example_ordering() {
 	go func() {
 		defer close(urls)
 		for i := 0; i < 1000; i++ {
-			// Stop generating URLs after the context is canceled (when file is found)
+			// Stop generating URLs after the context is canceled (when the file is found)
 			// This can be rewritten as a select statement, but it's not necessary
 			if err := ctx.Err(); err != nil {
 				return
