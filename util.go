@@ -7,7 +7,7 @@ func Drain[A any](in <-chan A) {
 	core.Drain(in)
 }
 
-// DrainNB is a non-blocking version of [Drain]. Is does draining in a separate goroutine.
+// DrainNB is a non-blocking version of [Drain]. It does draining in a separate goroutine.
 func DrainNB[A any](in <-chan A) {
 	core.DrainNB(in)
 }
