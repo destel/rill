@@ -591,10 +591,10 @@ func ExampleForEach() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Do something with each number and print the result
+	// Square each number and print the result
 	// Concurrency = 3
 	err := rill.ForEach(numbers, 3, func(x int) error {
-		y := doSomethingWithNumber(x)
+		y := square(x)
 		fmt.Println(y)
 		return nil
 	})
@@ -610,15 +610,15 @@ func ExampleForEach_ordered() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Do something with each number
+	// Square each number
 	// Concurrency = 3; Ordered
-	results := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
-		return doSomethingWithNumber(x), nil
+	squares := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
+		return square(x), nil
 	})
 
 	// Print results.
 	// Concurrency = 1; Ordered
-	err := rill.ForEach(results, 1, func(y int) error {
+	err := rill.ForEach(squares, 1, func(y int) error {
 		fmt.Println(y)
 		return nil
 	})
@@ -633,11 +633,11 @@ func ExampleMap() {
 
 	// Transform each number
 	// Concurrency = 3
-	results := rill.Map(numbers, 3, func(x int) (int, error) {
-		return doSomethingWithNumber(x), nil
+	squares := rill.Map(numbers, 3, func(x int) (int, error) {
+		return square(x), nil
 	})
 
-	printStream(results)
+	printStream(squares)
 }
 
 // The same example as for the [Map], but using ordered versions of functions.
@@ -647,11 +647,11 @@ func ExampleOrderedMap() {
 
 	// Transform each number
 	// Concurrency = 3; Ordered
-	results := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
-		return doSomethingWithNumber(x), nil
+	squares := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
+		return square(x), nil
 	})
 
-	printStream(results)
+	printStream(squares)
 }
 
 func ExampleMapReduce() {
@@ -709,11 +709,11 @@ func ExampleToSlice() {
 
 	// Transform each number
 	// Concurrency = 3; Ordered
-	results := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
-		return doSomethingWithNumber(x), nil
+	squares := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
+		return square(x), nil
 	})
 
-	resultsSlice, err := rill.ToSlice(results)
+	resultsSlice, err := rill.ToSlice(squares)
 
 	fmt.Println("Result:", resultsSlice)
 	fmt.Println("Error:", err)
@@ -735,15 +735,8 @@ func ExampleUnbatch() {
 
 // --- Helpers ---
 
-// helper function that squares the number
+// helper function that checks if a number is prime
 // and simulates some additional work using sleep
-func doSomethingWithNumber(x int) int {
-	randomSleep(500 * time.Millisecond) // simulate some additional work
-	return x * x
-}
-
-// naive prime number check.
-// also simulates some additional work using sleep
 func isPrime(n int) bool {
 	randomSleep(500 * time.Millisecond) // simulate some additional work
 
@@ -756,6 +749,13 @@ func isPrime(n int) bool {
 		}
 	}
 	return true
+}
+
+// helper function that squares the number
+// and simulates some additional work using sleep
+func square(x int) int {
+	randomSleep(500 * time.Millisecond) // simulate some additional work
+	return x * x
 }
 
 // printStream prints all items from a stream (one per line) and an error if any.

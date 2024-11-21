@@ -18,11 +18,11 @@ func ExampleFromSeq() {
 
 	// Transform each number
 	// Concurrency = 3
-	results := rill.Map(numbers, 3, func(x int) (int, error) {
-		return doSomethingWithNumber(x), nil
+	squares := rill.Map(numbers, 3, func(x int) (int, error) {
+		return square(x), nil
 	})
 
-	printStream(results)
+	printStream(squares)
 }
 
 func ExampleFromSeq2() {
@@ -40,11 +40,11 @@ func ExampleFromSeq2() {
 
 	// Transform each number
 	// Concurrency = 3
-	results := rill.Map(numbers, 3, func(x int) (int, error) {
-		return doSomethingWithNumber(x), nil
+	squares := rill.Map(numbers, 3, func(x int) (int, error) {
+		return square(x), nil
 	})
 
-	printStream(results)
+	printStream(squares)
 }
 
 func ExampleToSeq2() {
@@ -53,12 +53,12 @@ func ExampleToSeq2() {
 
 	// Transform each number
 	// Concurrency = 3
-	results := rill.Map(numbers, 3, func(x int) (int, error) {
-		return doSomethingWithNumber(x), nil
+	squares := rill.Map(numbers, 3, func(x int) (int, error) {
+		return square(x), nil
 	})
 
 	// Convert the stream into an iterator and use for-range to print the results
-	for val, err := range rill.ToSeq2(results) {
+	for val, err := range rill.ToSeq2(squares) {
 		if err != nil {
 			fmt.Println("Error:", err)
 			break // cleanup is done regardless of early exit
