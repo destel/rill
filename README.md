@@ -46,20 +46,39 @@ does not grow with the input size.
 
 
 ## Quick Start
-Rill makes it easy to process data concurrently. 
-Here's a simple example using **ForEach** to process items in parallel while handling errors:
+Rill transforms concurrent operations into clean, readable pipelines. 
+Here's a practical example that fetches users from an API, activates them, and saves the changes back - 
+all with explicit control over concurrency at each step. 
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-ForEach)
+[Try it](https://pkg.go.dev/github.com/destel/rill#example-package)
 ```go
 func main() {
-	// Convert a slice of numbers into a channel
-	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+	ctx := context.Background()
 
-	// Do something with each number and print the result
+	// Convert a slice of user IDs into a channel
+	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Read users from the API.
 	// Concurrency = 3
-	err := rill.ForEach(numbers, 3, func(x int) error {
-		y := doSomethingWithNumber(x)
-		fmt.Println(y)
+	users := rill.Map(ids, 3, func(id int) (*mockapi.User, error) {
+		return mockapi.GetUser(ctx, id)
+	})
+
+	// Activate users.
+	// Concurrency = 2
+	err := rill.ForEach(users, 2, func(u *mockapi.User) error {
+		if u.IsActive {
+			fmt.Printf("User %d is already active\n", u.ID)
+			return nil
+		}
+
+		u.IsActive = true
+		err := mockapi.SaveUser(ctx, u)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("User saved: %+v\n", u)
 		return nil
 	})
 
@@ -69,12 +88,14 @@ func main() {
 ```
 
 
-## Multi-Stage Pipelines
-The result as above can also be achieved with WaitGroup or ErrGroup, 
-but Rill shines when building complex multi-stage concurrent pipelines.
+## Batching
+While processing items individually works well in many cases, it's often more efficient to handle items in batches, 
+especially when working with external services or databases. This reduces the number of queries and API calls,
+improves throughput, and often reduces costs
 
-The next example demonstrates a multi-stage pipeline that fetches users from an external API in batches, 
-updates their status to active, and saves them back, while controlling the level of concurrency at each step.
+The previous example can be improved by using the API's bulk fetching capability. Instead of making individual 
+`GetUser` calls, the IDs can be grouped into batches to fetch multiple users at once using a single `GetUsers` API call. 
+The **Batch** function transforms a stream of individual items into a stream of batches, and **Unbatch** does the reverse.
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Batching)
 ```go
@@ -88,7 +109,7 @@ func main() {
 	}, nil)
 
 	// Group IDs into batches of 5
-	idBatches := rill.Batch(ids, 5, 1*time.Second)
+	idBatches := rill.Batch(ids, 5, -1)
 
 	// Bulk fetch users from the API
 	// Concurrency = 3
@@ -123,22 +144,22 @@ func main() {
 ```
 
 
-## Batching
-When working with external services or databases, batching is a common pattern to reduce the number of requests and improve performance.
-Rill provides a **Batch** function that transforms a stream of items into a stream of batches of a specified size. It's also possible
-to specify a timeout, after which a batch is emitted even if it's not full. This is useful for keeping an application reactive
-when the input stream is slow or sparse.
+## Real-Time Batching
+Real-world applications often need to handle data that arrives at unpredictable rates. While batching is still 
+desirable for efficiency, waiting to collect a full batch might introduce unacceptable delays when 
+the input stream becomes slow or sparse.
 
-Previous examples have already shown how to use **Batch** to group user IDs for bulk fetching.
-Let's examine a case where batching with timeout is particularly useful.
+Rill solves this with timeout-based batching: batches are emitted either when they're full or after a specified timeout, 
+whichever comes first. This ensures optimal batch sizes during high load while maintaining responsiveness during quiet periods.
 
-In the example below, the `UpdateUserTimestamp` function updates the _last_active_at_ column in the _users_ table with the current timestamp.
-This function is called concurrently from multiple places in the application, such as HTTP handlers. 
-A large number of such calls would cause a large number of concurrent SQL queries, potentially overwhelming the database.
+Consider an application that needs to update users' _last_active_at_ timestamps in a database. The function responsible 
+for this - `UpdateUserTimestamp` can be called concurrently, at unpredictable rates, and from different parts of the application.
+Sending all this updates individually may create too many concurrent queries, potentially overwhelming the database.
 
-To mitigate this, it's possible to group the updates and send them to the database in bulk using the **Batch** function.
-And when updates are sparse, the _timeout_ setting makes sure they're delayed by at most 100ms,
-balancing between reducing database load and data freshness.
+In the example below, updates are collected into batches of up to 5 items, but a batch is also emitted if 100ms passes 
+without reaching the full size. 
+This provides an excellent balance between efficiency and latency: full batches and zero latency during high load, 
+smaller batches and up to 100ms latency during quiet periods.
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-BatchingWithTimeout)
 ```go
