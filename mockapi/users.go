@@ -54,10 +54,11 @@ func GetDepartments() ([]string, error) {
 
 // GetUser returns a user by ID.
 func GetUser(ctx context.Context, id int) (*User, error) {
-	randomSleep(ctx, 500*time.Millisecond)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+
+	randomSleep(ctx, 500*time.Millisecond)
 
 	mu.RLock()
 	defer mu.RUnlock()

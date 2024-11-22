@@ -67,7 +67,7 @@ func Example_batching() {
 	}, nil)
 
 	// Group IDs into batches of 5
-	idBatches := rill.Batch(ids, 5, 1*time.Second)
+	idBatches := rill.Batch(ids, 5, -1)
 
 	// Bulk fetch users from the API
 	// Concurrency = 3
@@ -309,43 +309,40 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 	return res
 }
 
-// This example demonstrates how to use a context for pipeline termination.
-// The FindFirstPrime function uses several concurrent workers to find the first prime number after a given number.
-// Internally it creates a pipeline that starts from an infinite stream of numbers. When the first prime number is found
-// in that stream, the context gets canceled, and the pipeline terminates gracefully.
+// This example demonstrates how to gracefully stop a pipeline on the first error.
+// The CheckAllUsersExist uses several concurrent workers and returns an error as soon as it encounters a non-existent user.
+// Such early return triggers the context cancellation, which in turn stops all remaining users fetches.
 func Example_context() {
-	p := FindFirstPrime(10000, 3) // Use 3 concurrent workers
-	fmt.Println("The first prime after 10000 is", p)
+	ctx := context.Background()
+
+	// ID 999 doesn't exist, so fetching will stop after hitting it.
+	err := CheckAllUsersExist(ctx, 3, []int{1, 2, 3, 4, 5, 999, 7, 8, 9, 10})
+	fmt.Printf("Check result: %v\n", err)
 }
 
-// FindFirstPrime finds the first prime number after the given number, using several concurrent workers.
-func FindFirstPrime(after int, concurrency int) int {
-	ctx, cancel := context.WithCancel(context.Background())
+// CheckAllUsersExist uses several concurrent workers to checks if all users with given IDs exist.
+func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
+	// Create new context that will be canceled when this function returns
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// Generate an infinite stream of numbers starting from the given number
-	numbers := make(chan rill.Try[int])
-	go func() {
-		defer close(numbers)
-		for i := after + 1; ; i++ {
-			select {
-			case <-ctx.Done():
-				return // Stop generating numbers when the context is canceled
-			case numbers <- rill.Wrap(i, nil):
-			}
-		}
-	}()
+	idsStream := rill.FromSlice(ids, nil)
 
-	// Filter out non-prime numbers, preserve the order
-	primes := rill.OrderedFilter(numbers, concurrency, func(x int) (bool, error) {
-		fmt.Println("Checking", x)
-		return isPrime(x), nil
+	// Fetch users concurrently.
+	// Prints messages for successfully fetched users to demonstrate
+	// how pipeline stops after first error.
+	users := rill.Map(idsStream, concurrency, func(id int) (*mockapi.User, error) {
+		u, err := mockapi.GetUser(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch user %d: %w", id, err)
+		}
+
+		fmt.Printf("Fetched user %d\n", id)
+		return u, nil
 	})
 
-	// Get the first prime and cancel the context
-	// This stops number generation and allows goroutines to exit
-	result, _, _ := rill.First(primes)
-	return result
+	// Stop at first error and cancel remaining fetches via context
+	return rill.Err(users)
 }
 
 // --- Function examples ---
