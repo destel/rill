@@ -170,20 +170,13 @@ func Example_ordering() {
 	// The string to search for in the downloaded files
 	needle := []byte("26")
 
-	// Manually generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-999.txt
-	urls := make(chan rill.Try[string])
-	go func() {
-		defer close(urls)
-		for i := 0; i < 1000; i++ {
-			// Stop generating URLs after the context is canceled (when the file is found)
-			// This can be rewritten as a select statement, but it's not necessary
-			if err := ctx.Err(); err != nil {
-				return
-			}
+	// Start with a stream of numbers from 0 to 999
+	fileIDs := streamNumbers(ctx, 0, 1000)
 
-			urls <- rill.Wrap(fmt.Sprintf("https://example.com/file-%d.txt", i), nil)
-		}
-	}()
+	// Generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-999.txt
+	urls := rill.OrderedMap(fileIDs, 1, func(id int) (string, error) {
+		return fmt.Sprintf("https://example.com/file-%d.txt", id), nil
+	})
 
 	// Download and process the files
 	// At most 5 files are downloaded and held in memory at the same time
@@ -251,17 +244,16 @@ func sendMessage(message string, server string) error {
 	return nil
 }
 
-// This example demonstrates using [FlatMap] to accelerate paginated API calls. Instead of fetching all users sequentially,
-// page-by-page (which would take a long time since the API is slow and the number of pages is large), it fetches users from
-// multiple departments in parallel. The example also shows how to write a reusable streaming wrapper around an existing
-// API function that can be used on its own or as part of a larger pipeline.
-func Example_parallelStreams() {
+// This example demonstrates using [FlatMap] to fetch users from multiple departments concurrently.
+// Additionally, it demonstrates how to write a reusable streaming wrapper over paginated API calls - the StreamUsers function
+func Example_flatMap() {
 	ctx := context.Background()
 
-	// Convert a list of all departments into a stream
-	departments := rill.FromSlice(mockapi.GetDepartments())
+	// Start with a stream of department names
+	departments := rill.FromSlice([]string{"IT", "Finance", "Marketing", "Support", "Engineering"}, nil)
 
-	// Use FlatMap to stream users from 3 departments concurrently.
+	// Stream users from all departments concurrently.
+	// At most 3 departments at the same time.
 	users := rill.FlatMap(departments, 3, func(department string) <-chan rill.Try[*mockapi.User] {
 		return StreamUsers(ctx, &mockapi.UserQuery{Department: department})
 	})
@@ -276,7 +268,7 @@ func Example_parallelStreams() {
 
 // StreamUsers is a reusable streaming wrapper around the mockapi.ListUsers function.
 // It iterates through all listing pages and returns a stream of users.
-// This function is useful on its own or as a building block for more complex pipelines.
+// This function is useful both on its own and as part of larger pipelines.
 func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[*mockapi.User] {
 	res := make(chan rill.Try[*mockapi.User])
 
@@ -753,6 +745,22 @@ func isPrime(n int) bool {
 func square(x int) int {
 	randomSleep(500 * time.Millisecond) // simulate some additional work
 	return x * x
+}
+
+// helper function that creates a stream of numbers [start, end) and respects the context
+func streamNumbers(ctx context.Context, start, end int) <-chan rill.Try[int] {
+	out := make(chan rill.Try[int])
+	go func() {
+		defer close(out)
+		for i := start; i < end; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case out <- rill.Try[int]{Value: i}:
+			}
+		}
+	}()
+	return out
 }
 
 // printStream prints all items from a stream (one per line) and an error if any.

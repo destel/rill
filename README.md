@@ -11,7 +11,8 @@ go get -u github.com/destel/rill
 ## Goals
 
 - **Make common tasks easier.**  
-Rill provides a clean and safe way of solving common concurrency problems, such as parallel job execution.
+Rill provides a cleaner and safer way of solving common concurrency problems, such as parallel job execution or
+real-time event processing.
 It removes boilerplate and abstracts away the complexities of goroutine, channel, and error management.
 At the same time, developers retain full control over the concurrency level of all operations.
 
@@ -270,29 +271,109 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 ```
 
 
-## Boosting Sequential Operations
-There is a technique that significantly accelerates some seemingly sequential operations by 
-branching them into multiple parallel streams and then merging the results. 
-Common examples include listing S3 objects, querying APIs, or reading from databases.
+## Order Preservation (Ordered Fan-In)
+Concurrent processing can boost performance, but since tasks take different amounts of time to complete,
+the results' order usually differs from the input order. This seemingly simple problem is deceptively challenging to solve correctly,
+especially at scale.
+While out-of-order results are acceptable in many scenarios, some cases require preserving the original order.
 
-Example below fetches all users from an external paginated API. Doing it sequentially, page-by-page,
-would take a long time since the API is slow and the number of pages is large.
-One way to speed this up is to fetch users from multiple departments at the same time.
-The code below uses **FlatMap** to stream users from 3 departments concurrently and merge the results as they arrive, 
-achieving up to 3x speedup compared to sequential processing.
+To address this, rill provides ordered versions of its core functions, such as **OrderedMap** or **OrderedFilter**.
+These functions perform additional synchronization under the hood to ensure that if value **x** precedes value **y** in the input channel,
+then **f(x)** will precede **f(y)** in the output.
 
-Additionally, it demonstrates how to write a custom reusable streaming wrapper around an existing API function.
-The `StreamUsers` function is useful on its own, but can also be a part of a larger pipeline.
+Here's a practical example: finding the first occurrence of a specific string among 1000 large files hosted online.
+Downloading all files at once would consume too much memory, processing them sequentially would be too slow,
+and traditional concurrency patterns do not preserve the order of files, making it challenging to find the first match.
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-ParallelStreams)
+The combination of **OrderedFilter** and **First** functions solves this elegantly,
+while downloading and keeping in memory at most 5 files at a time.
+
+[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Ordering)
+
 ```go
 func main() {
 	ctx := context.Background()
 
-	// Convert a list of all departments into a stream
-	departments := rill.FromSlice(mockapi.GetDepartments())
+	// The string to search for in the downloaded files
+	needle := []byte("26")
 
-	// Use FlatMap to stream users from 3 departments concurrently.
+	// Start with a stream of numbers from 0 to 999
+	fileIDs := streamNumbers(ctx, 0, 1000)
+
+	// Generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-999.txt
+	urls := rill.OrderedMap(fileIDs, 1, func(id int) (string, error) {
+		return fmt.Sprintf("https://example.com/file-%d.txt", id), nil
+	})
+
+	// Download and process the files
+	// At most 5 files are downloaded and held in memory at the same time
+	matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
+		fmt.Println("Downloading:", url)
+
+		content, err := mockapi.DownloadFile(ctx, url)
+		if err != nil {
+			return false, err
+		}
+
+		// keep only URLs of files that contain the needle
+		return bytes.Contains(content, needle), nil
+	})
+
+	// Find the first matched URL
+	firstMatchedUrl, found, err := rill.First(matchedUrls)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	// Print the result
+	if found {
+		fmt.Println("Found in:", firstMatchedUrl)
+	} else {
+		fmt.Println("Not found")
+	}
+}
+
+// helper function that creates a stream of numbers [start, end) and respects the context
+func streamNumbers(ctx context.Context, start, end int) <-chan rill.Try[int] {
+	out := make(chan rill.Try[int])
+	go func() {
+		defer close(out)
+		for i := start; i < end; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case out <- rill.Try[int]{Value: i}:
+			}
+		}
+	}()
+	return out
+}
+```
+
+
+## Stream Merging and FlatMap
+Rill comes with the **Merge** function that combines multiple streams into a single one. Another, often overlooked,
+function that can combine streams is **FlatMap**. It's a powerful tool that transforms each input item into its own stream,
+and then merges all those streams together. 
+
+In the example below **FlatMap** transforms each department into its own stream of users, and then merges them into a final unified stream of users.
+Like other Rill functions, **FlatMap** gives full control over concurrency. 
+In this particular case the concurrency level is 3, meaning that users are fetched from up to 3 departments at the same time. 
+
+Additionally, this example demonstrates how to write a reusable streaming wrapper over paginated API calls - the `StreamUsers` function.
+This wrapper can be useful both on its own and as part of larger pipelines.
+
+[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-FlatMap)
+```go
+func main() {
+	ctx := context.Background()
+
+	// Start with a stream of department names
+	departments := rill.FromSlice([]string{"IT", "Finance", "Marketing", "Support", "Engineering"}, nil)
+
+	// Stream users from all departments concurrently.
+	// At most 3 departments at the same time.
 	users := rill.FlatMap(departments, 3, func(department string) <-chan rill.Try[*mockapi.User] {
 		return StreamUsers(ctx, &mockapi.UserQuery{Department: department})
 	})
@@ -307,7 +388,7 @@ func main() {
 
 // StreamUsers is a reusable streaming wrapper around the mockapi.ListUsers function.
 // It iterates through all listing pages and returns a stream of users.
-// This function is useful on its own or as a building block for more complex pipelines.
+// This function is useful both on its own and as part of larger pipelines.
 func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[*mockapi.User] {
 	res := make(chan rill.Try[*mockapi.User])
 
@@ -340,80 +421,7 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 	return res
 }
 ```
- 
 
-
-
-## Order Preservation (Ordered Fan-In)
-Concurrent processing can boost performance, but since tasks take different amounts of time to complete,
-the results' order usually differs from the input order. This seemingly simple problem is deceptively challenging to solve correctly,
-especially at scale.
-While out-of-order results are acceptable in many scenarios, some cases require preserving the original order.
-
-To address this, rill provides ordered versions of its core functions, such as **OrderedMap** or **OrderedFilter**.
-These functions perform additional synchronization under the hood to ensure that if value **x** precedes value **y** in the input channel,
-then **f(x)** will precede **f(y)** in the output.
-
-Here's a practical example: finding the first occurrence of a specific string among 1000 large files hosted online.
-Downloading all files at once would consume too much memory, processing them sequentially would be too slow,
-and traditional concurrency patterns do not preserve the order of files, making it challenging to find the first match.
-
-The combination of **OrderedFilter** and **First** functions solves this elegantly,
-while downloading and keeping in memory at most 5 files at a time.
-
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Ordering)
-
-```go
-func main() {
-	ctx := context.Background()
-
-	// The string to search for in the downloaded files
-	needle := []byte("26")
-
-	// Manually generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-999.txt
-	urls := make(chan rill.Try[string])
-	go func() {
-		defer close(urls)
-		for i := 0; i < 1000; i++ {
-			// Stop generating URLs after the context is canceled (when the file is found)
-			// This can be rewritten as a select statement, but it's not necessary
-			if err := ctx.Err(); err != nil {
-				return
-			}
-
-			urls <- rill.Wrap(fmt.Sprintf("https://example.com/file-%d.txt", i), nil)
-		}
-	}()
-
-	// Download and process the files
-	// At most 5 files are downloaded and held in memory at the same time
-	matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
-		fmt.Println("Downloading:", url)
-
-		content, err := mockapi.DownloadFile(ctx, url)
-		if err != nil {
-			return false, err
-		}
-
-		// keep only URLs of files that contain the needle
-		return bytes.Contains(content, needle), nil
-	})
-
-	// Find the first matched URL
-	firstMatchedUrl, found, err := rill.First(matchedUrls)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	// Print the result
-	if found {
-		fmt.Println("Found in:", firstMatchedUrl)
-	} else {
-		fmt.Println("Not found")
-	}
-}
-```
 
 ## Go 1.23 Iterators
 Starting from Go 1.23, the language adds *range-over-function* feature, allowing users to define custom iterators 
