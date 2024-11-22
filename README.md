@@ -11,9 +11,8 @@ go get -u github.com/destel/rill
 ## Goals
 
 - **Make common tasks easier.**  
-Rill provides a cleaner way of solving common concurrency problems, such as
-processing slices and channels, calling APIs, or making DB queries in parallel.
-It removes boilerplate and abstracts away the complexities of goroutine orchestration and error handling.
+Rill provides a clean and safe way of solving common concurrency problems, such as parallel job execution.
+It removes boilerplate and abstracts away the complexities of goroutine, channel, and error management.
 At the same time, developers retain full control over the concurrency level of all operations.
 
 - **Make concurrent code composable and clean.**  
@@ -46,6 +45,8 @@ does not grow with the input size.
 
 
 ## Quick Start
+
+
 Rill transforms concurrent operations into clean, readable pipelines. 
 Here's a practical example that fetches users from an API, activates them, and saves the changes back - 
 all with explicit control over concurrency at each step. 
@@ -156,7 +157,7 @@ Consider an application that needs to update users' _last_active_at_ timestamps 
 for this - `UpdateUserTimestamp` can be called concurrently, at unpredictable rates, and from different parts of the application.
 Sending all this updates individually may create too many concurrent queries, potentially overwhelming the database.
 
-In the example below, updates are collected into batches of up to 5 items, but a batch is also emitted if 100ms passes 
+ In the example below, updates are collected into batches of up to 5 items, but a batch is also emitted if 100ms passes 
 without reaching the full size. 
 This provides an excellent balance between efficiency and latency: full batches and zero latency during high load, 
 smaller batches and up to 100ms latency during quiet periods.
@@ -233,41 +234,38 @@ Rill is context-agnostic, meaning that it does not enforce any specific context 
 However, it's recommended to make user-defined pipeline stages context-aware.
 This is especially important for the initial stage, as it allows to stop feeding the pipeline with new items when the context is canceled.
 
-In the example below the `FindFirstPrime` function uses several concurrent workers to find the first prime number after
-a given number. Internally it creates an infinite stream of numbers. When the first prime number is found
-in that stream, the context gets canceled, and the pipeline terminates gracefully.
+In the example below the `CheckAllUsersExist` function uses several concurrent workers to check if all users 
+from the given list exist. The function returns as soon as it encounters a non-existent user. 
+Such early return triggers the context cancellation, which in-turn stops all remaining users fetches.
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Context)
 ```go
 func main() {
-	p := FindFirstPrime(10000, 3) // Use 3 concurrent workers
-	fmt.Println("The first prime after 10000 is", p)
+	ctx := context.Background()
+
+	// ID 999 doesn't exist, so fetching will stop after hitting it.
+	err := CheckAllUsersExist(ctx, 3, []int{1, 2, 3, 4, 5, 999, 7, 8, 9, 10})
+	fmt.Printf("Check result: %v\n", err)
 }
 
-// FindFirstPrime finds the first prime number after the given number, using several concurrent workers.
-func FindFirstPrime(after int, concurrency int) int {
-	ctx, cancel := context.WithCancel(context.Background())
+// CheckAllUsersExist uses several concurrent workers to checks if all users with given IDs exist.
+func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	numbers := make(chan rill.Try[int])
-	go func() {
-		defer close(numbers)
-		for i := after + 1; ; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case numbers <- rill.Wrap(i, nil):
-			}
-		}
-	}()
+	idsStream := rill.FromSlice(ids, nil)
 
-	primes := rill.OrderedFilter(numbers, concurrency, func(x int) (bool, error) {
-		fmt.Println("Checking", x)
-		return isPrime(x), nil
+	users := rill.Map(idsStream, concurrency, func(id int) (*mockapi.User, error) {
+		u, err := mockapi.GetUser(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch user %d: %w", id, err)
+		}
+
+		fmt.Printf("Fetched user %d\n", id)
+		return u, nil
 	})
 
-	result, _, _ := rill.First(primes)
-	return result
+	return rill.Err(users)
 }
 ```
 
