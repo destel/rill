@@ -108,7 +108,7 @@ func Example_batching() {
 // emits partial batches, ensuring that updates are delayed by at most 100ms.
 //
 // For simplicity, this example does not have retries, error handling and synchronization
-func Example_batchingWithTimeout() {
+func Example_batchingRealTime() {
 	// Start the background worker that processes the updates
 	go updateUserTimestampWorker()
 

@@ -162,7 +162,7 @@ without reaching the full size.
 This provides an excellent balance between efficiency and latency: full batches and zero latency during high load, 
 smaller batches and up to 100ms latency during quiet periods.
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-BatchingWithTimeout)
+[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-BatchingRealTime)
 ```go
 func main() {
 	// Start the background worker that processes the updates
