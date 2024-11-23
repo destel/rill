@@ -223,6 +223,8 @@ Rill provides a wide selection of blocking functions. Some of them are:
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Reduce)
 - **All:** Concurrently checks if all items in the stream satisfy a user provided condition.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-All)
+- **Err:** Returns the first error encountered in the stream or nil, and discards the rest.
+  [Example](https://pkg.go.dev/github.com/destel/rill#example-Err) 
 
 
 All blocking functions share a common behavior. In case of an early termination (before reaching the end of the input stream or in case of an error),
@@ -266,7 +268,7 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 		return u, nil
 	})
 
-	// Stop at first error and cancel remaining fetches via context
+	// Return the first error (if any) and cancel remaining fetches via context
 	return rill.Err(users)
 }
 ```

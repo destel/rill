@@ -331,7 +331,7 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 		return u, nil
 	})
 
-	// Stop at first error and cancel remaining fetches via context
+	// Return the first error (if any) and cancel remaining fetches via context
 	return rill.Err(users)
 }
 
