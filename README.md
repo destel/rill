@@ -360,7 +360,7 @@ and then merges all these streams together.
 
 In the example below, **FlatMap** transforms each department into a stream of users, then merges these streams into one.
 Like other Rill functions, **FlatMap** gives full control over concurrency. 
-In this particular case the concurrency level is 3, meaning that users are fetched from up to 3 departments at the same time. 
+In this particular case the concurrency level is 3, meaning that users are fetched from at most 3 departments at the same time. 
 
 Additionally, this example demonstrates how to write a reusable streaming wrapper over paginated API calls - the `StreamUsers` function.
 This wrapper can be useful both on its own and as part of larger pipelines.
