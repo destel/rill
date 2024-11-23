@@ -33,8 +33,7 @@ or building responsive data pipelines.
 
 - **Provide solutions for advanced tasks.**  
 Beyond basic operations, the library includes ready-to-use functions for batching, ordered fan-in, map-reduce, 
-stream splitting, merging, and more. Pipelines, while usually linear, 
-can have any topology forming a directed acyclic graph (DAG).
+stream splitting, merging, and more. Pipelines, while usually linear, can have any cycle-free topology (DAG).
 
 - **Support custom extensions.**  
 Since Rill operates on standard Go channels, it's easy to write custom functions compatible with the library.
@@ -46,7 +45,7 @@ does not grow with the input size.
 
 
 ## Quick Start
-Let's look at a common task: fetch users from an API, activate them, and save the changes back.
+Let's look at a practical example: fetch users from an API, activate them, and save the changes back.
 The example shows how to control concurrency at each step while keeping the code clean and manageable. 
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package)
@@ -94,7 +93,7 @@ improves throughput, and often reduces costs
 
 To demonstrate batching, let's improve the previous example by using the API's bulk fetching capability. 
 The **Batch** function transforms a stream of individual IDs into a stream of batches, enabling the use of `GetUsers` API 
-to fetch multiple users in a single call instead of making individual `GetUser` requests.
+to fetch multiple users in a single call, instead of making individual `GetUser` calls.
 
 
 
