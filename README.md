@@ -20,16 +20,15 @@ At the same time, developers retain full control over the concurrency level of a
 Most functions in the library take Go channels as inputs and return new, transformed channels as outputs.
 This allows them to be chained in various ways to build reusable pipelines from simpler parts,
 similar to Unix pipes.
-As a result, concurrent tasks become clear sequences of reusable operations.
+As a result, concurrent programs become clear sequences of reusable operations.
 
 - **Centralize error handling.**  
-Errors are automatically propagated through the pipeline and can be handled in a single place at the end.
-For more complex scenarios, Rill also provides tools to intercept and handle errors at any point in the pipeline.
+Errors are automatically propagated through a pipeline and can be handled in a single place at the end.
+For more complex scenarios, Rill also provides tools to intercept and handle errors at any point in a pipeline.
 
 - **Simplify stream processing.**    
 Thanks to Go channels, built-in functions can handle potentially infinite streams, processing items as they arrive.
-This makes Rill a convenient tool for real-time data processing, handling large datasets that don't fit in memory,
-or building responsive data pipelines.
+This makes Rill a convenient tool for real-time processing or handling large datasets that don't fit in memory.
 
 - **Provide solutions for advanced tasks.**  
 Beyond basic operations, the library includes ready-to-use functions for batching, ordered fan-in, map-reduce, 
@@ -87,12 +86,12 @@ func main() {
 
 
 ## Batching
-Processing items in batches rather than individually can significantly improve performance across many scenarios, 
+Processing items in batches rather than individually can significantly improve performance in many scenarios, 
 particularly when working with external services or databases. Batching reduces the number of queries and API calls, 
 increases throughput, and typically lowers costs.
 
 To demonstrate batching, let's improve the previous example by using the API's bulk fetching capability. 
-The **Batch** function transforms a stream of individual IDs into a stream of batches, enabling the use of `GetUsers` API 
+The **Batch** function transforms a stream of individual IDs into a stream of slices. This enables the use of `GetUsers` API 
 to fetch multiple users in a single call, instead of making individual `GetUser` calls.
 
 
@@ -145,9 +144,9 @@ func main() {
 
 
 ## Real-Time Batching
-Real-world applications often need to handle data that arrives at unpredictable rates. While batching is still 
+Real-world applications often need to handle events or data that arrives at unpredictable rates. While batching is still 
 desirable for efficiency, waiting to collect a full batch might introduce unacceptable delays when 
-the input stream slows down or becomes sparse.
+the input stream becomes slow or sparse.
 
 Rill solves this with timeout-based batching: batches are emitted either when they're full or after a specified timeout, 
 whichever comes first. This approach ensures optimal batch sizes during high load while maintaining responsiveness during quiet periods.
@@ -217,13 +216,13 @@ Rill provides a wide selection of blocking functions. Some of them are:
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ForEach)
 - **ToSlice:** Collects all stream items into a slice.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ToSlice)
-- **First:** Returns the first item or error encountered in the stream and discards the rest.
+- **First:** Returns the first item or error encountered in the stream and discards the rest
   [Example](https://pkg.go.dev/github.com/destel/rill#example-First)
 - **Reduce:** Concurrently reduces the stream to a single value, using a user provided reducer function.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Reduce)
 - **All:** Concurrently checks if all items in the stream satisfy a user provided condition.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-All)
-- **Err:** Returns the first error encountered in the stream or nil, and discards the rest.
+- **Err:** Returns the first error encountered in the stream or nil, and discards the rest of the stream.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Err) 
 
 
@@ -276,8 +275,8 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 
 ## Order Preservation (Ordered Fan-In)
 Concurrent processing can boost performance, but since tasks take different amounts of time to complete,
-the results' order usually differs from the input order. This seemingly simple problem is deceptively challenging to solve correctly.
-While out-of-order results are acceptable in many scenarios, some cases require preserving the original order.
+the results' order usually differs from the input order. While out-of-order results are acceptable in many scenarios, 
+some cases require preserving the original order. This seemingly simple problem is deceptively challenging to solve correctly.
 
 To address this, Rill provides ordered versions of its core functions, such as **OrderedMap** or **OrderedFilter**.
 These functions perform additional synchronization under the hood to ensure that if value **x** precedes value **y** in the input stream,
@@ -357,9 +356,9 @@ func streamNumbers(ctx context.Context, start, end int) <-chan rill.Try[int] {
 ## Stream Merging and FlatMap
 Rill comes with the **Merge** function that combines multiple streams into a single one. Another, often overlooked,
 function that can combine streams is **FlatMap**. It's a powerful tool that transforms each input item into its own stream,
-and then merges all those streams together. 
+and then merges all these streams together. 
 
-In the example below **FlatMap** transforms each department into its own stream of users, and then merges them into a single user stream.
+In the example below, **FlatMap** transforms each department into a stream of users, then merges these streams into one.
 Like other Rill functions, **FlatMap** gives full control over concurrency. 
 In this particular case the concurrency level is 3, meaning that users are fetched from up to 3 departments at the same time. 
 
