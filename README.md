@@ -158,7 +158,7 @@ Performing all these updates individually may create too many concurrent queries
 
 In the example below, the updates are queued into `userIDsToUpdate` channel and then grouped into batches of up to 5 items, 
 with each batch sent to the database as a single query.
-The *Batch* functions is used with a timeout of 100ms, ensuring zero latency during high load, 
+The **Batch** function is used with a timeout of 100ms, ensuring zero latency during high load, 
 and up to 100ms latency with smaller batches during quiet periods.
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-BatchingRealTime)
@@ -217,12 +217,12 @@ Rill provides a wide selection of blocking functions. Some of them are:
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ForEach)
 - **ToSlice:** Collects all stream items into a slice.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ToSlice)
-- **First:** Returns the first item or error encountered in the stream.
+- **First:** Returns the first item or error encountered in the stream and discards the rest.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-First)
 - **Reduce:** Concurrently reduces the stream to a single value, using a user provided reducer function.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Reduce)
-- **Any:** Concurrently checks if at least one item in the stream satisfies a user provided condition.
-  [Example](https://pkg.go.dev/github.com/destel/rill#example-Any)
+- **All:** Concurrently checks if all items in the stream satisfy a user provided condition.
+  [Example](https://pkg.go.dev/github.com/destel/rill#example-All)
 
 
 All blocking functions share a common behavior. In case of an early termination (before reaching the end of the input stream or in case of an error),
@@ -247,13 +247,15 @@ func main() {
 	fmt.Printf("Check result: %v\n", err)
 }
 
-// CheckAllUsersExist uses several concurrent workers to checks if all users with given IDs exist.
+// CheckAllUsersExist uses several concurrent workers to check if all users with given IDs exist.
 func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
+	// Create new context that will be canceled when this function returns
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	idsStream := rill.FromSlice(ids, nil)
 
+	// Fetch users concurrently.
 	users := rill.Map(idsStream, concurrency, func(id int) (*mockapi.User, error) {
 		u, err := mockapi.GetUser(ctx, id)
 		if err != nil {
@@ -264,6 +266,7 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 		return u, nil
 	})
 
+	// Stop at first error and cancel remaining fetches via context
 	return rill.Err(users)
 }
 ```
@@ -275,7 +278,7 @@ the results' order usually differs from the input order. This seemingly simple p
 While out-of-order results are acceptable in many scenarios, some cases require preserving the original order.
 
 To address this, Rill provides ordered versions of its core functions, such as **OrderedMap** or **OrderedFilter**.
-These functions perform additional synchronization under the hood to ensure that if value **x** precedes value **y** in the input channel,
+These functions perform additional synchronization under the hood to ensure that if value **x** precedes value **y** in the input stream,
 then **f(x)** will precede **f(y)** in the output.
 
 Here's a practical example: finding the first occurrence of a specific string among 1000 large files hosted online.
@@ -354,7 +357,7 @@ Rill comes with the **Merge** function that combines multiple streams into a sin
 function that can combine streams is **FlatMap**. It's a powerful tool that transforms each input item into its own stream,
 and then merges all those streams together. 
 
-In the example below **FlatMap** transforms each department into its own stream of users, and then merges them all into a final unified stream.
+In the example below **FlatMap** transforms each department into its own stream of users, and then merges them into a single user stream.
 Like other Rill functions, **FlatMap** gives full control over concurrency. 
 In this particular case the concurrency level is 3, meaning that users are fetched from up to 3 departments at the same time. 
 
@@ -440,12 +443,12 @@ func main() {
 
 	// Transform each number
 	// Concurrency = 3
-	results := rill.Map(numbers, 3, func(x int) (int, error) {
-		return doSomethingWithNumber(x), nil
+	squares := rill.Map(numbers, 3, func(x int) (int, error) {
+		return square(x), nil
 	})
 
 	// Convert the stream into an iterator and use for-range to print the results
-	for val, err := range rill.ToSeq2(results) {
+	for val, err := range rill.ToSeq2(squares) {
 		if err != nil {
 			fmt.Println("Error:", err)
 			break // cleanup is done regardless of early exit

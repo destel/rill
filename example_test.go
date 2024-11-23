@@ -321,8 +321,6 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 	idsStream := rill.FromSlice(ids, nil)
 
 	// Fetch users concurrently.
-	// Prints messages for successfully fetched users to demonstrate
-	// how pipeline stops after first error.
 	users := rill.Map(idsStream, concurrency, func(id int) (*mockapi.User, error) {
 		u, err := mockapi.GetUser(ctx, id)
 		if err != nil {
