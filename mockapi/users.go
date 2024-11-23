@@ -1,5 +1,5 @@
-// Package mockapi provides a very basic mock API client for examples and demos.
-// Unfortunately it must live outside the internal folder to be accessible from runnable examples and go playground.
+// Package mockapi provides a very basic mock API for examples and demos.
+// It's intentionally kept public to enable running and experimenting with examples in the Go Playground.
 package mockapi
 
 import (
@@ -54,10 +54,11 @@ func GetDepartments() ([]string, error) {
 
 // GetUser returns a user by ID.
 func GetUser(ctx context.Context, id int) (*User, error) {
-	randomSleep(ctx, 500*time.Millisecond)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+
+	randomSleep(ctx, 500*time.Millisecond)
 
 	mu.RLock()
 	defer mu.RUnlock()

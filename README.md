@@ -11,30 +11,28 @@ go get -u github.com/destel/rill
 ## Goals
 
 - **Make common tasks easier.**  
-Rill provides a cleaner way of solving common concurrency problems, such as
-processing slices and channels, calling APIs, or making DB queries in parallel.
-It removes boilerplate and abstracts away the complexities of goroutine orchestration and error handling.
+Rill provides a cleaner and safer way of solving common concurrency problems, such as parallel job execution or
+real-time event processing.
+It removes boilerplate and abstracts away the complexities of goroutine, channel, and error management.
 At the same time, developers retain full control over the concurrency level of all operations.
 
 - **Make concurrent code composable and clean.**  
 Most functions in the library take Go channels as inputs and return new, transformed channels as outputs.
 This allows them to be chained in various ways to build reusable pipelines from simpler parts,
 similar to Unix pipes.
-As a result, concurrent tasks become clear sequences of reusable operations.
+As a result, concurrent programs become clear sequences of reusable operations.
 
 - **Centralize error handling.**  
-Errors are automatically propagated through the pipeline and can be handled in a single place at the end.
-For more complex scenarios, Rill also provides tools to intercept and handle errors at any point in the pipeline.
+Errors are automatically propagated through a pipeline and can be handled in a single place at the end.
+For more complex scenarios, Rill also provides tools to intercept and handle errors at any point in a pipeline.
 
 - **Simplify stream processing.**    
 Thanks to Go channels, built-in functions can handle potentially infinite streams, processing items as they arrive.
-This makes Rill a convenient tool for real-time data processing, handling large datasets that don't fit in memory,
-or building responsive data pipelines.
+This makes Rill a convenient tool for real-time processing or handling large datasets that don't fit in memory.
 
 - **Provide solutions for advanced tasks.**  
 Beyond basic operations, the library includes ready-to-use functions for batching, ordered fan-in, map-reduce, 
-stream splitting, merging, and more. Pipelines, while usually linear, 
-can have any topology forming a directed acyclic graph (DAG).
+stream splitting, merging, and more. Pipelines, while usually linear, can have any cycle-free topology (DAG).
 
 - **Support custom extensions.**  
 Since Rill operates on standard Go channels, it's easy to write custom functions compatible with the library.
@@ -46,20 +44,38 @@ does not grow with the input size.
 
 
 ## Quick Start
-Rill makes it easy to process data concurrently. 
-Here's a simple example using **ForEach** to process items in parallel while handling errors:
+Let's look at a practical example: fetch users from an API, activate them, and save the changes back.
+It shows how to control concurrency at each step while keeping the code clean and manageable. 
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-ForEach)
+[Try it](https://pkg.go.dev/github.com/destel/rill#example-package)
 ```go
 func main() {
-	// Convert a slice of numbers into a channel
-	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+	ctx := context.Background()
 
-	// Do something with each number and print the result
+	// Convert a slice of user IDs into a channel
+	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Read users from the API.
 	// Concurrency = 3
-	err := rill.ForEach(numbers, 3, func(x int) error {
-		y := doSomethingWithNumber(x)
-		fmt.Println(y)
+	users := rill.Map(ids, 3, func(id int) (*mockapi.User, error) {
+		return mockapi.GetUser(ctx, id)
+	})
+
+	// Activate users.
+	// Concurrency = 2
+	err := rill.ForEach(users, 2, func(u *mockapi.User) error {
+		if u.IsActive {
+			fmt.Printf("User %d is already active\n", u.ID)
+			return nil
+		}
+
+		u.IsActive = true
+		err := mockapi.SaveUser(ctx, u)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("User saved: %+v\n", u)
 		return nil
 	})
 
@@ -69,12 +85,16 @@ func main() {
 ```
 
 
-## Multi-Stage Pipelines
-The result as above can also be achieved with WaitGroup or ErrGroup, 
-but Rill shines when building complex multi-stage concurrent pipelines.
+## Batching
+Processing items in batches rather than individually can significantly improve performance in many scenarios, 
+particularly when working with external services or databases. Batching reduces the number of queries and API calls, 
+increases throughput, and typically lowers costs.
 
-The next example demonstrates a multi-stage pipeline that fetches users from an external API in batches, 
-updates their status to active, and saves them back, while controlling the level of concurrency at each step.
+To demonstrate batching, let's improve the previous example by using the API's bulk fetching capability. 
+The **Batch** function transforms a stream of individual IDs into a stream of slices. This enables the use of `GetUsers` API 
+to fetch multiple users in a single call, instead of making individual `GetUser` calls.
+
+
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Batching)
 ```go
@@ -88,7 +108,7 @@ func main() {
 	}, nil)
 
 	// Group IDs into batches of 5
-	idBatches := rill.Batch(ids, 5, 1*time.Second)
+	idBatches := rill.Batch(ids, 5, -1)
 
 	// Bulk fetch users from the API
 	// Concurrency = 3
@@ -123,24 +143,24 @@ func main() {
 ```
 
 
-## Batching
-When working with external services or databases, batching is a common pattern to reduce the number of requests and improve performance.
-Rill provides a **Batch** function that transforms a stream of items into a stream of batches of a specified size. It's also possible
-to specify a timeout, after which a batch is emitted even if it's not full. This is useful for keeping an application reactive
-when the input stream is slow or sparse.
+## Real-Time Batching
+Real-world applications often need to handle events or data that arrives at unpredictable rates. While batching is still 
+desirable for efficiency, waiting to collect a full batch might introduce unacceptable delays when 
+the input stream becomes slow or sparse.
 
-Previous examples have already shown how to use **Batch** to group user IDs for bulk fetching.
-Let's examine a case where batching with timeout is particularly useful.
+Rill solves this with timeout-based batching: batches are emitted either when they're full or after a specified timeout, 
+whichever comes first. This approach ensures optimal batch sizes during high load while maintaining responsiveness during quiet periods.
 
-In the example below, the `UpdateUserTimestamp` function updates the _last_active_at_ column in the _users_ table with the current timestamp.
-This function is called concurrently from multiple places in the application, such as HTTP handlers. 
-A large number of such calls would cause a large number of concurrent SQL queries, potentially overwhelming the database.
+Consider an application that needs to update users' _last_active_at_ timestamps in a database. The function responsible 
+for this - `UpdateUserTimestamp` can be called concurrently, at unpredictable rates, and from different parts of the application.
+Performing all these updates individually may create too many concurrent queries, potentially overwhelming the database.
 
-To mitigate this, it's possible to group the updates and send them to the database in bulk using the **Batch** function.
-And when updates are sparse, the _timeout_ setting makes sure they're delayed by at most 100ms,
-balancing between reducing database load and data freshness.
+In the example below, the updates are queued into `userIDsToUpdate` channel and then grouped into batches of up to 5 items, 
+with each batch sent to the database as a single query.
+The **Batch** function is used with a timeout of 100ms, ensuring zero latency during high load, 
+and up to 100ms latency with smaller batches during quiet periods.
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-BatchingWithTimeout)
+[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-BatchingRealTime)
 ```go
 func main() {
 	// Start the background worker that processes the updates
@@ -196,12 +216,14 @@ Rill provides a wide selection of blocking functions. Some of them are:
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ForEach)
 - **ToSlice:** Collects all stream items into a slice.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ToSlice)
-- **First:** Returns the first item or error encountered in the stream.
+- **First:** Returns the first item or error encountered in the stream and discards the rest
   [Example](https://pkg.go.dev/github.com/destel/rill#example-First)
 - **Reduce:** Concurrently reduces the stream to a single value, using a user provided reducer function.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Reduce)
-- **Any:** Concurrently checks if at least one item in the stream satisfies a user provided condition.
-  [Example](https://pkg.go.dev/github.com/destel/rill#example-Any)
+- **All:** Concurrently checks if all items in the stream satisfy a user provided condition.
+  [Example](https://pkg.go.dev/github.com/destel/rill#example-All)
+- **Err:** Returns the first error encountered in the stream or nil, and discards the rest of the stream.
+  [Example](https://pkg.go.dev/github.com/destel/rill#example-Err) 
 
 
 All blocking functions share a common behavior. In case of an early termination (before reaching the end of the input stream or in case of an error),
@@ -212,68 +234,147 @@ Rill is context-agnostic, meaning that it does not enforce any specific context 
 However, it's recommended to make user-defined pipeline stages context-aware.
 This is especially important for the initial stage, as it allows to stop feeding the pipeline with new items when the context is canceled.
 
-In the example below the `FindFirstPrime` function uses several concurrent workers to find the first prime number after
-a given number. Internally it creates an infinite stream of numbers. When the first prime number is found
-in that stream, the context gets canceled, and the pipeline terminates gracefully.
+In the example below the `CheckAllUsersExist` function uses several concurrent workers to check if all users 
+from the given list exist. The function returns as soon as it encounters a non-existent user. 
+Such early return triggers the context cancellation, which in-turn stops all remaining users fetches.
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Context)
 ```go
 func main() {
-	p := FindFirstPrime(10000, 3) // Use 3 concurrent workers
-	fmt.Println("The first prime after 10000 is", p)
+	ctx := context.Background()
+
+	// ID 999 doesn't exist, so fetching will stop after hitting it.
+	err := CheckAllUsersExist(ctx, 3, []int{1, 2, 3, 4, 5, 999, 7, 8, 9, 10})
+	fmt.Printf("Check result: %v\n", err)
 }
 
-// FindFirstPrime finds the first prime number after the given number, using several concurrent workers.
-func FindFirstPrime(after int, concurrency int) int {
-	ctx, cancel := context.WithCancel(context.Background())
+// CheckAllUsersExist uses several concurrent workers to check if all users with given IDs exist.
+func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
+	// Create new context that will be canceled when this function returns
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	numbers := make(chan rill.Try[int])
-	go func() {
-		defer close(numbers)
-		for i := after + 1; ; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case numbers <- rill.Wrap(i, nil):
-			}
-		}
-	}()
+	idsStream := rill.FromSlice(ids, nil)
 
-	primes := rill.OrderedFilter(numbers, concurrency, func(x int) (bool, error) {
-		fmt.Println("Checking", x)
-		return isPrime(x), nil
+	// Fetch users concurrently.
+	users := rill.Map(idsStream, concurrency, func(id int) (*mockapi.User, error) {
+		u, err := mockapi.GetUser(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch user %d: %w", id, err)
+		}
+
+		fmt.Printf("Fetched user %d\n", id)
+		return u, nil
 	})
 
-	result, _, _ := rill.First(primes)
-	return result
+	// Return the first error (if any) and cancel remaining fetches via context
+	return rill.Err(users)
 }
 ```
 
 
-## Boosting Sequential Operations
-There is a technique that significantly accelerates some seemingly sequential operations by 
-branching them into multiple parallel streams and then merging the results. 
-Common examples include listing S3 objects, querying APIs, or reading from databases.
+## Order Preservation (Ordered Fan-In)
+Concurrent processing can boost performance, but since tasks take different amounts of time to complete,
+the results' order usually differs from the input order. While out-of-order results are acceptable in many scenarios, 
+some cases require preserving the original order. This seemingly simple problem is deceptively challenging to solve correctly.
 
-Example below fetches all users from an external paginated API. Doing it sequentially, page-by-page,
-would take a long time since the API is slow and the number of pages is large.
-One way to speed this up is to fetch users from multiple departments at the same time.
-The code below uses **FlatMap** to stream users from 3 departments concurrently and merge the results as they arrive, 
-achieving up to 3x speedup compared to sequential processing.
+To address this, Rill provides ordered versions of its core functions, such as **OrderedMap** or **OrderedFilter**.
+These functions perform additional synchronization under the hood to ensure that if value **x** precedes value **y** in the input stream,
+then **f(x)** will precede **f(y)** in the output.
 
-Additionally, it demonstrates how to write a custom reusable streaming wrapper around an existing API function.
-The `StreamUsers` function is useful on its own, but can also be a part of a larger pipeline.
+Here's a practical example: finding the first occurrence of a specific string among 1000 large files hosted online.
+Downloading all files at once would consume too much memory, processing them sequentially would be too slow,
+and traditional concurrency patterns do not preserve the order of files, making it challenging to find the first match.
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-ParallelStreams)
+The combination of **OrderedFilter** and **First** functions solves this elegantly,
+while downloading and keeping in memory at most 5 files at a time.
+
+[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Ordering)
+
 ```go
 func main() {
 	ctx := context.Background()
 
-	// Convert a list of all departments into a stream
-	departments := rill.FromSlice(mockapi.GetDepartments())
+	// The string to search for in the downloaded files
+	needle := []byte("26")
 
-	// Use FlatMap to stream users from 3 departments concurrently.
+	// Start with a stream of numbers from 0 to 999
+	fileIDs := streamNumbers(ctx, 0, 1000)
+
+	// Generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-999.txt
+	urls := rill.OrderedMap(fileIDs, 1, func(id int) (string, error) {
+		return fmt.Sprintf("https://example.com/file-%d.txt", id), nil
+	})
+
+	// Download and process the files
+	// At most 5 files are downloaded and held in memory at the same time
+	matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
+		fmt.Println("Downloading:", url)
+
+		content, err := mockapi.DownloadFile(ctx, url)
+		if err != nil {
+			return false, err
+		}
+
+		// keep only URLs of files that contain the needle
+		return bytes.Contains(content, needle), nil
+	})
+
+	// Find the first matched URL
+	firstMatchedUrl, found, err := rill.First(matchedUrls)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	// Print the result
+	if found {
+		fmt.Println("Found in:", firstMatchedUrl)
+	} else {
+		fmt.Println("Not found")
+	}
+}
+
+// helper function that creates a stream of numbers [start, end) and respects the context
+func streamNumbers(ctx context.Context, start, end int) <-chan rill.Try[int] {
+	out := make(chan rill.Try[int])
+	go func() {
+		defer close(out)
+		for i := start; i < end; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case out <- rill.Try[int]{Value: i}:
+			}
+		}
+	}()
+	return out
+}
+```
+
+
+## Stream Merging and FlatMap
+Rill comes with the **Merge** function that combines multiple streams into a single one. Another, often overlooked,
+function that can combine streams is **FlatMap**. It's a powerful tool that transforms each input item into its own stream,
+and then merges all these streams together. 
+
+In the example below, **FlatMap** transforms each department into a stream of users, then merges these streams into one.
+Like other Rill functions, **FlatMap** gives full control over concurrency. 
+In this particular case the concurrency level is 3, meaning that users are fetched from at most 3 departments at the same time. 
+
+Additionally, this example demonstrates how to write a reusable streaming wrapper over paginated API calls - the `StreamUsers` function.
+This wrapper can be useful both on its own and as part of larger pipelines.
+
+[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-FlatMap)
+```go
+func main() {
+	ctx := context.Background()
+
+	// Start with a stream of department names
+	departments := rill.FromSlice([]string{"IT", "Finance", "Marketing", "Support", "Engineering"}, nil)
+
+	// Stream users from all departments concurrently.
+	// At most 3 departments at the same time.
 	users := rill.FlatMap(departments, 3, func(department string) <-chan rill.Try[*mockapi.User] {
 		return StreamUsers(ctx, &mockapi.UserQuery{Department: department})
 	})
@@ -288,7 +389,7 @@ func main() {
 
 // StreamUsers is a reusable streaming wrapper around the mockapi.ListUsers function.
 // It iterates through all listing pages and returns a stream of users.
-// This function is useful on its own or as a building block for more complex pipelines.
+// This function is useful both on its own and as part of larger pipelines.
 func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[*mockapi.User] {
 	res := make(chan rill.Try[*mockapi.User])
 
@@ -321,83 +422,10 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 	return res
 }
 ```
- 
 
-
-
-## Order Preservation (Ordered Fan-In)
-Concurrent processing can boost performance, but since tasks take different amounts of time to complete,
-the results' order usually differs from the input order. This seemingly simple problem is deceptively challenging to solve correctly,
-especially at scale.
-While out-of-order results are acceptable in many scenarios, some cases require preserving the original order.
-
-To address this, rill provides ordered versions of its core functions, such as **OrderedMap** or **OrderedFilter**.
-These functions perform additional synchronization under the hood to ensure that if value **x** precedes value **y** in the input channel,
-then **f(x)** will precede **f(y)** in the output.
-
-Here's a practical example: finding the first occurrence of a specific string among 1000 large files hosted online.
-Downloading all files at once would consume too much memory, processing them sequentially would be too slow,
-and traditional concurrency patterns do not preserve the order of files, making it challenging to find the first match.
-
-The combination of **OrderedFilter** and **First** functions solves this elegantly,
-while downloading and keeping in memory at most 5 files at a time.
-
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Ordering)
-
-```go
-func main() {
-	ctx := context.Background()
-
-	// The string to search for in the downloaded files
-	needle := []byte("26")
-
-	// Manually generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-999.txt
-	urls := make(chan rill.Try[string])
-	go func() {
-		defer close(urls)
-		for i := 0; i < 1000; i++ {
-			// Stop generating URLs after the context is canceled (when the file is found)
-			// This can be rewritten as a select statement, but it's not necessary
-			if err := ctx.Err(); err != nil {
-				return
-			}
-
-			urls <- rill.Wrap(fmt.Sprintf("https://example.com/file-%d.txt", i), nil)
-		}
-	}()
-
-	// Download and process the files
-	// At most 5 files are downloaded and held in memory at the same time
-	matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
-		fmt.Println("Downloading:", url)
-
-		content, err := mockapi.DownloadFile(ctx, url)
-		if err != nil {
-			return false, err
-		}
-
-		// keep only URLs of files that contain the needle
-		return bytes.Contains(content, needle), nil
-	})
-
-	// Find the first matched URL
-	firstMatchedUrl, found, err := rill.First(matchedUrls)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	// Print the result
-	if found {
-		fmt.Println("Found in:", firstMatchedUrl)
-	} else {
-		fmt.Println("Not found")
-	}
-}
-```
 
 ## Go 1.23 Iterators
-Starting from Go 1.23, the language adds *range-over-function* feature, allowing users to define custom iterators 
+Starting from Go 1.23, the language added *range-over-function* feature, allowing users to define custom iterators 
 for use in for-range loops. This feature enables Rill to integrate seamlessly with existing iterator-based functions
 in the standard library and third-party packages.
 
@@ -416,12 +444,12 @@ func main() {
 
 	// Transform each number
 	// Concurrency = 3
-	results := rill.Map(numbers, 3, func(x int) (int, error) {
-		return doSomethingWithNumber(x), nil
+	squares := rill.Map(numbers, 3, func(x int) (int, error) {
+		return square(x), nil
 	})
 
 	// Convert the stream into an iterator and use for-range to print the results
-	for val, err := range rill.ToSeq2(results) {
+	for val, err := range rill.ToSeq2(squares) {
 		if err != nil {
 			fmt.Println("Error:", err)
 			break // cleanup is done regardless of early exit
