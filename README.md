@@ -87,9 +87,9 @@ func main() {
 
 
 ## Batching
-While processing items individually works well in many cases, it's often more efficient to handle items in batches, 
-especially when working with external services or databases. This reduces the number of queries and API calls,
-improves throughput, and often reduces costs
+Processing items in batches rather than individually can significantly improve performance across many scenarios, 
+particularly when working with external services or databases. Batching reduces the number of queries and API calls, 
+increases throughput, and typically lowers costs.
 
 To demonstrate batching, let's improve the previous example by using the API's bulk fetching capability. 
 The **Batch** function transforms a stream of individual IDs into a stream of batches, enabling the use of `GetUsers` API 
@@ -147,7 +147,7 @@ func main() {
 ## Real-Time Batching
 Real-world applications often need to handle data that arrives at unpredictable rates. While batching is still 
 desirable for efficiency, waiting to collect a full batch might introduce unacceptable delays when 
-the input stream becomes slow or sparse.
+the input stream slows down or becomes sparse.
 
 Rill solves this with timeout-based batching: batches are emitted either when they're full or after a specified timeout, 
 whichever comes first. This approach ensures optimal batch sizes during high load while maintaining responsiveness during quiet periods.
@@ -158,7 +158,7 @@ Performing all these updates individually may create too many concurrent queries
 
 In the example below, the updates are queued into `userIDsToUpdate` channel and then grouped into batches of up to 5 items, 
 with each batch sent to the database as a single query.
-The *Batch* functions is used with a timeout of 100ms, meaning zero latency during high load, 
+The *Batch* functions is used with a timeout of 100ms, ensuring zero latency during high load, 
 and up to 100ms latency with smaller batches during quiet periods.
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-BatchingRealTime)
@@ -271,8 +271,7 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 
 ## Order Preservation (Ordered Fan-In)
 Concurrent processing can boost performance, but since tasks take different amounts of time to complete,
-the results' order usually differs from the input order. This seemingly simple problem is deceptively challenging to solve correctly,
-especially at scale.
+the results' order usually differs from the input order. This seemingly simple problem is deceptively challenging to solve correctly.
 While out-of-order results are acceptable in many scenarios, some cases require preserving the original order.
 
 To address this, rill provides ordered versions of its core functions, such as **OrderedMap** or **OrderedFilter**.
@@ -355,7 +354,7 @@ Rill comes with the **Merge** function that combines multiple streams into a sin
 function that can combine streams is **FlatMap**. It's a powerful tool that transforms each input item into its own stream,
 and then merges all those streams together. 
 
-In the example below **FlatMap** transforms each department into its own stream of users, and then merges them into a final unified stream of users.
+In the example below **FlatMap** transforms each department into its own stream of users, and then merges them all into a final unified stream.
 Like other Rill functions, **FlatMap** gives full control over concurrency. 
 In this particular case the concurrency level is 3, meaning that users are fetched from up to 3 departments at the same time. 
 
@@ -422,7 +421,7 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 
 
 ## Go 1.23 Iterators
-Starting from Go 1.23, the language adds *range-over-function* feature, allowing users to define custom iterators 
+Starting from Go 1.23, the language added *range-over-function* feature, allowing users to define custom iterators 
 for use in for-range loops. This feature enables Rill to integrate seamlessly with existing iterator-based functions
 in the standard library and third-party packages.
 
