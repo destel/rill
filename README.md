@@ -46,7 +46,7 @@ does not grow with the input size.
 
 ## Quick Start
 Let's look at a practical example: fetch users from an API, activate them, and save the changes back.
-The example shows how to control concurrency at each step while keeping the code clean and manageable. 
+It shows how to control concurrency at each step while keeping the code clean and manageable. 
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package)
 ```go
@@ -274,7 +274,7 @@ Concurrent processing can boost performance, but since tasks take different amou
 the results' order usually differs from the input order. This seemingly simple problem is deceptively challenging to solve correctly.
 While out-of-order results are acceptable in many scenarios, some cases require preserving the original order.
 
-To address this, rill provides ordered versions of its core functions, such as **OrderedMap** or **OrderedFilter**.
+To address this, Rill provides ordered versions of its core functions, such as **OrderedMap** or **OrderedFilter**.
 These functions perform additional synchronization under the hood to ensure that if value **x** precedes value **y** in the input channel,
 then **f(x)** will precede **f(y)** in the output.
 
