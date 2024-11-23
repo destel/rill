@@ -46,11 +46,8 @@ does not grow with the input size.
 
 
 ## Quick Start
-
-
-Rill transforms concurrent operations into clean, readable pipelines. 
-Here's a practical example that fetches users from an API, activates them, and saves the changes back - 
-all with explicit control over concurrency at each step. 
+Let's look at a common task: fetch users from an API, activate them, and save the changes back.
+The example shows how to control concurrency at each step while keeping the code clean and manageable. 
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package)
 ```go
