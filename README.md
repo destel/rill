@@ -92,9 +92,11 @@ While processing items individually works well in many cases, it's often more ef
 especially when working with external services or databases. This reduces the number of queries and API calls,
 improves throughput, and often reduces costs
 
-The previous example can be improved by using the API's bulk fetching capability. Instead of making individual 
-`GetUser` calls, the IDs can be grouped into batches to fetch multiple users at once using a single `GetUsers` API call. 
-The **Batch** function transforms a stream of individual items into a stream of batches, and **Unbatch** does the reverse.
+To demonstrate batching, let's improve the previous example by using the API's bulk fetching capability. 
+The **Batch** function transforms a stream of individual IDs into a stream of batches, enabling the use of `GetUsers` API 
+to fetch multiple users in a single call instead of making individual `GetUser` requests.
+
+
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Batching)
 ```go
@@ -149,16 +151,16 @@ desirable for efficiency, waiting to collect a full batch might introduce unacce
 the input stream becomes slow or sparse.
 
 Rill solves this with timeout-based batching: batches are emitted either when they're full or after a specified timeout, 
-whichever comes first. This ensures optimal batch sizes during high load while maintaining responsiveness during quiet periods.
+whichever comes first. This approach ensures optimal batch sizes during high load while maintaining responsiveness during quiet periods.
 
 Consider an application that needs to update users' _last_active_at_ timestamps in a database. The function responsible 
 for this - `UpdateUserTimestamp` can be called concurrently, at unpredictable rates, and from different parts of the application.
-Sending all this updates individually may create too many concurrent queries, potentially overwhelming the database.
+Performing all these updates individually may create too many concurrent queries, potentially overwhelming the database.
 
- In the example below, updates are collected into batches of up to 5 items, but a batch is also emitted if 100ms passes 
-without reaching the full size. 
-This provides an excellent balance between efficiency and latency: full batches and zero latency during high load, 
-smaller batches and up to 100ms latency during quiet periods.
+In the example below, the updates are queued into `userIDsToUpdate` channel and then grouped into batches of up to 5 items, 
+with each batch sent to the database as a single query.
+The *Batch* functions is used with a timeout of 100ms, meaning zero latency during high load, 
+and up to 100ms latency with smaller batches during quiet periods.
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-BatchingRealTime)
 ```go
