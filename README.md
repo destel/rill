@@ -232,11 +232,11 @@ all goroutines feeding the stream are allowed to complete.
 
 Rill is context-agnostic, meaning that it does not enforce any specific context usage.
 However, it's recommended to make user-defined pipeline stages context-aware.
-This is especially important for the initial stage, as it allows to stop feeding the pipeline with new items when the context is canceled.
+This is especially important for the initial stage, as it allows to stop feeding the pipeline with new items after the context cancellation.
 
-In the example below the `CheckAllUsersExist` function uses several concurrent workers to check if all users 
-from the given list exist. The function returns as soon as it encounters a non-existent user. 
-Such early return triggers the context cancellation, which in-turn stops all remaining users fetches.
+In the example below the `CheckAllUsersExist` function uses several concurrent workers to check if all users  
+from the given list exist. When an error occurs (like a non-existent user), the function returns that error  
+and cancels the context, which in turn stops all remaining user fetches.
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Context)
 ```go
@@ -254,6 +254,7 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// Convert the slice into a stream
 	idsStream := rill.FromSlice(ids, nil)
 
 	// Fetch users concurrently.

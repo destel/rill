@@ -318,6 +318,7 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// Convert the slice into a stream
 	idsStream := rill.FromSlice(ids, nil)
 
 	// Fetch users concurrently.
