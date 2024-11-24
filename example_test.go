@@ -615,6 +615,33 @@ func ExampleForEach_ordered() {
 	fmt.Println("Error:", err)
 }
 
+// Generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-9.txt
+func ExampleGenerate() {
+	urls := rill.Generate(func(send func(string), sendErr func(error)) {
+		for i := 0; i < 10; i++ {
+			send(fmt.Sprintf("http://example.com/file-%d.txt", i))
+		}
+	})
+
+	printStream(urls)
+}
+
+// Generate an infinite stream of natural numbers (1, 2, 3, ...).
+// New numbers are sent to the stream every 500ms until the context is canceled
+func ExampleGenerate_context() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	numbers := rill.Generate(func(send func(int), sendErr func(error)) {
+		for i := 1; ctx.Err() == nil; i++ {
+			send(i)
+			time.Sleep(500 * time.Millisecond)
+		}
+	})
+
+	printStream(numbers)
+}
+
 func ExampleMap() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)

@@ -182,13 +182,13 @@ func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 //
 // Here's how the same code would look without Generate:
 //
-//	stream := make(chan Try[int])
+//	stream := make(chan rill.Try[int])
 //	go func() {
 //		defer close(stream)
 //		for i := 0; i < 100; i++ {
-//			stream <- Try[int]{Value: i}
+//			stream <- rill.Try[int]{Value: i}
 //		}
-//		stream <- Try[int]{Error: someError}
+//		stream <- rill.Try[int]{Error: someError}
 //	}()
 func Generate[A any](f func(send func(A), sendErr func(error))) <-chan Try[A] {
 	out := make(chan Try[A])
