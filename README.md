@@ -245,7 +245,7 @@ func main() {
 	ctx := context.Background()
 
 	// ID 999 doesn't exist, so fetching will stop after hitting it.
-	err := CheckAllUsersExist(ctx, 3, []int{1, 2, 3, 4, 5, 999, 7, 8, 9, 10})
+	err := CheckAllUsersExist(ctx, 3, []int{1, 2, 3, 4, 5, 999, 7, 8, 9, 10, 11, 12, 13, 14, 15})
 	fmt.Printf("Check result: %v\n", err)
 }
 
