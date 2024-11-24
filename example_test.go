@@ -618,11 +618,11 @@ func ExampleForEach_ordered() {
 	fmt.Println("Error:", err)
 }
 
-// Generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-9.txt
+// Generate a stream of URLs from https://example.com/file-0.txt to https://example.com/file-9.txt
 func ExampleGenerate() {
 	urls := rill.Generate(func(send func(string), sendErr func(error)) {
 		for i := 0; i < 10; i++ {
-			send(fmt.Sprintf("http://example.com/file-%d.txt", i))
+			send(fmt.Sprintf("https://example.com/file-%d.txt", i))
 		}
 	})
 
