@@ -312,7 +312,15 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 	defer cancel()
 
 	// Convert the slice into a stream
-	idsStream := rill.FromSlice(ids, nil)
+	// Use Generate instead of FromSlice to make the first stage context-aware
+	idsStream := rill.Generate(func(send func(int), sendErr func(error)) {
+		for _, id := range ids {
+			if ctx.Err() != nil {
+				return
+			}
+			send(id)
+		}
+	})
 
 	// Fetch users concurrently.
 	users := rill.Map(idsStream, concurrency, func(id int) (*mockapi.User, error) {

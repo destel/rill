@@ -233,6 +233,7 @@ all goroutines feeding the stream are allowed to complete.
 Rill is context-agnostic, meaning that it does not enforce any specific context usage.
 However, it's recommended to make user-defined pipeline stages context-aware.
 This is especially important for the initial stage, as it allows to stop feeding the pipeline with new items after the context cancellation.
+In practice the first stage is often naturally context-aware through Go's standard APIs for databases, HTTP clients, and other external sources. 
 
 In the example below the `CheckAllUsersExist` function uses several concurrent workers to check if all users  
 from the given list exist. When an error occurs (like a non-existent user), the function returns that error  
@@ -272,6 +273,22 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 	return rill.Err(users)
 }
 ```
+
+In the example above only the second stage (`mockapi.GetUser`) of the pipeline is context-aware, 
+which is fine - the input slice is small and the expensive API calls will be prevented anyway.
+For completeness below is a demonstration of how to replace **FromSlice** with **Generate** to make the first stage context-aware as well.
+
+```go
+idsStream := rill.Generate(func(send func(int), sendErr func(error)) {
+	for _, id := range ids {
+		if ctx.Err() != nil {
+			return
+		}
+		send(id)
+	}
+})
+```
+
 
 
 ## Order Preservation (Ordered Fan-In)
