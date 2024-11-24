@@ -299,12 +299,12 @@ func main() {
 	// The string to search for in the downloaded files
 	needle := []byte("26")
 
-	// Start with a stream of numbers from 0 to 999
-	fileIDs := streamNumbers(ctx, 0, 1000)
-
-	// Generate a stream of URLs from http://example.com/file-0.txt to http://example.com/file-999.txt
-	urls := rill.OrderedMap(fileIDs, 1, func(id int) (string, error) {
-		return fmt.Sprintf("https://example.com/file-%d.txt", id), nil
+	// Generate a stream of URLs from https://example.com/file-0.txt to https://example.com/file-999.txt
+	// New URLs will stop being generated if the context is canceled
+	urls := rill.Generate(func(send func(string), sendErr func(error)) {
+		for i := 0; i < 1000 && ctx.Err() == nil; i++ {
+			send(fmt.Sprintf("https://example.com/file-%d.txt", i))
+		}
 	})
 
 	// Download and process the files
@@ -334,22 +334,6 @@ func main() {
 	} else {
 		fmt.Println("Not found")
 	}
-}
-
-// helper function that creates a stream of numbers [start, end) and respects the context
-func streamNumbers(ctx context.Context, start, end int) <-chan rill.Try[int] {
-	out := make(chan rill.Try[int])
-	go func() {
-		defer close(out)
-		for i := start; i < end; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case out <- rill.Try[int]{Value: i}:
-			}
-		}
-	}()
-	return out
 }
 ```
 
