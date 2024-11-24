@@ -169,3 +169,40 @@ func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 
 	return out, errs
 }
+
+// Generate is a shorthand for creating streams.
+// It provides a more ergonomic way of sending both values and errors to a stream, manages goroutine and channel lifecycle.
+//
+//	stream := rill.Generate(func(send func(int), sendErr func(error)) {
+//		for i := 0; i < 100; i++ {
+//			send(i)
+//		}
+//		sendErr(someError)
+//	})
+//
+// Here's how the same code would look without Generate:
+//
+//	stream := make(chan Try[int])
+//	go func() {
+//		defer close(stream)
+//		for i := 0; i < 100; i++ {
+//			stream <- Try[int]{Value: i}
+//		}
+//		stream <- Try[int]{Error: someError}
+//	}()
+func Generate[A any](f func(send func(A), sendErr func(error))) <-chan Try[A] {
+	out := make(chan Try[A])
+	go func() {
+		defer close(out)
+
+		send := func(a A) {
+			out <- Try[A]{Value: a}
+		}
+		sendErr := func(err error) {
+			out <- Try[A]{Error: err}
+		}
+
+		f(send, sendErr)
+	}()
+	return out
+}

@@ -180,3 +180,20 @@ func TestFromChans(t *testing.T) {
 	runTest("values and errors", makeSlice(10000), makeErrSlice(10000))
 	runTest("values and nil errors", makeSlice(10), []error{nil, nil, fmt.Errorf("err"), nil})
 }
+
+func TestGenerate(t *testing.T) {
+	in := Generate(func(send func(int), sendErr func(error)) {
+		for i := 0; i < 10; i++ {
+			if i%2 == 0 {
+				send(i)
+			} else {
+				sendErr(fmt.Errorf("err%d", i))
+			}
+		}
+	})
+
+	outSlice, errSlice := toSliceAndErrors(in)
+
+	th.ExpectSlice(t, outSlice, []int{0, 2, 4, 6, 8})
+	th.ExpectSlice(t, errSlice, []string{"err1", "err3", "err5", "err7", "err9"})
+}
