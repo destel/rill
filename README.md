@@ -275,7 +275,7 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 ```
 
 In the example above only the second stage (`mockapi.GetUser`) of the pipeline is context-aware.
-FromSlice works well here since the input is small, iteration is fast and context cancellation prevents expensive API calls regardless.
+**FromSlice** works well here since the input is small, iteration is fast and context cancellation prevents expensive API calls regardless.
 The following example demonstrates how to replace **FromSlice** with **Generate** when full context awareness becomes important.
 
 ```go
