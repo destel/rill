@@ -276,7 +276,7 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 
 In the example above only the second stage (`mockapi.GetUser`) of the pipeline is context-aware.
 **FromSlice** works well here since the input is small, iteration is fast and context cancellation prevents expensive API calls regardless.
-The following example demonstrates how to replace **FromSlice** with **Generate** when full context awareness becomes important.
+The following code demonstrates how to replace **FromSlice** with **Generate** when full context awareness becomes important.
 
 ```go
 idsStream := rill.Generate(func(send func(int), sendErr func(error)) {
@@ -316,7 +316,8 @@ func main() {
 	// The string to search for in the downloaded files
 	needle := []byte("26")
 
-	// Generate a stream of URLs from https://example.com/file-0.txt to https://example.com/file-999.txt
+	// Generate a stream of URLs from https://example.com/file-0.txt 
+	// to https://example.com/file-999.txt
 	urls := rill.Generate(func(send func(string), sendErr func(error)) {
 		for i := 0; i < 1000 && ctx.Err() == nil; i++ {
 			send(fmt.Sprintf("https://example.com/file-%d.txt", i))

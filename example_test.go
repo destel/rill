@@ -170,7 +170,8 @@ func Example_ordering() {
 	// The string to search for in the downloaded files
 	needle := []byte("26")
 
-	// Generate a stream of URLs from https://example.com/file-0.txt to https://example.com/file-999.txt
+	// Generate a stream of URLs from https://example.com/file-0.txt
+	// to https://example.com/file-999.txt
 	urls := rill.Generate(func(send func(string), sendErr func(error)) {
 		for i := 0; i < 1000 && ctx.Err() == nil; i++ {
 			send(fmt.Sprintf("https://example.com/file-%d.txt", i))
