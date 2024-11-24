@@ -210,7 +210,7 @@ Pipelines typically consist of a sequence of non-blocking channel transformation
 The general rule is: any error occurring anywhere in a pipeline is propagated down to the final stage,
 where it's caught by some blocking function and returned to the caller.
 
-Rill provides a wide selection of blocking functions. Some of them are:
+Rill provides a wide selection of blocking functions. Here are some commonly used ones:
 
 - **ForEach:** Concurrently applies a user function to each item in the stream.
   [Example](https://pkg.go.dev/github.com/destel/rill#example-ForEach)
@@ -274,9 +274,9 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 }
 ```
 
-In the example above only the second stage (`mockapi.GetUser`) of the pipeline is context-aware, 
-which is fine - the input slice is small and the expensive API calls will be prevented anyway.
-For completeness below is a demonstration of how to replace **FromSlice** with **Generate** to make the first stage context-aware as well.
+In the example above only the second stage (`mockapi.GetUser`) of the pipeline is context-aware.
+This approach works well since the input slice is small, iteration is fast and context cancellation prevents expensive API calls regardless.
+The following example demonstrates how to replace **FromSlice** with **Generate** when full context awareness becomes important.
 
 ```go
 idsStream := rill.Generate(func(send func(int), sendErr func(error)) {
