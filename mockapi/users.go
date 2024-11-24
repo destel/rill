@@ -1,5 +1,6 @@
 // Package mockapi provides a very basic mock API for examples and demos.
 // It's intentionally kept public to enable running and experimenting with examples in the Go Playground.
+// The implementation is naive and uses full scan for all operations.
 package mockapi
 
 import (
@@ -20,20 +21,27 @@ type User struct {
 }
 
 // don't use pointers here, to make sure that raw data is not accessible from outside
-var departments = []string{"HR", "IT", "Finance", "Marketing", "Sales", "Support", "Engineering", "Management"}
-var users = make(map[int]User)
+var departments []string
+var users []User
 
 var mu sync.RWMutex
 
 func init() {
+	const usersCount = 100
+
 	var adjs = []string{"Big", "Small", "Fast", "Slow", "Smart", "Happy", "Sad", "Funny", "Serious", "Angry"}
 	var nouns = []string{"Dog", "Cat", "Bird", "Fish", "Mouse", "Elephant", "Lion", "Tiger", "Bear", "Wolf"}
 
 	mu.Lock()
 	defer mu.Unlock()
 
+	departments = []string{"HR", "IT", "Finance", "Marketing", "Sales", "Support", "Engineering", "Management"}
+
 	// Generate users
-	for i := 1; i <= 100; i++ {
+	// Use deterministic values for all fields to make examples reproducible
+	users = make([]User, 0, usersCount)
+
+	for i := 1; i <= usersCount; i++ {
 		user := User{
 			ID:         i,
 			Name:       adjs[hash(i, "name1")%len(adjs)] + " " + nouns[hash(i, "name2")%len(nouns)], // adj + noun
@@ -42,7 +50,7 @@ func init() {
 			IsActive:   hash(i, "active")%100 < 60,                                                  // 60%
 		}
 
-		users[i] = user
+		users = append(users, user)
 	}
 }
 
@@ -57,37 +65,38 @@ func GetUser(ctx context.Context, id int) (*User, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-
 	randomSleep(ctx, 500*time.Millisecond)
 
 	mu.RLock()
 	defer mu.RUnlock()
 
-	user, ok := users[id]
-	if !ok {
-		return nil, fmt.Errorf("user not found")
+	idx, err := getUserIndex(id)
+	if err != nil {
+		return nil, err
 	}
 
+	user := users[idx]
 	return &user, nil
 }
 
 // GetUsers returns a list of users by IDs.
 // If a user is not found, nil is returned in the corresponding position.
 func GetUsers(ctx context.Context, ids []int) ([]*User, error) {
-	randomSleep(ctx, 1000*time.Millisecond)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	randomSleep(ctx, 1000*time.Millisecond)
 
 	mu.RLock()
 	defer mu.RUnlock()
 
 	res := make([]*User, 0, len(ids))
 	for _, id := range ids {
-		user, ok := users[id]
-		if !ok {
+		idx, err := getUserIndex(id)
+		if err != nil {
 			res = append(res, nil)
 		} else {
+			user := users[idx]
 			res = append(res, &user)
 		}
 	}
@@ -102,15 +111,16 @@ type UserQuery struct {
 
 // ListUsers returns a paginated list of users optionally filtered by department.
 func ListUsers(ctx context.Context, query *UserQuery) ([]*User, error) {
-	randomSleep(ctx, 1000*time.Millisecond)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	randomSleep(ctx, 1000*time.Millisecond)
 
 	const pageSize = 10
 	if query == nil {
 		query = &UserQuery{}
 	}
+
 	offset := query.Page * pageSize
 
 	mu.RLock()
@@ -131,7 +141,8 @@ func ListUsers(ctx context.Context, query *UserQuery) ([]*User, error) {
 			break
 		}
 
-		res = append(res, &user)
+		userCopy := user
+		res = append(res, &userCopy)
 	}
 
 	return res, nil
@@ -139,10 +150,10 @@ func ListUsers(ctx context.Context, query *UserQuery) ([]*User, error) {
 
 // SaveUser saves a user.
 func SaveUser(ctx context.Context, user *User) error {
-	randomSleep(ctx, 1000*time.Millisecond)
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	randomSleep(ctx, 1000*time.Millisecond)
 
 	if user == nil {
 		return fmt.Errorf("user is nil")
@@ -158,8 +169,24 @@ func SaveUser(ctx context.Context, user *User) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	users[user.ID] = *user
+	idx, err := getUserIndex(user.ID)
+	if err != nil {
+		users = append(users, *user)
+	} else {
+		users[idx] = *user
+	}
+
 	return nil
+}
+
+func getUserIndex(id int) (int, error) {
+	for i, u := range users {
+		if u.ID == id {
+			return i, nil
+		}
+	}
+
+	return -1, fmt.Errorf("user not found")
 }
 
 func hash(input ...any) int {
