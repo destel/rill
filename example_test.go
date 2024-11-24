@@ -171,7 +171,6 @@ func Example_ordering() {
 	needle := []byte("26")
 
 	// Generate a stream of URLs from https://example.com/file-0.txt to https://example.com/file-999.txt
-	// New URLs will stop being generated if the context is canceled
 	urls := rill.Generate(func(send func(string), sendErr func(error)) {
 		for i := 0; i < 1000 && ctx.Err() == nil; i++ {
 			send(fmt.Sprintf("https://example.com/file-%d.txt", i))
