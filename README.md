@@ -393,15 +393,16 @@ func main() {
 // It iterates through all listing pages and uses [Generate] to simplify sending users and errors to the resulting stream.
 // This function is useful both on its own and as part of larger pipelines.
 func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[*mockapi.User] {
-	if query == nil {
-		query = &mockapi.UserQuery{}
-	}
-
 	return rill.Generate(func(send func(*mockapi.User), sendErr func(error)) {
-		for page := 0; ; page++ {
-			query.Page = page
+		var currentQuery mockapi.UserQuery
+		if query != nil {
+			currentQuery = *query
+		}
 
-			users, err := mockapi.ListUsers(ctx, query)
+		for page := 0; ; page++ {
+			currentQuery.Page = page
+
+			users, err := mockapi.ListUsers(ctx, &currentQuery)
 			if err != nil {
 				sendErr(err)
 				return
