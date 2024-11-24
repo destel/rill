@@ -373,24 +373,20 @@ func main() {
 }
 
 // StreamUsers is a reusable streaming wrapper around the mockapi.ListUsers function.
-// It iterates through all listing pages and returns a stream of users.
+// It iterates through all listing pages and uses [Generate] to simplify sending users and errors to the resulting stream.
 // This function is useful both on its own and as part of larger pipelines.
 func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[*mockapi.User] {
-	res := make(chan rill.Try[*mockapi.User])
-
 	if query == nil {
 		query = &mockapi.UserQuery{}
 	}
 
-	go func() {
-		defer close(res)
-
+	return rill.Generate(func(send func(*mockapi.User), sendErr func(error)) {
 		for page := 0; ; page++ {
 			query.Page = page
 
 			users, err := mockapi.ListUsers(ctx, query)
 			if err != nil {
-				res <- rill.Wrap[*mockapi.User](nil, err)
+				sendErr(err)
 				return
 			}
 
@@ -399,12 +395,10 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 			}
 
 			for _, user := range users {
-				res <- rill.Wrap(user, nil)
+				send(user)
 			}
 		}
-	}()
-
-	return res
+	})
 }
 ```
 
