@@ -50,7 +50,8 @@ It shows how to control concurrency at each step while keeping the code clean an
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package)
 ```go
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Convert a slice of user IDs into a channel
 	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
@@ -99,7 +100,8 @@ to fetch multiple users in a single call, instead of making individual `GetUser`
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Batching)
 ```go
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Convert a slice of user IDs into a channel
 	ids := rill.FromSlice([]int{
@@ -311,13 +313,15 @@ while downloading and keeping in memory at most 5 files at a time.
 
 ```go
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// The string to search for in the downloaded files
 	needle := []byte("26")
 
 	// Generate a stream of URLs from https://example.com/file-0.txt 
 	// to https://example.com/file-999.txt
+	// Stop generating URLs if the context is canceled
 	urls := rill.Generate(func(send func(string), sendErr func(error)) {
 		for i := 0; i < 1000 && ctx.Err() == nil; i++ {
 			send(fmt.Sprintf("https://example.com/file-%d.txt", i))
@@ -370,7 +374,8 @@ This wrapper can be useful both on its own and as part of larger pipelines.
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-FlatMap)
 ```go
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Start with a stream of department names
 	departments := rill.FromSlice([]string{"IT", "Finance", "Marketing", "Support", "Engineering"}, nil)
