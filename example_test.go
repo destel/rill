@@ -19,9 +19,11 @@ import (
 
 // This example demonstrates a Rill pipeline that fetches users from an API,
 // updates their status to active and saves them back.
-// Both operations are performed concurrently
+// Both operations are performed concurrently.
+// [ForEach] returns on the first error, and context cancellation via defer stops all remaining fetches.
 func Example() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Convert a slice of user IDs into a stream
 	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
@@ -58,7 +60,8 @@ func Example() {
 // and updates their status to active and saves them back.
 // Users are fetched concurrently and in batches to reduce the number of API calls.
 func Example_batching() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Convert a slice of user IDs into a stream
 	ids := rill.FromSlice([]int{
@@ -164,14 +167,18 @@ func updateUserTimestampWorker() {
 //
 // The combination of [OrderedFilter] and [First] functions solves the problem,
 // while downloading and holding in memory at most 5 files at the same time.
+// [First] returns on the first match, this triggers the context cancellation via defer,
+// stopping URL generation and file downloads.
 func Example_ordering() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// The string to search for in the downloaded files
 	needle := []byte("26")
 
 	// Generate a stream of URLs from https://example.com/file-0.txt
 	// to https://example.com/file-999.txt
+	// Stop generating URLs if the context is canceled
 	urls := rill.Generate(func(send func(string), sendErr func(error)) {
 		for i := 0; i < 1000 && ctx.Err() == nil; i++ {
 			send(fmt.Sprintf("https://example.com/file-%d.txt", i))
@@ -247,7 +254,8 @@ func sendMessage(message string, server string) error {
 // This example demonstrates using [FlatMap] to fetch users from multiple departments concurrently.
 // Additionally, it demonstrates how to write a reusable streaming wrapper over paginated API calls - the StreamUsers function
 func Example_flatMap() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Start with a stream of department names
 	departments := rill.FromSlice([]string{"IT", "Finance", "Marketing", "Support", "Engineering"}, nil)
