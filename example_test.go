@@ -20,6 +20,7 @@ import (
 // This example demonstrates a Rill pipeline that fetches users from an API,
 // updates their status to active and saves them back.
 // Both operations are performed concurrently
+// [ForEach] returns on the first error, and context cancellation via defer stops all remaining fetches.
 func Example() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

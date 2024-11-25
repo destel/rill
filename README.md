@@ -44,8 +44,10 @@ does not grow with the input size.
 
 
 ## Quick Start
-Let's look at a practical example: fetch users from an API, activate them, and save the changes back.
-It shows how to control concurrency at each step while keeping the code clean and manageable. 
+Let's look at a practical example: fetch users from an API, activate them, and save the changes back. 
+It shows how to control concurrency at each step while keeping the code clean and manageable.
+**ForEach** returns on the first error, and context cancellation via defer stops all remaining fetches.
+
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package)
 ```go
@@ -308,7 +310,7 @@ and traditional concurrency patterns do not preserve the order of files, making 
 
 The combination of **OrderedFilter** and **First** functions solves this elegantly,
 while downloading and keeping in memory at most 5 files at a time. **First** returns on the first match,
-this triggers the context cancellation, and prevents further downloads.
+this triggers the context cancellation via defer, stopping URL generation and file downloads.
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Ordering)
 
