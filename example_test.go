@@ -166,6 +166,7 @@ func updateUserTimestampWorker() {
 //
 // The combination of [OrderedFilter] and [First] functions solves the problem,
 // while downloading and holding in memory at most 5 files at the same time.
+// [First] returns on the first match, this triggers the context cancellation, and prevents further downloads.
 func Example_ordering() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
