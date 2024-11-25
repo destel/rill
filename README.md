@@ -307,7 +307,8 @@ Downloading all files at once would consume too much memory, processing them seq
 and traditional concurrency patterns do not preserve the order of files, making it challenging to find the first match.
 
 The combination of **OrderedFilter** and **First** functions solves this elegantly,
-while downloading and keeping in memory at most 5 files at a time.
+while downloading and keeping in memory at most 5 files at a time. Context cancellation via defer
+ensures that the pipeline is terminated as soon as the first match is found.
 
 [Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Ordering)
 
