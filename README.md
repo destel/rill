@@ -473,5 +473,13 @@ Rill has a test coverage of over 95%, with testing focused on:
 
 
 ## Contributing
-Contributions are welcome! Whether it's reporting a bug, suggesting a feature, or submitting a pull request, your support helps improve Rill.
-Please ensure that your code adheres to the existing style and includes relevant tests._
+Thank you for your interest in improving Rill! Before submitting your pull request, please consider:
+
+- Focus on generic, widely applicable solutions
+- Consider use cases. Try to avoid highly specialized features that could be separate packages
+- Keep the API surface clean and focused
+- Try to avoid adding functions that can be easily misused
+- Add tests and documentation
+- For major changes, prefer opening an issue first to discuss the approach
+
+For bug reports and feature requests, please include a clear description and minimal example when possible.
