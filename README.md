@@ -479,6 +479,7 @@ Thank you for your interest in improving Rill! Before submitting your pull reque
 - Consider use cases. Try to avoid highly specialized features that could be separate packages
 - Keep the API surface clean and focused
 - Try to avoid adding functions that can be easily misused
+- Avoid external dependencies 
 - Add tests and documentation
 - For major changes, prefer opening an issue first to discuss the approach
 
