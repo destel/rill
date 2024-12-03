@@ -192,3 +192,13 @@ func ExpectNotPanic(t *testing.T, f func()) {
 	}()
 	f()
 }
+
+func ExpectPanic(t *testing.T, f func()) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("expected panic")
+		}
+	}()
+	f()
+}
