@@ -19,5 +19,5 @@ func PriorityQueue[A any](in <-chan Try[A], capacity int, less func(A, A) bool) 
 		return !less(item1.Value, item2.Value)
 	})
 
-	return core.CustomBuffer(in, buf)
+	return core.CustomBuffer[Try[A]](in, buf)
 }
