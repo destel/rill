@@ -481,6 +481,12 @@ Rill has a test coverage of over 95%, with testing focused on:
 - **Ordering**: ensuring that ordered versions of functions preserve the order, while basic versions do not
 
 
+## Blog Posts
+Technical articles exploring different aspects and applications of Rill's concurrency patterns:
+- [Real-Time Batching in Go](https://destel.dev/blog/real-time-batching-in-go)
+- [Fast Listing of Files from S3, GCS and Other Object Storages](https://destel.dev/blog/fast-listing-of-files-from-s3-gcs-and-other-object-storages)
+
+
 ## Contributing
 Thank you for your interest in improving Rill! Before submitting your pull request, please consider:
 
