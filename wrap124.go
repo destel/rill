@@ -2,7 +2,7 @@
 
 package rill
 
-// Stream is a type alias for a channel of Try containers.
+// Stream is a type alias for a channel of [Try] containers.
 // This alias is optional, but it can make the code more readable.
 //
 // Before:
