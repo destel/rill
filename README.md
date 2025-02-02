@@ -428,6 +428,15 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 }
 ```
 
+**Note:** Starting from Go 1.24, thanks to generic type aliases, the return type of the `StreamUsers` function 
+can optionally be simplified to `rill.Stream[*mockapi.User]`
+
+```go
+func StreamUsers(ctx context.Context, query *mockapi.UserQuery) rill.Stream[*mockapi.User] {
+    ...
+}
+```
+
 
 ## Go 1.23 Iterators
 Starting from Go 1.23, the language added *range-over-function* feature, allowing users to define custom iterators 
