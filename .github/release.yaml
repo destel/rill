@@ -1,12 +1,12 @@
 changelog:
   categories:
-    - title: ➕ New
+    - title: 🟢 New
       labels: ["new"]
-    - title: 🐛 Fixes
+    - title: 🔴 Fixes
       labels: ["fix", "bug"]
-    - title: 📖 Documentation
+    - title: 🟣 Documentation
       labels: ["documentation", "docs"]
-    - title: 🔗 Dependencies
+    - title: 🟠 Dependencies
       labels: ["dependencies"]
-    - title: 📦 Other
+    - title: 🔵 Other
       labels: ["*"]
