@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func FromSlice[A any](slice []A) <-chan A {
@@ -38,6 +39,21 @@ func Send[T any](ch chan<- T, items ...T) {
 	for _, item := range items {
 		ch <- item
 	}
+}
+
+func SendTimeout[T any](ch chan<- T, timeout time.Duration, items ...T) bool {
+	t := time.NewTimer(timeout)
+	defer t.Stop()
+
+	for _, item := range items {
+		select {
+		case <-t.C:
+			return false
+		case ch <- item:
+		}
+	}
+
+	return true
 }
 
 func Sort[A ordered](s []A) {
