@@ -46,7 +46,7 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 // This is a blocking ordered function that processes items sequentially.
 // See the package documentation for more information on blocking ordered functions and error handling.
 func Err[A any](in <-chan Try[A]) error {
-	defer DrainNB(in)
+	defer Discard(in)
 
 	for a := range in {
 		if a.Error != nil {
@@ -63,7 +63,7 @@ func Err[A any](in <-chan Try[A]) error {
 // This is a blocking ordered function that processes items sequentially.
 // See the package documentation for more information on blocking ordered functions and error handling.
 func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
-	defer DrainNB(in)
+	defer Discard(in)
 
 	for a := range in {
 		return a.Value, true, a.Error

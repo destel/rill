@@ -59,7 +59,7 @@ func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 
 	for x := range in {
 		if err := x.Error; err != nil {
-			DrainNB(in)
+			Discard(in)
 			return res, err
 		}
 		res = append(res, x.Value)

@@ -61,7 +61,7 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 // See the package documentation for more information on blocking ordered functions.
 func ToSeq2[A any](in <-chan Try[A]) iter.Seq2[A, error] {
 	return func(yield func(A, error) bool) {
-		defer DrainNB(in)
+		defer Discard(in)
 		for x := range in {
 			if !yield(x.Value, x.Error) {
 				return
