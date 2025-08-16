@@ -230,8 +230,8 @@ Rill provides a wide selection of blocking functions. Here are some commonly use
   [Example](https://pkg.go.dev/github.com/destel/rill#example-Err) 
 
 
-All blocking functions share a common behavior. In case of an early termination (before reaching the end of the input stream or in case of an error),
-such functions initiate background draining of the remaining items. This is done to prevent goroutine leaks by ensuring that
+All blocking functions share a common behavior. When they terminate early (before reaching the end of the input stream or when an error occurs),
+they return immediately but spawn a background goroutine that discards the remaining items from the input channel. This prevents goroutine leaks by ensuring that
 all goroutines feeding the stream are allowed to complete.
 
 Rill is context-agnostic, meaning that it does not enforce any specific context usage.

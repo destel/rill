@@ -36,15 +36,15 @@
 //   - The end of the stream is reached. In this case, the function returns the final result.
 //   - An error is encountered either in the input stream or in some user-provided function. In this case, the function returns the error.
 //
-// In case of an early termination (before reaching the end of the input stream), such functions initiate
-// background draining of the remaining items. This is done to prevent goroutine
+// In case of an early termination (before reaching the end of the input stream), such functions return immediately
+// but spawn a background goroutine that discards the remaining items from the input channel. This is done to prevent goroutine
 // leaks by ensuring that all goroutines feeding the stream are allowed to complete.
 // The input stream should not be used anymore after calling such functions.
 //
 // It's also possible to consume the pipeline results manually, for example using a for-range loop.
-// In this case, add a deferred call to [DrainNB] before the loop to ensure that goroutines are not leaked.
+// In this case, add a deferred call to [Discard] before the loop to ensure that goroutines are not leaked.
 //
-//	 defer rill.DrainNB(results)
+//	 defer rill.Discard(results)
 //
 //	 for res := range results {
 //			if res.Error != nil {
