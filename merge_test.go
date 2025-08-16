@@ -64,7 +64,7 @@ func TestSplit2(t *testing.T) {
 				)
 
 				var expectedOutSliceTrue, expectedOutSliceFalse []int
-				var expectedErrSliceTrue, expectedErrSliceFalse []string
+				var expectedErrSlice []string
 
 				for i := 0; i < 20*4; i++ {
 					switch i % 4 {
@@ -73,8 +73,7 @@ func TestSplit2(t *testing.T) {
 					case 1:
 						expectedOutSliceFalse = append(expectedOutSliceFalse, i)
 					default:
-						expectedErrSliceTrue = append(expectedErrSliceTrue, fmt.Sprintf("err%03d", i))
-						expectedErrSliceFalse = append(expectedErrSliceFalse, fmt.Sprintf("err%03d", i))
+						expectedErrSlice = append(expectedErrSlice, fmt.Sprintf("err%03d", i))
 					}
 				}
 
@@ -85,8 +84,8 @@ func TestSplit2(t *testing.T) {
 
 				th.ExpectSlice(t, outSliceTrue, expectedOutSliceTrue)
 				th.ExpectSlice(t, outSliceFalse, expectedOutSliceFalse)
-				th.ExpectSlice(t, errSliceTrue, expectedErrSliceTrue)
-				th.ExpectSlice(t, errSliceFalse, expectedErrSliceFalse)
+				th.ExpectSlice(t, errSliceTrue, expectedErrSlice)
+				th.ExpectSlice(t, errSliceFalse, expectedErrSlice)
 			})
 
 			t.Run(th.Name("ordering", n), func(t *testing.T) {
