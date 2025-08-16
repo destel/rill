@@ -11,7 +11,7 @@ jobs:
   gotest:
     strategy:
       matrix:
-        go-version: [1.21.x, 1.23.x, 1.24.0-rc.2]
+        go-version: [1.21.x, 1.25.x]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
