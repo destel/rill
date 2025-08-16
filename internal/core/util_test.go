@@ -13,10 +13,10 @@ func TestDrain(t *testing.T) {
 	th.ExpectDrainedChan(t, in)
 }
 
-func TestDrainNB(t *testing.T) {
+func TestDiscard(t *testing.T) {
 	th.ExpectNotHang(t, 10*time.Second, func() {
 		in := make(chan int)
-		DrainNB(in)
+		Discard(in)
 
 		// able write in the main goroutine
 		in <- 1

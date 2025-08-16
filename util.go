@@ -9,7 +9,7 @@ func Drain[A any](in <-chan A) {
 
 // DrainNB is a non-blocking version of [Drain]. It does draining in a separate goroutine.
 func DrainNB[A any](in <-chan A) {
-	core.DrainNB(in)
+	core.Discard(in)
 }
 
 // Buffer takes a channel of items and returns a buffered channel of exact same items in the same order.
