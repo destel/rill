@@ -1,8 +1,6 @@
 package rill
 
 import (
-	"math/rand"
-
 	"github.com/destel/rill/internal/core"
 )
 
@@ -19,49 +17,85 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 
 // Split2 divides the input stream into two output streams based on the predicate function f:
 // The splitting behavior is determined by the boolean return value of f. When f returns true, the item is sent to the outTrue stream,
-// otherwise it is sent to the outFalse stream. In case of any error, the item is sent to one of the output streams in a non-deterministic way.
+// otherwise it is sent to the outFalse stream. In case of any error, the item is sent to both output streams.
 //
 // This is a non-blocking unordered function that processes items concurrently using n goroutines.
 // An ordered version of this function, [OrderedSplit2], is also available.
 //
 // See the package documentation for more information on non-blocking unordered functions and error handling.
 func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
-	outs := core.MapAndSplit(in, 2, n, func(a Try[A]) (Try[A], int) {
+	if in == nil {
+		return nil, nil
+	}
+
+	resOutTrue := make(chan Try[A])
+	resOutFalse := make(chan Try[A])
+	done := make(chan struct{})
+
+	core.Loop(in, done, n, func(a Try[A]) {
 		if a.Error != nil {
-			return a, rand.Int() & 1
+			resOutTrue <- a
+			resOutFalse <- a
+			return
 		}
 
-		putToTrue, err := f(a.Value)
+		dir, err := f(a.Value)
 		switch {
 		case err != nil:
-			return Try[A]{Error: err}, rand.Int() & 1
-		case putToTrue:
-			return a, 0
+			resOutTrue <- Try[A]{Error: err}
+			resOutFalse <- Try[A]{Error: err}
+		case dir:
+			resOutTrue <- a
 		default:
-			return a, 1
+			resOutFalse <- a
 		}
 	})
 
-	return outs[0], outs[1]
+	go func() {
+		<-done
+		close(resOutTrue)
+		close(resOutFalse)
+	}()
+
+	return resOutTrue, resOutFalse
 }
 
 // OrderedSplit2 is the ordered version of [Split2].
 func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
-	outs := core.OrderedMapAndSplit(in, 2, n, func(a Try[A]) (Try[A], int) {
+	if in == nil {
+		return nil, nil
+	}
+
+	resOutTrue := make(chan Try[A])
+	resOutFalse := make(chan Try[A])
+	done := make(chan struct{})
+
+	core.OrderedLoop(in, done, n, func(a Try[A], canWrite <-chan struct{}) {
 		if a.Error != nil {
-			return a, rand.Int() & 1
+			<-canWrite
+			resOutTrue <- a
+			resOutFalse <- a
+			return
 		}
 
-		putToTrue, err := f(a.Value)
+		dir, err := f(a.Value)
+		<-canWrite
 		switch {
 		case err != nil:
-			return Try[A]{Error: err}, rand.Int() & 1
-		case putToTrue:
-			return a, 0
+			resOutTrue <- Try[A]{Error: err}
+			resOutFalse <- Try[A]{Error: err}
+		case dir:
+			resOutTrue <- a
 		default:
-			return a, 1
+			resOutFalse <- a
 		}
 	})
 
-	return outs[0], outs[1]
+	go func() {
+		<-done
+		close(resOutTrue)
+		close(resOutFalse)
+	}()
+
+	return resOutTrue, resOutFalse
 }
