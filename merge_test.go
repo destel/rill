@@ -89,8 +89,6 @@ func TestSplit2(t *testing.T) {
 			})
 
 			t.Run(th.Name("ordering", n), func(t *testing.T) {
-				return
-
 				in := FromChan(th.FromRange(0, 10000*4), nil)
 
 				outTrue, outFalse := universalSplit2(ord, in, n, func(x int) (bool, error) {
