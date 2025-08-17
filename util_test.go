@@ -9,6 +9,7 @@ import (
 func TestDrain(t *testing.T) {
 	// real tests are in another package
 	Drain[int](th.FromRange(0, 10))
+	Discard[int](th.FromRange(0, 10))
 	DrainNB[int](th.FromRange(0, 10))
 }
 

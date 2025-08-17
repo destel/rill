@@ -5,7 +5,7 @@ func Drain[A any](in <-chan A) {
 	}
 }
 
-func DrainNB[A any](in <-chan A) {
+func Discard[A any](in <-chan A) {
 	go Drain(in)
 }
 

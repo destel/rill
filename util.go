@@ -7,9 +7,16 @@ func Drain[A any](in <-chan A) {
 	core.Drain(in)
 }
 
+// Discard is a non-blocking function that discards all items from an input channel.
+func Discard[A any](in <-chan A) {
+	core.Discard(in)
+}
+
 // DrainNB is a non-blocking version of [Drain]. It does draining in a separate goroutine.
+//
+// Deprecated: use [Discard] instead
 func DrainNB[A any](in <-chan A) {
-	core.DrainNB(in)
+	core.Discard(in)
 }
 
 // Buffer takes a channel of items and returns a buffered channel of exact same items in the same order.
