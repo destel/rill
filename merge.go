@@ -22,6 +22,7 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 // This is a non-blocking unordered function that processes items concurrently using n goroutines.
 // An ordered version of this function, [OrderedSplit2], is also available.
 //
+// Both output streams must be consumed independently to avoid deadlocks.
 // See the package documentation for more information on non-blocking unordered functions and error handling.
 func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
 	if in == nil {
@@ -61,6 +62,7 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-
 }
 
 // OrderedSplit2 is the ordered version of [Split2].
+// Both output streams must be consumed independently to avoid deadlocks.
 func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
 	if in == nil {
 		return nil, nil
