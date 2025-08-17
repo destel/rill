@@ -107,6 +107,13 @@ func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (out
 //
 // This is a non-blocking function that processes items in a single goroutine.
 // See the package documentation for more information on non-blocking functions and error handling.
+//
+// If deep copying of values is needed, use [Map] on one or both outputs:
+//
+//	out1, out2 := rill.Tee(in)
+//	out2 = rill.Map(out2, 1, func(x A) (A, error) {
+//		return deepCopy(x), nil
+//	})
 func Tee[A any](in <-chan Try[A]) (<-chan Try[A], <-chan Try[A]) {
 	if in == nil {
 		return nil, nil
