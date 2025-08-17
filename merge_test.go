@@ -128,3 +128,37 @@ func TestSplit2(t *testing.T) {
 		}
 	})
 }
+
+func TestTee(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		out1, out2 := Tee[int](nil)
+		th.ExpectValue(t, out1, nil)
+		th.ExpectValue(t, out2, nil)
+	})
+
+	t.Run("correctness", func(t *testing.T) {
+		// Create input with mixed values and errors
+		in := FromChan(th.FromRange(0, 10), nil)
+		in = replaceWithError(in, 2, fmt.Errorf("error at 2"))
+		in = replaceWithError(in, 7, fmt.Errorf("error at 7"))
+
+		out1, out2 := Tee(in)
+
+		var out1Slice, out2Slice []int
+		var out1Err, out2Err []string
+
+		th.DoConcurrently(
+			func() { out1Slice, out1Err = toSliceAndErrors(out1) },
+			func() { out2Slice, out2Err = toSliceAndErrors(out2) },
+		)
+
+		expected := []int{0, 1, 3, 4, 5, 6, 8, 9}
+		expectedErr := []string{"error at 2", "error at 7"}
+
+		// Both outputs should be identical
+		th.ExpectSlice(t, out1Slice, expected)
+		th.ExpectSlice(t, out2Slice, expected)
+		th.ExpectSlice(t, out1Err, expectedErr)
+		th.ExpectSlice(t, out2Err, expectedErr)
+	})
+}

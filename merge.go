@@ -99,3 +99,29 @@ func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (out
 
 	return resOutTrue, resOutFalse
 }
+
+// Tee returns two streams that are identical to the input stream (both errors and values).
+// Both output streams must be consumed independently to avoid deadlocks.
+//
+// This is a non-blocking function that processes items in a single goroutine.
+// See the package documentation for more information on non-blocking functions and error handling.
+func Tee[A any](in <-chan Try[A]) (<-chan Try[A], <-chan Try[A]) {
+	if in == nil {
+		return nil, nil
+	}
+
+	out1 := make(chan Try[A])
+	out2 := make(chan Try[A])
+
+	go func() {
+		defer close(out1)
+		defer close(out2)
+
+		for x := range in {
+			out1 <- x
+			out2 <- x
+		}
+	}()
+
+	return out1, out2
+}
