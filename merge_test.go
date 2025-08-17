@@ -137,8 +137,8 @@ func TestTee(t *testing.T) {
 	t.Run("correctness", func(t *testing.T) {
 		// Create input with mixed values and errors
 		in := FromChan(th.FromRange(0, 10), nil)
-		in = replaceWithError(in, 2, fmt.Errorf("error at 2"))
-		in = replaceWithError(in, 7, fmt.Errorf("error at 7"))
+		in = replaceWithError(in, 2, fmt.Errorf("err2"))
+		in = replaceWithError(in, 7, fmt.Errorf("err7"))
 
 		out1, out2 := Tee(in)
 
@@ -151,7 +151,7 @@ func TestTee(t *testing.T) {
 		)
 
 		expected := []int{0, 1, 3, 4, 5, 6, 8, 9}
-		expectedErr := []string{"error at 2", "error at 7"}
+		expectedErr := []string{"err2", "err7"}
 
 		// Both outputs should be identical
 		th.ExpectSlice(t, out1Slice, expected)
