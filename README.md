@@ -49,7 +49,7 @@ It shows how to control concurrency at each step while keeping the code clean an
 **ForEach** returns on the first error, and context cancellation via defer stops all remaining fetches.
 
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package)
+[Try in Go playground ↗](https://goplay.tools/snippet/xN_1zaBzfkq)
 ```go
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -99,7 +99,7 @@ to fetch multiple users in a single call, instead of making individual `GetUser`
 
 
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Batching)
+[Try in Go playground ↗](https://goplay.tools/snippet/fpltOjeX-Le)
 ```go
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -164,7 +164,7 @@ with each batch sent to the database as a single query.
 The **Batch** function is used with a timeout of 100ms, ensuring zero latency during high load, 
 and up to 100ms latency with smaller batches during quiet periods.
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-BatchingRealTime)
+[Try in Go playground ↗](https://goplay.tools/snippet/w0xsLilX1ca)
 ```go
 func main() {
 	// Start the background worker that processes the updates
@@ -243,7 +243,7 @@ In the example below the `CheckAllUsersExist` function uses several concurrent w
 from the given list exist. When an error occurs (like a non-existent user), the function returns that error  
 and cancels the context, which in turn stops all remaining user fetches.
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Context)
+[Try in Go playground ↗](https://goplay.tools/snippet/AVigyK2JFLC)
 ```go
 func main() {
 	ctx := context.Background()
@@ -312,7 +312,7 @@ The combination of **OrderedFilter** and **First** functions solves this elegant
 while downloading and keeping in memory at most 5 files at a time. **First** returns on the first match,
 this triggers the context cancellation via defer, stopping URL generation and file downloads.
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-Ordering)
+[Try in Go playground ↗](https://goplay.tools/snippet/UuuV2t5xbN2)
 
 ```go
 func main() {
@@ -377,7 +377,7 @@ In this particular case the concurrency level is 3, meaning that users are fetch
 Additionally, this example demonstrates how to write a reusable streaming wrapper over paginated API calls - the `StreamUsers` function.
 This wrapper can be useful both on its own and as part of larger pipelines.
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-package-FlatMap)
+[Try in Go playground ↗](https://goplay.tools/snippet/ckenCrDV3eN)
 ```go
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -452,7 +452,7 @@ and **ToSeq2** function to convert a stream back into an iterator.
 **ToSeq2** can be a good alternative to **ForEach** when concurrency is not needed. 
 It gives more control and performs all necessary cleanup and draining, even if the loop is terminated early using *break* or *return*.
 
-[Try it](https://pkg.go.dev/github.com/destel/rill#example-ToSeq2)
+[Try in Go playground ↗](https://goplay.tools/snippet/M8B0xJj8btk)
 
 ```go
 func main() {
