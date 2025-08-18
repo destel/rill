@@ -18,11 +18,11 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 // Split2 divides the input stream into two output streams based on the predicate function f:
 // The splitting behavior is determined by the boolean return value of f. When f returns true, the item is sent to the outTrue stream,
 // otherwise it is sent to the outFalse stream. In case of any error, the item is sent to both output streams.
+// Both output streams must be consumed independently to avoid deadlocks.
 //
 // This is a non-blocking unordered function that processes items concurrently using n goroutines.
 // An ordered version of this function, [OrderedSplit2], is also available.
 //
-// Both output streams must be consumed independently to avoid deadlocks.
 // See the package documentation for more information on non-blocking unordered functions and error handling.
 func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
 	if in == nil {
@@ -62,7 +62,6 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-
 }
 
 // OrderedSplit2 is the ordered version of [Split2].
-// Both output streams must be consumed independently to avoid deadlocks.
 func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
 	if in == nil {
 		return nil, nil
