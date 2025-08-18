@@ -40,12 +40,12 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-
 			return
 		}
 
-		dir, err := f(a.Value)
+		isTrue, err := f(a.Value)
 		switch {
 		case err != nil:
 			resOutTrue <- Try[A]{Error: err}
 			resOutFalse <- Try[A]{Error: err}
-		case dir:
+		case isTrue:
 			resOutTrue <- a
 		default:
 			resOutFalse <- a
