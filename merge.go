@@ -18,6 +18,7 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 // Split2 divides the input stream into two output streams based on the predicate function f:
 // The splitting behavior is determined by the boolean return value of f. When f returns true, the item is sent to the outTrue stream,
 // otherwise it is sent to the outFalse stream. In case of any error, the item is sent to both output streams.
+// Both output streams must be consumed independently to avoid deadlocks.
 //
 // This is a non-blocking unordered function that processes items concurrently using n goroutines.
 // An ordered version of this function, [OrderedSplit2], is also available.
@@ -39,12 +40,12 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-
 			return
 		}
 
-		dir, err := f(a.Value)
+		isTrue, err := f(a.Value)
 		switch {
 		case err != nil:
 			resOutTrue <- Try[A]{Error: err}
 			resOutFalse <- Try[A]{Error: err}
-		case dir:
+		case isTrue:
 			resOutTrue <- a
 		default:
 			resOutFalse <- a
@@ -98,4 +99,37 @@ func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (out
 	}()
 
 	return resOutTrue, resOutFalse
+}
+
+// Tee returns two streams that are identical to the input stream (both errors and values).
+// Both output streams must be consumed independently to avoid deadlocks.
+//
+// This is a non-blocking function that processes items in a single goroutine.
+// See the package documentation for more information on non-blocking functions and error handling.
+//
+// If deep copying of values is needed, use [Map] on one or both outputs:
+//
+//	out1, out2 := rill.Tee(in)
+//	out2 = rill.Map(out2, 1, func(x A) (A, error) {
+//		return deepCopy(x), nil
+//	})
+func Tee[A any](in <-chan Try[A]) (<-chan Try[A], <-chan Try[A]) {
+	if in == nil {
+		return nil, nil
+	}
+
+	out1 := make(chan Try[A])
+	out2 := make(chan Try[A])
+
+	go func() {
+		defer close(out1)
+		defer close(out2)
+
+		for x := range in {
+			out1 <- x
+			out2 <- x
+		}
+	}()
+
+	return out1, out2
 }
