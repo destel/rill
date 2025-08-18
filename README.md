@@ -1,7 +1,7 @@
 # Rill [![GoDoc](https://pkg.go.dev/badge/github.com/destel/rill)](https://pkg.go.dev/github.com/destel/rill) [![Go Report Card](https://goreportcard.com/badge/github.com/destel/rill)](https://goreportcard.com/report/github.com/destel/rill) <!--[![codecov](https://codecov.io/gh/destel/rill/graph/badge.svg?token=252K8OQ7E1)](https://codecov.io/gh/destel/rill)--> [![Coverage Status](https://coveralls.io/repos/github/destel/rill/badge.svg?branch=main)](https://coveralls.io/github/destel/rill?branch=main) [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go) 
 
 Rill is a toolkit that brings composable concurrency to Go, making it easier to build concurrent programs from simple, reusable parts.
-It reduces boilerplate while preserving Go's natural channel-based model.
+It reduces boilerplate while preserving Go's natural channel-based model and backpressure behavior.
 
 ```bash
 go get -u github.com/destel/rill
@@ -362,10 +362,13 @@ func main() {
 ```
 
 
-## Stream Merging and FlatMap
-Rill comes with the **Merge** function that combines multiple streams into a single one. Another, often overlooked,
-function that can combine streams is **FlatMap**. It's a powerful tool that transforms each input item into its own stream,
-and then merges all these streams together. 
+## Parallel Streaming and FlatMap
+Sometimes operations that appear inherently sequential can be parallelized by partitioning the problem space. 
+This can dramatically speed up data processing by allowing multiple streams to work concurrently instead of waiting 
+for each to complete sequentially.
+
+**FlatMap** is particularly powerful for this pattern. It transforms each input item into its own stream, then merges 
+all these streams together, giving you full control over the level of concurrency. 
 
 In the example below, **FlatMap** transforms each department into a stream of users, then merges these streams into one.
 Like other Rill functions, **FlatMap** gives full control over concurrency. 
@@ -484,7 +487,7 @@ Rill has a test coverage of over 95%, with testing focused on:
 ## Blog Posts
 Technical articles exploring different aspects and applications of Rill's concurrency patterns:
 - [Real-Time Batching in Go](https://destel.dev/blog/real-time-batching-in-go)
-- [Fast Listing of Files from S3, GCS and Other Object Storages](https://destel.dev/blog/fast-listing-of-files-from-s3-gcs-and-other-object-storages)
+- [Parallel Streaming Pattern in Go: How to Scan Large S3 or GCS Buckets Significantly Faster](https://destel.dev/blog/fast-listing-of-files-from-s3-gcs-and-other-object-storages)
 
 
 ## Contributing
