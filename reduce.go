@@ -56,7 +56,10 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 			return Try[A]{Value: res} // the only non-dummy return
 		})
 
-		setReturns(res.Value, ok, nil)
+		if res.Error != nil {
+			ok = false
+		}
+		setReturns(res.Value, ok, res.Error)
 	}()
 
 	once.Wait()
