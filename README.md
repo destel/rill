@@ -486,8 +486,9 @@ Rill has a test coverage of over 95%, with testing focused on:
 
 ## Blog Posts
 Technical articles exploring different aspects and applications of Rill's concurrency patterns:
-- [Real-Time Batching in Go](https://destel.dev/blog/real-time-batching-in-go)
-- [Parallel Streaming Pattern in Go: How to Scan Large S3 or GCS Buckets Significantly Faster](https://destel.dev/blog/fast-listing-of-files-from-s3-gcs-and-other-object-storages)
+- [Preserving Order in Concurrent Go Apps](https://destel.dev/blog/preserving-order-in-concurrent-go?ref=rill-readme)
+- [Real-Time Batching in Go](https://destel.dev/blog/real-time-batching-in-go?ref=rill-readme)
+- [Parallel Streaming Pattern in Go: How to Scan Large S3 or GCS Buckets Significantly Faster](https://destel.dev/blog/fast-listing-of-files-from-s3-gcs-and-other-object-storages?ref=rill-readme)
 
 
 ## Contributing
