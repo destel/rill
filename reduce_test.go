@@ -24,6 +24,33 @@ func TestReduce(t *testing.T) {
 			th.ExpectDrainedChan(t, in)
 		})
 
+		t.Run(th.Name("single item", n), func(t *testing.T) {
+			t.Run("no error", func(t *testing.T) {
+				in := FromSlice([]int{5}, nil)
+
+				out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+					return x + y, nil
+				})
+
+				th.ExpectNoError(t, err)
+				th.ExpectValue(t, out, 5)
+				th.ExpectValue(t, ok, true)
+				th.ExpectDrainedChan(t, in)
+			})
+
+			t.Run("error", func(t *testing.T) {
+				in := FromSlice([]int{}, fmt.Errorf("err0"))
+
+				_, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+					return x + y, nil
+				})
+
+				th.ExpectError(t, err, "err0")
+				th.ExpectValue(t, ok, false)
+				th.ExpectDrainedChan(t, in)
+			})
+		})
+
 		t.Run(th.Name("no errors", n), func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 100), nil)
 
