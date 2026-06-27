@@ -32,7 +32,7 @@ func TestFilterMap(t *testing.T) {
 				outSlice := th.ToSlice(out)
 
 				expectedSlice := make([]string, 0, 20)
-				for i := 0; i < 20; i++ {
+				for i := range 20 {
 					if i%2 != 0 {
 						continue
 					}

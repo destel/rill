@@ -3,8 +3,9 @@ version: "2"
 linters:
   # default = the standard set: errcheck, govet, ineffassign, staticcheck, unused
   enable:
-    - errorlint   
+    - errorlint
     - godoclint
+    - modernize
 
 formatters:
   enable:

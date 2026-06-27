@@ -22,15 +22,12 @@ func Loop[A, B any](in <-chan A, done chan<- B, n int, f func(A)) {
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+	for range n {
+		wg.Go(func() {
 			for a := range in {
 				f(a)
 			}
-		}()
+		})
 	}
 
 	if done != nil {
@@ -105,17 +102,15 @@ func OrderedLoop[A, B any](in <-chan A, done chan<- B, n int, f func(a A, canWri
 	}()
 
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range n {
+		wg.Go(func() {
 			for a := range orderedIn {
 				f(a.Value, a.CanWrite)
 
 				releaseCanWriteChan(a.CanWrite)
 				a.NextCanWrite <- struct{}{}
 			}
-		}()
+		})
 	}
 
 	if done != nil {

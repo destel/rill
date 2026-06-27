@@ -15,7 +15,7 @@ func TestOnceWithWait(t *testing.T) {
 
 		th.ExpectValue(t, o.WasCalled(), false)
 
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			go func() {
 				o.Do(func() {
 					calls.Add(1)

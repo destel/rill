@@ -13,5 +13,5 @@ func DownloadFile(ctx context.Context, url string) ([]byte, error) {
 		return nil, err
 	}
 
-	return []byte(fmt.Sprintf("This is the content of %s", url)), nil
+	return fmt.Appendf(nil, "This is the content of %s", url), nil
 }

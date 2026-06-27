@@ -384,7 +384,7 @@ func ExampleBatch() {
 	numbers := make(chan rill.Try[int])
 	go func() {
 		defer close(numbers)
-		for i := 0; i < 50; i++ {
+		for i := range 50 {
 			numbers <- rill.Wrap(i, nil)
 			time.Sleep(50 * time.Millisecond)
 		}
@@ -630,7 +630,7 @@ func ExampleForEach_ordered() {
 // Generate a stream of URLs from https://example.com/file-0.txt to https://example.com/file-9.txt
 func ExampleGenerate() {
 	urls := rill.Generate(func(send func(string), sendErr func(error)) {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			send(fmt.Sprintf("https://example.com/file-%d.txt", i))
 		}
 	})

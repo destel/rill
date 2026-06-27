@@ -17,7 +17,7 @@ func TestMerge(t *testing.T) {
 		t.Run(th.Name("correctness", numChans), func(t *testing.T) {
 			ins := make([]<-chan int, numChans)
 
-			for i := 0; i < numChans; i++ {
+			for i := range numChans {
 				ins[i] = th.FromRange(i*10, (i+1)*10)
 			}
 

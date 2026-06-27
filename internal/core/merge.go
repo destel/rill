@@ -58,13 +58,11 @@ func slowMerge[A any](ins []<-chan A) <-chan A {
 	var wg sync.WaitGroup
 	for _, in := range ins {
 		in1 := in
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for x := range in1 {
 				out <- x
 			}
-		}()
+		})
 	}
 
 	go func() {
