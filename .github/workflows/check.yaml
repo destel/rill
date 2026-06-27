@@ -42,13 +42,6 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: destel/rill
 
-      - name: Upload coverage reports to Coveralls
-        uses: coverallsapp/github-action@v2.3.6
-        with:
-          github-token: ${{ secrets.github_token }}
-          file: coverage.out
-          format: golang
-
 
   lint:
     runs-on: ubuntu-latest
