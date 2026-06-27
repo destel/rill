@@ -1,6 +1,7 @@
 package th
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -40,7 +41,7 @@ func Send[T any](ch chan<- T, items ...T) {
 	}
 }
 
-func Sort[A ordered](s []A) {
+func Sort[A cmp.Ordered](s []A) {
 	slices.Sort(s)
 }
 
