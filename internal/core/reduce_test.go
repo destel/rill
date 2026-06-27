@@ -11,7 +11,6 @@ import (
 func TestReduce(t *testing.T) {
 	for _, n := range []int{1, 4, 8} {
 		t.Run(th.Name("nil", n), func(t *testing.T) {
-			n := n
 			th.ExpectHang(t, 1*time.Second, func() {
 				_, _ = Reduce[int](nil, n, func(a, b int) int {
 					return a + b
