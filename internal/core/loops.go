@@ -30,7 +30,6 @@ func Loop[A, B any](in <-chan A, done chan<- B, n int, f func(A)) {
 			for a := range in {
 				f(a)
 			}
-			return
 		}()
 	}
 

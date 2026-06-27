@@ -191,7 +191,7 @@ func getUserIndex(id int) (int, error) {
 
 func hash(input ...any) int {
 	hasher := fnv.New32()
-	fmt.Fprintln(hasher, input...)
+	_, _ = fmt.Fprintln(hasher, input...)
 	return int(hasher.Sum32())
 }
 
