@@ -66,7 +66,7 @@ func TestSplit2(t *testing.T) {
 				var expectedOutSliceTrue, expectedOutSliceFalse []int
 				var expectedErrSlice []string
 
-				for i := 0; i < 20*4; i++ {
+				for i := range 20 * 4 {
 					switch i % 4 {
 					case 0:
 						expectedOutSliceTrue = append(expectedOutSliceTrue, i)

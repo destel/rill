@@ -1,8 +1,9 @@
 package th
 
 import (
+	"cmp"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -40,22 +41,17 @@ func Send[T any](ch chan<- T, items ...T) {
 	}
 }
 
-func Sort[A ordered](s []A) {
-	sort.Slice(s, func(i, j int) bool {
-		return s[i] < s[j]
-	})
+func Sort[A cmp.Ordered](s []A) {
+	slices.Sort(s)
 }
 
 func DoConcurrently(ff ...func()) {
 	var wg sync.WaitGroup
 
 	for _, f := range ff {
-		f := f
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			f()
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -64,13 +60,10 @@ func DoConcurrently(ff ...func()) {
 func DoConcurrentlyN(n int, f func(i int)) {
 	var wg sync.WaitGroup
 
-	for i := 0; i < n; i++ {
-		i := i
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for i := range n {
+		wg.Go(func() {
 			f(i)
-		}()
+		})
 	}
 
 	wg.Wait()

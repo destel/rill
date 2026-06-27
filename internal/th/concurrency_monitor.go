@@ -14,7 +14,6 @@ type ConcurrencyMonitor struct {
 	current int
 	max     int
 
-	target int
 	window time.Duration
 
 	lastChangeAt time.Time

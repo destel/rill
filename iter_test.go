@@ -102,7 +102,7 @@ func TestFromSeq2(t *testing.T) {
 		// generate from 0 to 7, and when the value is  5, yield error
 		err5 := errors.New("err5")
 		gen := func(yield func(x int, err error) bool) {
-			for i := 0; i < 8; i++ {
+			for i := range 8 {
 				var err error
 				if i == 5 {
 					err = err5

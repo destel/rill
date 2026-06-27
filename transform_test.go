@@ -42,7 +42,7 @@ func TestMap(t *testing.T) {
 				outSlice, errSlice := toSliceAndErrors(out)
 
 				expectedSlice := make([]string, 0, 20)
-				for i := 0; i < 20; i++ {
+				for i := range 20 {
 					if i == 5 || i == 6 || i == 15 {
 						continue
 					}
@@ -117,7 +117,7 @@ func TestFilter(t *testing.T) {
 				outSlice, errSlice := toSliceAndErrors(out)
 
 				expectedSlice := make([]int, 0, 20)
-				for i := 0; i < 20; i++ {
+				for i := range 20 {
 					if i%2 == 1 || i == 5 || i == 6 || i == 15 {
 						continue
 					}
@@ -195,7 +195,7 @@ func TestFilterMap(t *testing.T) {
 				outSlice, errSlice := toSliceAndErrors(out)
 
 				expectedSlice := make([]string, 0, 20)
-				for i := 0; i < 20; i++ {
+				for i := range 20 {
 					if i == 5 || i == 6 || i == 15 || i%2 == 1 {
 						continue
 					}
@@ -271,7 +271,7 @@ func TestFlatMap(t *testing.T) {
 				outSlice, errSlice := toSliceAndErrors(out)
 
 				expectedSlice := make([]string, 0, 20*2)
-				for i := 0; i < 20; i++ {
+				for i := range 20 {
 					if i == 5 || i == 15 {
 						continue
 					}
@@ -351,7 +351,7 @@ func TestCatch(t *testing.T) {
 				outSlice, errSlice := toSliceAndErrors(out)
 
 				expectedSlice := make([]int, 0, 20)
-				for i := 0; i < 20; i++ {
+				for i := range 20 {
 					if i == 5 || i == 10 || i == 15 {
 						continue
 					}

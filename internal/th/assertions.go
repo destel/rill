@@ -2,7 +2,8 @@
 package th
 
 import (
-	"sort"
+	"cmp"
+	"slices"
 	"testing"
 	"time"
 )
@@ -80,26 +81,16 @@ type number interface {
 	~int | ~int64
 }
 
-type ordered interface {
-	~int | ~int64 | ~string
-}
-
-func ExpectSorted[T ordered](t *testing.T, arr []T) {
+func ExpectSorted[T cmp.Ordered](t *testing.T, arr []T) {
 	t.Helper()
-	isSorted := sort.SliceIsSorted(arr, func(i, j int) bool {
-		return arr[i] <= arr[j]
-	})
-	if !isSorted {
+	if !slices.IsSorted(arr) {
 		t.Errorf("expected sorted slice")
 	}
 }
 
-func ExpectUnsorted[T ordered](t *testing.T, arr []T) {
+func ExpectUnsorted[T cmp.Ordered](t *testing.T, arr []T) {
 	t.Helper()
-	isSorted := sort.SliceIsSorted(arr, func(i, j int) bool {
-		return arr[i] <= arr[j]
-	})
-	if isSorted {
+	if slices.IsSorted(arr) {
 		t.Errorf("expected unsorted slice")
 	}
 }

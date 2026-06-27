@@ -57,7 +57,7 @@ func TestFromSlice(t *testing.T) {
 
 	t.Run("errors", func(t *testing.T) {
 		inSlice := make([]int, 20)
-		for i := 0; i < 20; i++ {
+		for i := range 20 {
 			inSlice[i] = i
 		}
 
@@ -85,7 +85,7 @@ func TestFromChan(t *testing.T) {
 		var inSlice []int
 		var expectedOutSlice []Try[int]
 
-		for i := 0; i < 20000; i++ {
+		for i := range 20000 {
 			inSlice = append(inSlice, i)
 			expectedOutSlice = append(expectedOutSlice, Try[int]{Value: i})
 		}
@@ -103,7 +103,7 @@ func TestFromChan(t *testing.T) {
 		err := fmt.Errorf("err")
 		expectedOutSlice = append(expectedOutSlice, Try[int]{Error: err})
 
-		for i := 0; i < 20000; i++ {
+		for i := range 20000 {
 			inSlice = append(inSlice, i)
 			expectedOutSlice = append(expectedOutSlice, Try[int]{Value: i})
 		}
@@ -160,7 +160,7 @@ func TestFromChans(t *testing.T) {
 
 	makeSlice := func(n int) []int {
 		out := make([]int, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			out[i] = i
 		}
 		return out
@@ -168,7 +168,7 @@ func TestFromChans(t *testing.T) {
 
 	makeErrSlice := func(n int) []error {
 		out := make([]error, n)
-		for i := 0; i < n; i++ {
+		for i := range n {
 			out[i] = fmt.Errorf("err%06d", i)
 		}
 		return out
@@ -183,7 +183,7 @@ func TestFromChans(t *testing.T) {
 
 func TestGenerate(t *testing.T) {
 	in := Generate(func(send func(int), sendErr func(error)) {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			if i%2 == 0 {
 				send(i)
 			} else {

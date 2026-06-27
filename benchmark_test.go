@@ -46,7 +46,7 @@ func runBenchmark(b *testing.B, name string, body func(in <-chan Try[int])) {
 			b.StartTimer()
 
 			// write to input
-			for k := 0; k < benchmarkInputSize; k++ {
+			for k := range benchmarkInputSize {
 				in <- Try[int]{Value: k}
 			}
 			close(in)

@@ -34,16 +34,13 @@ func Reduce[A any](in <-chan A, n int, f func(A, A) A) (A, bool) {
 	partialResults := make(chan A, n)
 	var wg sync.WaitGroup
 
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+	for range n {
+		wg.Go(func() {
 			res, ok := nonConcurrentReduce(in, f)
 			if ok {
 				partialResults <- res
 			}
-		}()
+		})
 	}
 
 	go func() {
@@ -110,17 +107,14 @@ func MapReduce[A any, K comparable, V any](in <-chan A, nm int, mapper func(A) (
 	partialResults := make(chan map[K]V, nr)
 	var wg sync.WaitGroup
 
-	for i := 0; i < nr; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+	for range nr {
+		wg.Go(func() {
 			res := make(map[K]V)
 			for kv := range mapped {
 				reduceIntoMap(res, kv.Key, kv.Value, reducer)
 			}
 			partialResults <- res
-		}()
+		})
 	}
 
 	go func() {
