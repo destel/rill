@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 )
 
 func FromSlice[A any](slice []A) <-chan A {
@@ -83,5 +84,11 @@ func TestBothOrderings(t *testing.T, f func(t *testing.T, ord bool)) {
 
 	t.Run("ordered", func(t *testing.T) {
 		f(t, true)
+	})
+}
+
+func RunSynctest(t *testing.T, name string, f func(t *testing.T)) {
+	t.Run(name, func(t *testing.T) {
+		synctest.Test(t, f)
 	})
 }

@@ -5,91 +5,45 @@ import (
 	"time"
 )
 
-// ConcurrencyMonitor measures the maximum concurrency level reached by goroutines.
-// It enforces maximum possible concurrency by requiring each goroutine to call Inc() at the start and Dec() at the end of its execution.
-// Goroutines calling Inc() are blocked until the concurrency level remains stable for a specified time window, ensuring that concurrency peaks are accurately captured.
-// The highest level of concurrency observed can be retrieved using the Max() method.
+// ConcurrencyMonitor measures the peak number of goroutines simultaneously
+// inside an instrumented region: each calls Enter at the start and Exit at the
+// end. Enter sleeps for Hold so concurrent callers pile up before any leaves,
+// and Max reports the peak. Only meaningful inside a testing/synctest bubble,
+// where the fake clock makes the pile-up deterministic.
 type ConcurrencyMonitor struct {
-	cond    *sync.Cond
+	// Hold is how long Enter parks the caller. Zero defaults to 1s; the exact
+	// value is irrelevant under synctest. Set before first use.
+	Hold time.Duration
+
+	mu      sync.Mutex
 	current int
 	max     int
-
-	window time.Duration
-
-	lastChangeAt time.Time
-	timer        *time.Timer
-	timerFired   bool
 }
 
-func NewConcurrencyMonitor(window time.Duration) *ConcurrencyMonitor {
-	c := &ConcurrencyMonitor{
-		cond:   sync.NewCond(&sync.Mutex{}),
-		window: window,
-	}
-
-	c.timer = time.AfterFunc(1*time.Hour, func() {
-		c.cond.L.Lock()
-		defer c.cond.L.Unlock()
-
-		c.timerFired = true
-		c.cond.Broadcast()
-	})
-
-	return c
-}
-
-func (c *ConcurrencyMonitor) Inc() {
-	c.cond.L.Lock()
-	defer c.cond.L.Unlock()
-
-	c.lastChangeAt = time.Now()
-	if !c.timerFired {
-		c.timer.Reset(c.window)
-	}
-
+func (c *ConcurrencyMonitor) Enter() {
+	c.mu.Lock()
 	c.current++
-	if c.max < c.current {
+	if c.current > c.max {
 		c.max = c.current
 	}
+	c.mu.Unlock()
 
-	// block all goroutines unless "window" has passed since the last counter change
-	for !c.timerFired && time.Since(c.lastChangeAt) < c.window {
-		c.cond.Wait()
+	hold := c.Hold
+	if hold <= 0 {
+		hold = 1 * time.Second // default
 	}
+
+	time.Sleep(hold) // must stay outside the lock
 }
 
-func (c *ConcurrencyMonitor) Dec() {
-	c.cond.L.Lock()
-	defer c.cond.L.Unlock()
-
-	c.lastChangeAt = time.Now()
-	if !c.timerFired {
-		c.timer.Reset(c.window)
-	}
-
+func (c *ConcurrencyMonitor) Exit() {
+	c.mu.Lock()
 	c.current--
-	c.cond.Broadcast()
-}
-
-func (c *ConcurrencyMonitor) Reset() int {
-	c.cond.L.Lock()
-	defer c.cond.L.Unlock()
-
-	if c.timer != nil {
-		c.timer.Stop()
-	}
-
-	c.current = 0
-	c.max = 0
-	c.lastChangeAt = time.Time{}
-	c.timer.Reset(1 * time.Hour)
-	c.timerFired = false
-	return c.max
+	c.mu.Unlock()
 }
 
 func (c *ConcurrencyMonitor) Max() int {
-	c.cond.L.Lock()
-	defer c.cond.L.Unlock()
-
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.max
 }

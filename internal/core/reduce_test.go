@@ -37,14 +37,14 @@ func TestReduce(t *testing.T) {
 			th.ExpectValue(t, ok, true)
 		})
 
-		t.Run(th.Name("concurrency", n), func(t *testing.T) {
+		th.RunSynctest(t, th.Name("concurrency", n), func(t *testing.T) {
 			in := th.FromRange(0, 100)
 
-			monitor := th.NewConcurrencyMonitor(1 * time.Second)
+			var monitor th.ConcurrencyMonitor
 
 			_, _ = Reduce(in, n, func(a, b int) int {
-				monitor.Inc()
-				defer monitor.Dec()
+				monitor.Enter()
+				defer monitor.Exit()
 
 				return a + b
 			})
@@ -105,23 +105,25 @@ func TestMapReduce(t *testing.T) {
 				})
 			})
 
-			t.Run(th.Name("concurrency", nm, nr), func(t *testing.T) {
-				// Need a really high number of items to reliably "catch" the max concurrency.
+			th.RunSynctest(t, th.Name("concurrency", nm, nr), func(t *testing.T) {
 				in := th.FromRange(0, 100)
 
-				mapMonitor := th.NewConcurrencyMonitor(1 * time.Second)
-				reduceMonitor := th.NewConcurrencyMonitor(1 * time.Second)
+				// To reach max concurrency in the reduce phase, the map phase must outpace it
+				// rather than become the bottleneck. Under synctest we get that by giving
+				// mappers a much smaller hold than reducers.
+				mapMonitor := th.ConcurrencyMonitor{Hold: 1 * time.Second}
+				reduceMonitor := th.ConcurrencyMonitor{Hold: 30 * time.Second}
 
 				_ = MapReduce(in,
 					nm, func(x int) (string, int) {
-						mapMonitor.Inc()
-						defer mapMonitor.Dec()
+						mapMonitor.Enter()
+						defer mapMonitor.Exit()
 
 						return fmt.Sprintf("%d mod 3", x%3), 1
 					},
 					nr, func(a, b int) int {
-						reduceMonitor.Inc()
-						defer reduceMonitor.Dec()
+						reduceMonitor.Enter()
+						defer reduceMonitor.Exit()
 
 						return a + b
 					},
@@ -129,7 +131,6 @@ func TestMapReduce(t *testing.T) {
 
 				th.ExpectValue(t, mapMonitor.Max(), nm)
 				th.ExpectValue(t, reduceMonitor.Max(), nr)
-
 			})
 
 		}

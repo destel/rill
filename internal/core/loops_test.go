@@ -3,7 +3,6 @@ package core
 import (
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/destel/rill/internal/th"
 )
@@ -23,7 +22,7 @@ func universalLoop[A, B any](ord bool, in <-chan A, done chan<- B, n int, f func
 
 func TestLoop(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
-		for _, n := range []int{1, 5} {
+		for _, n := range []int{1, 3, 5} {
 			t.Run(th.Name("correctness", n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
 				done := make(chan struct{})
@@ -39,15 +38,15 @@ func TestLoop(t *testing.T) {
 				th.ExpectValue(t, sum.Load(), 19*20/2)
 			})
 
-			t.Run(th.Name("concurrency", n), func(t *testing.T) {
+			th.RunSynctest(t, th.Name("concurrency", n), func(t *testing.T) {
 				in := th.FromRange(0, 100)
 				out := make(chan int)
 
-				monitor := th.NewConcurrencyMonitor(1 * time.Second)
+				var monitor th.ConcurrencyMonitor
 
 				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
-					monitor.Inc()
-					defer monitor.Dec()
+					monitor.Enter()
+					defer monitor.Exit()
 
 					<-canWrite
 
@@ -98,17 +97,17 @@ func TestForEach(t *testing.T) {
 			th.ExpectValue(t, sum.Load(), 19*20/2)
 		})
 
-		t.Run(th.Name("concurrency", n), func(t *testing.T) {
+		th.RunSynctest(t, th.Name("concurrency", n), func(t *testing.T) {
 			in := th.FromRange(0, 100)
 
-			mon := th.NewConcurrencyMonitor(1 * time.Second)
+			var monitor th.ConcurrencyMonitor
 
 			ForEach(in, n, func(x int) {
-				mon.Inc()
-				defer mon.Dec()
+				monitor.Enter()
+				defer monitor.Exit()
 			})
 
-			th.ExpectValue(t, mon.Max(), n)
+			th.ExpectValue(t, monitor.Max(), n)
 		})
 
 		t.Run(th.Name("ordering", n), func(t *testing.T) {
