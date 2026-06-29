@@ -10,6 +10,12 @@ import (
 )
 
 func TestErr(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		th.ExpectDeadlock(t, func() {
+			_ = Err[int](nil)
+		})
+	})
+
 	t.Run("empty", func(t *testing.T) {
 		in := FromChan(th.FromSlice([]int{}), nil)
 		err := Err(in)
@@ -38,6 +44,12 @@ func TestErr(t *testing.T) {
 }
 
 func TestFirst(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		th.ExpectDeadlock(t, func() {
+			_, _, _ = First[int](nil)
+		})
+	})
+
 	t.Run("empty", func(t *testing.T) {
 		in := FromChan(th.FromSlice([]int{}), nil)
 		_, ok, err := First(in)
@@ -75,6 +87,12 @@ func TestFirst(t *testing.T) {
 
 func TestForEach(t *testing.T) {
 	for _, n := range []int{1, 5} {
+
+		t.Run(th.Name("nil", n), func(t *testing.T) {
+			th.ExpectDeadlock(t, func() {
+				_ = ForEach(nil, n, func(int) error { return nil })
+			})
+		})
 
 		t.Run(th.Name("no errors", n), func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 10), nil)
@@ -146,6 +164,12 @@ func TestForEach(t *testing.T) {
 
 func TestAnyAll(t *testing.T) {
 	for _, n := range []int{1, 5} {
+		t.Run(th.Name("nil", n), func(t *testing.T) {
+			th.ExpectDeadlock(t, func() {
+				_, _ = All(nil, n, func(int) (bool, error) { return true, nil })
+			})
+		})
+
 		t.Run(th.Name("empty", n), func(t *testing.T) {
 			in := FromSlice([]int{}, nil)
 

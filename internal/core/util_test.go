@@ -2,6 +2,7 @@ package core
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/destel/rill/internal/th"
@@ -14,11 +15,11 @@ func TestDrain(t *testing.T) {
 }
 
 func TestDiscard(t *testing.T) {
-	th.ExpectNotHang(t, 10*time.Second, func() {
+	synctest.Test(t, func(t *testing.T) {
 		in := make(chan int)
-		Discard(in)
+		Discard(in) // doesn't block
 
-		// able write in the main goroutine
+		// able to write
 		in <- 1
 		in <- 2
 		close(in)

@@ -21,10 +21,6 @@ func nonConcurrentReduce[A any](in <-chan A, f func(A, A) A) (A, bool) {
 // Reduce reduces the input channel into a single value using the provided function,
 // using n goroutines for concurrency
 func Reduce[A any](in <-chan A, n int, f func(A, A) A) (A, bool) {
-	if in == nil {
-		<-in
-	}
-
 	// Phase 0: Optimized non-concurrent case
 	if n == 1 {
 		return nonConcurrentReduce(in, f)
@@ -84,10 +80,6 @@ func reduceIntoMap[K comparable, V any](m map[K]V, k K, v V, f func(V, V) V) {
 // If there are multiple values for the same key, they are reduced into a single value using the reducer function and nr goroutines.
 // The result is a map where each key is associated with a single value.
 func MapReduce[A any, K comparable, V any](in <-chan A, nm int, mapper func(A) (K, V), nr int, reducer func(V, V) V) map[K]V {
-	if in == nil {
-		<-in
-	}
-
 	// Phase 1: Map
 	mapped := FilterMap(in, nm, func(a A) (keyValue[K, V], bool) {
 		k, v := mapper(a)

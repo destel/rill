@@ -2,7 +2,6 @@ package core
 
 import (
 	"testing"
-	"time"
 
 	"github.com/destel/rill/internal/th"
 )
@@ -34,18 +33,19 @@ func TestMerge(t *testing.T) {
 		})
 
 		t.Run(th.Name("nil hang", numChans), func(t *testing.T) {
-			ins := make([]<-chan int, numChans)
+			th.ExpectDeadlock(t, func() {
+				ins := make([]<-chan int, numChans)
 
-			for i := 0; i < numChans-1; i++ {
-				ins[i] = th.FromRange(i*10, (i+1)*10)
-			}
+				for i := 0; i < numChans-1; i++ {
+					ins[i] = th.FromRange(i*10, (i+1)*10)
+				}
 
-			// make last channel nil
-			ins[numChans-1] = nil
+				// make last channel nil
+				ins[numChans-1] = nil
 
-			out := Merge(ins...)
-
-			th.ExpectNeverClosedChan(t, out, 1*time.Second)
+				out := Merge(ins...)
+				th.ToSlice(out)
+			})
 		})
 
 	}

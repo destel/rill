@@ -11,6 +11,12 @@ import (
 
 func TestReduce(t *testing.T) {
 	for _, n := range []int{1, 4} {
+		t.Run(th.Name("nil", n), func(t *testing.T) {
+			th.ExpectDeadlock(t, func() {
+				_, _, _ = Reduce(nil, n, func(x, y int) (int, error) { return x + y, nil })
+			})
+		})
+
 		t.Run(th.Name("empty", n), func(t *testing.T) {
 			in := FromSlice([]int{}, nil)
 
@@ -145,6 +151,18 @@ func TestReduce(t *testing.T) {
 func TestMapReduce(t *testing.T) {
 	for _, nm := range []int{1, 4} {
 		for _, nr := range []int{1, 4} {
+			t.Run(th.Name("nil", nm, nr), func(t *testing.T) {
+				th.ExpectDeadlock(t, func() {
+					_, _ = MapReduce(nil,
+						nm, func(x int) (string, int, error) {
+							return fmt.Sprint(x), x, nil
+						},
+						nr, func(x, y int) (int, error) {
+							return x + y, nil
+						})
+				})
+			})
+
 			t.Run(th.Name("empty", nm, nr), func(t *testing.T) {
 				in := FromSlice([]int{}, nil)
 

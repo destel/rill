@@ -11,8 +11,8 @@ import (
 func TestReduce(t *testing.T) {
 	for _, n := range []int{1, 4, 8} {
 		t.Run(th.Name("nil", n), func(t *testing.T) {
-			th.ExpectHang(t, 1*time.Second, func() {
-				_, _ = Reduce[int](nil, n, func(a, b int) int {
+			th.ExpectDeadlock(t, func() {
+				_, _ = Reduce(nil, n, func(a, b int) int {
 					return a + b
 				})
 			})
@@ -59,9 +59,8 @@ func TestMapReduce(t *testing.T) {
 		for _, nr := range []int{1, 4, 8} {
 			t.Run(th.Name("nil", nm, nr), func(t *testing.T) {
 				nm, nr := nm, nr
-				th.ExpectHang(t, 1*time.Second, func() {
-					var in chan int
-					_ = MapReduce(in,
+				th.ExpectDeadlock(t, func() {
+					_ = MapReduce(nil,
 						nm, func(x int) (string, int) {
 							return "", 1
 						},

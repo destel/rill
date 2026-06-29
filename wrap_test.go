@@ -12,6 +12,14 @@ func TestWrap(t *testing.T) {
 	_ = Wrap(10, nil)
 }
 
+func TestToSlice(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		th.ExpectDeadlock(t, func() {
+			_, _ = ToSlice[int](nil)
+		})
+	})
+}
+
 func TestFromSlice(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		in := FromSlice[int](nil, nil)

@@ -3,8 +3,11 @@ package th
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -107,36 +110,19 @@ func ExpectDrainedChan[A any](t *testing.T, ch <-chan A) {
 	}
 }
 
-func ExpectNeverClosedChan[A any](t *testing.T, ch <-chan A, waitFor time.Duration) {
+// ExpectDeadlock checks if f() or any goroutine it spawns blocks indefinitely.
+func ExpectDeadlock(t *testing.T, f func()) {
 	t.Helper()
-	timeout := time.After(waitFor)
-	for {
-		select {
-		case _, ok := <-ch:
-			if !ok {
-				t.Errorf("expected channel to be never closed")
-				return
-			}
-		case <-timeout:
-			return
+	defer func() {
+		r := recover()
+		if r == nil || !strings.Contains(fmt.Sprint(r), "deadlock") {
+			t.Errorf("expected deadlock")
 		}
-	}
-}
-
-func ExpectHang(t *testing.T, waitFor time.Duration, f func()) {
-	t.Helper()
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-		f()
 	}()
 
-	select {
-	case <-done:
-		t.Errorf("expected hang")
-	case <-time.After(waitFor):
-	}
+	synctest.Test(t, func(t *testing.T) {
+		f()
+	})
 }
 
 func ExpectNotHang(t *testing.T, waitFor time.Duration, f func()) {
