@@ -1,8 +1,10 @@
 package core
 
 import (
+	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/destel/rill/internal/th"
 )
@@ -23,7 +25,7 @@ func universalLoop[A, B any](ord bool, in <-chan A, done chan<- B, n int, f func
 func TestLoop(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
 		for _, n := range []int{1, 3, 5} {
-			t.Run(th.Name("correctness", n), func(t *testing.T) {
+			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
 				done := make(chan struct{})
 
@@ -58,14 +60,16 @@ func TestLoop(t *testing.T) {
 				th.ExpectValue(t, monitor.Max(), n)
 			})
 
-			t.Run(th.Name("ordering", n), func(t *testing.T) {
-				in := th.FromRange(0, 20000)
+			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+				in := th.FromRange(0, 1000)
 				out := make(chan int)
 
 				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
+					if x < 100 && x%2 == 0 {
+						time.Sleep(1 * time.Second) // force out-of-order completion
+					}
 
 					<-canWrite
-
 					out <- x
 				})
 
@@ -91,11 +95,10 @@ func TestForEach(t *testing.T) {
 			})
 		})
 
-		t.Run(th.Name("correctness", n), func(t *testing.T) {
+		th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
 			in := th.FromRange(0, 20)
 
 			var sum atomic.Int64
-
 			ForEach(in, n, func(x int) {
 				sum.Add(int64(x))
 			})
@@ -116,18 +119,21 @@ func TestForEach(t *testing.T) {
 			th.ExpectValue(t, monitor.Max(), n)
 		})
 
-		t.Run(th.Name("ordering", n), func(t *testing.T) {
-			in := th.FromRange(0, 20000)
-			out := make(chan int)
+		th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+			in := th.FromRange(0, 1000)
 
-			go func() {
-				ForEach(in, n, func(x int) {
-					out <- x
-				})
-				close(out)
-			}()
+			outSlice := make([]int, 0, 1000)
+			var mu sync.Mutex
 
-			outSlice := th.ToSlice(out)
+			ForEach(in, n, func(x int) {
+				if x < 100 && x%2 == 0 {
+					time.Sleep(1 * time.Second) // force out-of-order completion
+				}
+
+				mu.Lock()
+				outSlice = append(outSlice, x)
+				mu.Unlock()
+			})
 
 			if n == 1 {
 				th.ExpectSorted(t, outSlice)
