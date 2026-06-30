@@ -13,7 +13,7 @@ func TestMerge(t *testing.T) {
 	})
 
 	for _, numChans := range []int{1, 3, 5, 10} {
-		t.Run(th.Name("correctness", numChans), func(t *testing.T) {
+		th.RunSynctest(t, th.Name("correctness", numChans), func(t *testing.T) {
 			ins := make([]<-chan int, numChans)
 
 			for i := range numChans {
