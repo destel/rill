@@ -65,7 +65,7 @@ func TestLoop(t *testing.T) {
 				out := make(chan int)
 
 				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
-					if x < 100 && x%2 == 0 {
+					if x%7 == 0 {
 						time.Sleep(1 * time.Second) // force out-of-order completion
 					}
 
@@ -126,7 +126,7 @@ func TestForEach(t *testing.T) {
 			var mu sync.Mutex
 
 			ForEach(in, n, func(x int) {
-				if x < 100 && x%2 == 0 {
+				if x%7 == 0 {
 					time.Sleep(1 * time.Second) // force out-of-order completion
 				}
 
