@@ -28,7 +28,7 @@ func TestDiscard(t *testing.T) {
 func TestBuffer(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		trySend := func(ch chan<- int, x int) bool {
-			// Wait for the bubble to settle. It maked the non-blocking send deterministic:
+			// Wait for the bubble to settle. It makes the non-blocking send deterministic:
 			// it succeeds iff the buffer has room.
 			synctest.Wait()
 			select {
