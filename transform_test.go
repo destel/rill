@@ -110,7 +110,7 @@ func TestFilter(t *testing.T) {
 
 				out := universalFilter(ord, in, n, func(x int) (bool, error) {
 					if x == 5 || x == 6 {
-						return false, fmt.Errorf("err%03d", x)
+						return x == 6, fmt.Errorf("err%03d", x)
 					}
 
 					return x%2 == 0, nil
@@ -194,7 +194,7 @@ func TestFilterMap(t *testing.T) {
 
 				out := universalFilterMap(ord, in, n, func(x int) (string, bool, error) {
 					if x == 5 || x == 6 {
-						return "", false, fmt.Errorf("err%03d", x)
+						return "dummy", x == 6, fmt.Errorf("err%03d", x)
 					}
 
 					return fmt.Sprintf("%03d", x), x%2 == 0, nil
