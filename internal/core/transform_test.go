@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -39,7 +40,7 @@ func TestFilterMap(t *testing.T) {
 					expectedSlice = append(expectedSlice, fmt.Sprintf("%03d", i))
 				}
 
-				th.Sort(outSlice)
+				slices.Sort(outSlice)
 				th.ExpectSlice(t, outSlice, expectedSlice)
 			})
 

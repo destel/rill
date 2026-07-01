@@ -1,6 +1,7 @@
 package core
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/destel/rill/internal/th"
@@ -28,7 +29,7 @@ func TestMerge(t *testing.T) {
 				expectedSlice = append(expectedSlice, i)
 			}
 
-			th.Sort(outSlice)
+			slices.Sort(outSlice)
 			th.ExpectSlice(t, outSlice, expectedSlice)
 		})
 
