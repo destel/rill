@@ -41,7 +41,7 @@ func TestFromSlice(t *testing.T) {
 
 func TestToSlice(t *testing.T) {
 	th.RunSynctestExpectBlock(t, "nil", func(t *testing.T) {
-		ToSlice[int](nil)
+		_, _ = ToSlice[int](nil)
 	})
 
 	th.RunSynctest(t, "no errors", func(t *testing.T) {
@@ -75,7 +75,7 @@ func TestToSlice(t *testing.T) {
 func TestFromChan(t *testing.T) {
 	th.RunSynctestExpectBlock(t, "nil no errors", func(t *testing.T) {
 		out := FromChan[int](nil, nil)
-		ToSlice(out)
+		_, _ = ToSlice(out)
 	})
 
 	th.RunSynctestExpectBlock(t, "nil with error", func(t *testing.T) {
