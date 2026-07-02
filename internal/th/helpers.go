@@ -3,11 +3,13 @@ package th
 import (
 	"cmp"
 	"fmt"
+	"math/rand"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
+	"time"
 )
 
 func FromSlice[A any](slice []A) <-chan A {
@@ -44,6 +46,11 @@ func Send[T any](ch chan<- T, items ...T) {
 
 func Sort[A cmp.Ordered](s []A) {
 	slices.Sort(s)
+}
+
+func RandomSleep(min, max time.Duration) {
+	d := min + time.Duration(rand.Int63n(int64(max-min)))
+	time.Sleep(d)
 }
 
 func DoConcurrently(ff ...func()) {
