@@ -135,5 +135,9 @@ func All[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 		ok, err := f(a)
 		return !ok, err // negate
 	})
-	return !res, err // negate
+
+	if err != nil {
+		return false, err
+	}
+	return !res, nil // negate
 }
