@@ -10,11 +10,9 @@ import (
 
 func TestReduce(t *testing.T) {
 	for _, n := range []int{1, 4, 8} {
-		t.Run(th.Name("nil", n), func(t *testing.T) {
-			th.ExpectDeadlock(t, func() {
-				_, _ = Reduce(nil, n, func(a, b int) int {
-					return a + b
-				})
+		th.RunSynctestExpectBlock(t, th.Name("nil", n), func(t *testing.T) {
+			Reduce(nil, n, func(a, b int) int {
+				return a + b
 			})
 		})
 
@@ -57,17 +55,15 @@ func TestReduce(t *testing.T) {
 func TestMapReduce(t *testing.T) {
 	for _, nm := range []int{1, 4} {
 		for _, nr := range []int{1, 4, 8} {
-			t.Run(th.Name("nil", nm, nr), func(t *testing.T) {
-				th.ExpectDeadlock(t, func() {
-					_ = MapReduce(nil,
-						nm, func(x int) (string, int) {
-							return "", 1
-						},
-						nr, func(a, b int) int {
-							return a + b
-						},
-					)
-				})
+			th.RunSynctestExpectBlock(t, th.Name("nil", nm, nr), func(t *testing.T) {
+				MapReduce(nil,
+					nm, func(x int) (string, int) {
+						return "", 1
+					},
+					nr, func(a, b int) int {
+						return a + b
+					},
+				)
 			})
 
 			t.Run(th.Name("empty", nm, nr), func(t *testing.T) {

@@ -33,20 +33,18 @@ func TestMerge(t *testing.T) {
 			th.ExpectSlice(t, outSlice, expectedSlice)
 		})
 
-		t.Run(th.Name("nil hang", numChans), func(t *testing.T) {
-			th.ExpectDeadlock(t, func() {
-				ins := make([]<-chan int, numChans)
+		th.RunSynctestExpectBlock(t, th.Name("nil hang", numChans), func(t *testing.T) {
+			ins := make([]<-chan int, numChans)
 
-				for i := 0; i < numChans-1; i++ {
-					ins[i] = th.FromRange(i*10, (i+1)*10)
-				}
+			for i := 0; i < numChans-1; i++ {
+				ins[i] = th.FromRange(i*10, (i+1)*10)
+			}
 
-				// make last channel nil
-				ins[numChans-1] = nil
+			// make last channel nil
+			ins[numChans-1] = nil
 
-				out := Merge(ins...)
-				th.ToSlice(out)
-			})
+			out := Merge(ins...)
+			th.ToSlice(out)
 		})
 
 	}

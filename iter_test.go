@@ -21,11 +21,9 @@ func rangeInt(from, to int) iter.Seq[int] {
 }
 
 func TestToSeq2(t *testing.T) {
-	t.Run("nil", func(t *testing.T) {
-		th.ExpectDeadlock(t, func() {
-			for range ToSeq2[int](nil) {
-			}
-		})
+	th.RunSynctestExpectBlock(t, "nil", func(t *testing.T) {
+		for range ToSeq2[int](nil) {
+		}
 	})
 
 	t.Run("errors", func(t *testing.T) {

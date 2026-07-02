@@ -12,7 +12,7 @@ func TestDrain(t *testing.T) {
 	Discard[int](th.FromRange(0, 10))
 	DrainNB[int](th.FromRange(0, 10))
 
-	th.ExpectDeadlock(t, func() {
+	th.RunSynctestExpectBlock(t, "nil", func(t *testing.T) {
 		Drain[int](nil)
 	})
 }

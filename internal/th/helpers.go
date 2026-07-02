@@ -88,6 +88,7 @@ func TestBothOrderings(t *testing.T, f func(t *testing.T, ord bool)) {
 }
 
 // RunSynctest runs a subtest in a synctest bubble.
+// It panics if any unless all goroutines started from f exit cleanly.
 func RunSynctest(t *testing.T, name string, f func(t *testing.T)) {
 	t.Run(name, func(t *testing.T) {
 		synctest.Test(t, f)
