@@ -3,197 +3,197 @@ package rill
 import (
 	"fmt"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/destel/rill/internal/th"
 )
 
 func TestWrap(t *testing.T) {
-	_ = Wrap(10, nil)
+	item := Wrap(10, fmt.Errorf("err"))
+	th.ExpectValue(t, item.Value, 10)
+	th.ExpectError(t, item.Error, "err")
 }
 
 func TestFromSlice(t *testing.T) {
-	t.Run("empty", func(t *testing.T) {
-		in := FromSlice[int](nil, nil)
-		outSlice, err := ToSlice(in)
+	th.RunSynctest(t, "error", func(t *testing.T) {
+		out := FromSlice([]int{1, 2, 3, 4}, fmt.Errorf("some error"))
+		outSlice, errs := toSliceAndErrors(out)
 
 		th.ExpectSlice(t, outSlice, nil)
-		th.ExpectNoError(t, err)
+		th.ExpectSlice(t, errs, []string{"some error"})
 	})
 
-	t.Run("error in second arg", func(t *testing.T) {
-		in := FromSlice([]int{1, 2, 3, 4}, fmt.Errorf("err0"))
-		outSlice, errs := toSliceAndErrors(in)
+	for _, inputSize := range []int{0, 20, 4000} {
+		th.RunSynctest(t, th.Name("no error", inputSize), func(t *testing.T) {
+			inSlice := make([]int, inputSize)
+			for i := range inSlice {
+				inSlice[i] = i
+			}
 
-		th.ExpectSlice(t, outSlice, nil)
-		th.ExpectSlice(t, errs, []string{"err0"})
+			out := FromSlice(inSlice, nil)
+			outSlice, errs := toSliceAndErrors(out)
+
+			th.ExpectSlice(t, outSlice, inSlice)
+			th.ExpectSlice(t, errs, nil)
+		})
+	}
+}
+
+func TestToSlice(t *testing.T) {
+	th.RunSynctestExpectBlock(t, "nil", func(t *testing.T) {
+		_, _ = ToSlice[int](nil)
 	})
 
-	t.Run("no errors", func(t *testing.T) {
-		inSlice := make([]int, 20)
-		for i := range inSlice {
-			inSlice[i] = i
-		}
-
-		in := FromSlice(inSlice, nil)
+	th.RunSynctest(t, "no errors", func(t *testing.T) {
+		in := FromSlice([]int{0, 1, 2, 3, 4}, nil)
 		outSlice, err := ToSlice(in)
 
-		th.ExpectSlice(t, outSlice, inSlice)
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
 		th.ExpectNoError(t, err)
 	})
 
-	t.Run("no errors large", func(t *testing.T) {
-		inSlice := make([]int, 4000)
-		for i := range inSlice {
-			inSlice[i] = i
-		}
-
-		in := FromSlice(inSlice, nil)
-		outSlice, err := ToSlice(in)
-
-		th.ExpectSlice(t, outSlice, inSlice)
-		th.ExpectNoError(t, err)
-	})
-
-	t.Run("errors", func(t *testing.T) {
+	th.RunSynctest(t, "errors", func(t *testing.T) {
 		inSlice := make([]int, 20)
 		for i := range 20 {
 			inSlice[i] = i
 		}
 
 		in := FromSlice(inSlice, nil)
-		in = replaceWithError(in, 15, fmt.Errorf("err15"))
-		in = replaceWithError(in, 18, fmt.Errorf("err18"))
+		in = replaceWithError(in, 15, fmt.Errorf("err015"))
+		in = replaceWithError(in, 18, fmt.Errorf("err018"))
 
 		outSlice, err := ToSlice(in)
 
 		th.ExpectSlice(t, outSlice, inSlice[:15])
-		th.ExpectError(t, err, "err15")
+		th.ExpectError(t, err, "err015")
 
-		time.Sleep(1 * time.Second)
+		synctest.Wait()
 		th.ExpectDrainedChan(t, in)
 	})
 }
 
 func TestFromChan(t *testing.T) {
-	t.Run("nil", func(t *testing.T) {
-		res := FromChan[int](nil, nil)
-		th.ExpectValue(t, res, nil)
+	th.RunSynctestExpectBlock(t, "nil no errors", func(t *testing.T) {
+		out := FromChan[int](nil, nil)
+		_, _ = ToSlice(out)
 	})
 
-	t.Run("no error", func(t *testing.T) {
-		var inSlice []int
-		var expectedOutSlice []Try[int]
+	th.RunSynctestExpectBlock(t, "nil with error", func(t *testing.T) {
+		out := FromChan[int](nil, fmt.Errorf("err"))
 
-		for i := range 20000 {
-			inSlice = append(inSlice, i)
-			expectedOutSlice = append(expectedOutSlice, Try[int]{Value: i})
-		}
-
-		wrapped := FromChan(th.FromSlice(inSlice), nil)
-		outSlice := th.ToSlice(wrapped)
-
-		th.ExpectSlice(t, outSlice, expectedOutSlice)
+		outSlice, errs, _ := toSliceAndErrorsNB(out)
+		th.ExpectSlice(t, outSlice, nil)
+		th.ExpectSlice(t, errs, []string{"err"})
 	})
 
-	t.Run("with error", func(t *testing.T) {
-		var inSlice []int
-		var expectedOutSlice []Try[int]
+	th.RunSynctest(t, "no error", func(t *testing.T) {
+		inSlice := []int{0, 1, 2, 3, 4, 5}
 
-		err := fmt.Errorf("err")
-		expectedOutSlice = append(expectedOutSlice, Try[int]{Error: err})
+		out := FromChan(th.FromSlice(inSlice), nil)
+		outSlice, errs := toSliceAndErrors(out)
 
-		for i := range 20000 {
-			inSlice = append(inSlice, i)
-			expectedOutSlice = append(expectedOutSlice, Try[int]{Value: i})
-		}
+		th.ExpectSlice(t, outSlice, inSlice)
+		th.ExpectSlice(t, errs, nil)
+	})
 
-		wrapped := FromChan(th.FromSlice(inSlice), err)
-		outSlice := th.ToSlice(wrapped)
+	th.RunSynctest(t, "error", func(t *testing.T) {
+		inSlice := []int{0, 1, 2, 3, 4, 5}
 
-		th.ExpectSlice(t, outSlice, expectedOutSlice)
+		out := FromChan(th.FromSlice(inSlice), fmt.Errorf("some error"))
+		outSlice, errs, _ := toSliceAndErrorsNB(out)
+
+		th.ExpectSlice(t, outSlice, inSlice)
+		th.ExpectSlice(t, errs, []string{"some error"})
+	})
+
+	th.RunSynctest(t, "error should go before values", func(t *testing.T) {
+		inSlice := []int{0, 1, 2, 3, 4, 5}
+
+		out := FromChan(th.FromSlice(inSlice), fmt.Errorf("some error"))
+		defer Discard(out)
+
+		item := <-out
+		th.ExpectError(t, item.Error, "some error")
+
+		item = <-out
+		th.ExpectValue(t, item.Value, inSlice[0])
+		th.ExpectNoError(t, item.Error)
+
+		item = <-out
+		th.ExpectValue(t, item.Value, inSlice[1])
+		th.ExpectNoError(t, item.Error)
 	})
 }
 
 func TestFromChans(t *testing.T) {
-	// slices -> FromSlice -> FromChans -> ToChans -> ToSlice -> compare
-	runTest := func(name string, valsIn []int, errsIn []error) {
-		t.Run(name, func(t *testing.T) {
-			var valsInChan <-chan int
-			if len(valsIn) > 0 {
-				valsInChan = th.FromSlice(valsIn)
-			}
+	t.Run("nils", func(t *testing.T) {
+		out := FromChans[int](nil, nil)
+		th.ExpectValue(t, out, nil)
+	})
 
-			var errsInChan <-chan error
-			if len(errsIn) > 0 {
-				errsInChan = th.FromSlice(errsIn)
-			}
+	th.RunSynctest(t, "nil values", func(t *testing.T) {
+		out := FromChans[int](nil, th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")}))
+		outSlice, errs := toSliceAndErrors(out)
+		th.ExpectSlice(t, outSlice, nil)
+		th.ExpectSlice(t, errs, []string{"err001", "err002"})
+	})
 
-			valsOutChan, errsOutChan := ToChans(FromChans(valsInChan, errsInChan))
+	th.RunSynctest(t, "nil errors", func(t *testing.T) {
+		out := FromChans(th.FromSlice([]int{0, 1, 2, 3, 4}), nil)
+		outSlice, errs := toSliceAndErrors(out)
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
+		th.ExpectSlice(t, errs, nil)
+	})
 
-			if valsInChan == nil && errsInChan == nil {
-				th.ExpectValue(t, valsOutChan, nil)
-				th.ExpectValue(t, errsOutChan, nil)
-				return
-			}
+	th.RunSynctest(t, "not nil", func(t *testing.T) {
+		out := FromChans(th.FromSlice([]int{0, 1, 2, 3, 4}), th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")}))
+		outSlice, errs := toSliceAndErrors(out)
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
+		th.ExpectSlice(t, errs, []string{"err001", "err002"})
+	})
+}
 
-			var valsOut []int
-			var errsOut []error
+func TestToChans(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		out, errs := ToChans[int](nil)
+		th.ExpectValue(t, out, nil)
+		th.ExpectValue(t, errs, nil)
+	})
 
-			th.DoConcurrently(
-				func() { valsOut = th.ToSlice(valsOutChan) },
-				func() { errsOut = th.ToSlice(errsOutChan) },
-			)
+	th.RunSynctest(t, "normal", func(t *testing.T) {
+		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+		in = replaceWithError(in, 3, fmt.Errorf("err003"))
+		in = replaceWithError(in, 7, fmt.Errorf("err007"))
 
-			// nil errors are not expected in the output
-			var expectedErrors []error
-			for _, err := range errsIn {
-				if err != nil {
-					expectedErrors = append(expectedErrors, err)
-				}
-			}
+		out, errs := ToChans(in)
 
-			th.ExpectSlice(t, valsOut, valsIn)
-			th.ExpectSlice(t, errsOut, expectedErrors)
-		})
-	}
+		var outSlice []int
+		var errsSlice []error
+		th.DoConcurrently(
+			func() { outSlice = th.ToSlice(out) },
+			func() { errsSlice = th.ToSlice(errs) },
+		)
 
-	makeSlice := func(n int) []int {
-		out := make([]int, n)
-		for i := range n {
-			out[i] = i
-		}
-		return out
-	}
-
-	makeErrSlice := func(n int) []error {
-		out := make([]error, n)
-		for i := range n {
-			out[i] = fmt.Errorf("err%06d", i)
-		}
-		return out
-	}
-
-	runTest("nil", nil, nil)
-	runTest("no errors", makeSlice(10000), nil)
-	runTest("only errors", nil, makeErrSlice(10000))
-	runTest("values and errors", makeSlice(10000), makeErrSlice(10000))
-	runTest("values and nil errors", makeSlice(10), []error{nil, nil, fmt.Errorf("err"), nil})
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 4, 5, 6, 8, 9})
+		th.ExpectErrorSlice(t, errsSlice, []string{"err003", "err007"})
+	})
 }
 
 func TestGenerate(t *testing.T) {
-	in := Generate(func(send func(int), sendErr func(error)) {
-		for i := range 10 {
-			if i%2 == 0 {
-				send(i)
-			} else {
-				sendErr(fmt.Errorf("err%d", i))
+	synctest.Test(t, func(t *testing.T) {
+		in := Generate(func(send func(int), sendErr func(error)) {
+			for i := range 10 {
+				if i%2 == 0 {
+					send(i)
+				} else {
+					sendErr(fmt.Errorf("err%d", i))
+				}
 			}
-		}
+		})
+
+		outSlice, errSlice := toSliceAndErrors(in)
+
+		th.ExpectSlice(t, outSlice, []int{0, 2, 4, 6, 8})
+		th.ExpectSlice(t, errSlice, []string{"err1", "err3", "err5", "err7", "err9"})
 	})
-
-	outSlice, errSlice := toSliceAndErrors(in)
-
-	th.ExpectSlice(t, outSlice, []int{0, 2, 4, 6, 8})
-	th.ExpectSlice(t, errSlice, []string{"err1", "err3", "err5", "err7", "err9"})
 }

@@ -21,6 +21,11 @@ func rangeInt(from, to int) iter.Seq[int] {
 }
 
 func TestToSeq2(t *testing.T) {
+	th.RunSynctestExpectBlock(t, "nil", func(t *testing.T) {
+		for range ToSeq2[int](nil) {
+		}
+	})
+
 	t.Run("errors", func(t *testing.T) {
 		in := FromSeq(rangeInt(0, 20), nil)
 		expectedErrs := []error{fmt.Errorf("err15"), fmt.Errorf("err18")}

@@ -1,8 +1,8 @@
 package core
 
 import (
+	"slices"
 	"testing"
-	"time"
 
 	"github.com/destel/rill/internal/th"
 )
@@ -14,7 +14,7 @@ func TestMerge(t *testing.T) {
 	})
 
 	for _, numChans := range []int{1, 3, 5, 10} {
-		t.Run(th.Name("correctness", numChans), func(t *testing.T) {
+		th.RunSynctest(t, th.Name("correctness", numChans), func(t *testing.T) {
 			ins := make([]<-chan int, numChans)
 
 			for i := range numChans {
@@ -29,11 +29,11 @@ func TestMerge(t *testing.T) {
 				expectedSlice = append(expectedSlice, i)
 			}
 
-			th.Sort(outSlice)
+			slices.Sort(outSlice)
 			th.ExpectSlice(t, outSlice, expectedSlice)
 		})
 
-		t.Run(th.Name("nil hang", numChans), func(t *testing.T) {
+		th.RunSynctestExpectBlock(t, th.Name("nil hang", numChans), func(t *testing.T) {
 			ins := make([]<-chan int, numChans)
 
 			for i := 0; i < numChans-1; i++ {
@@ -44,8 +44,7 @@ func TestMerge(t *testing.T) {
 			ins[numChans-1] = nil
 
 			out := Merge(ins...)
-
-			th.ExpectNeverClosedChan(t, out, 1*time.Second)
+			th.ToSlice(out)
 		})
 
 	}

@@ -11,6 +11,10 @@ func TestDrain(t *testing.T) {
 	Drain[int](th.FromRange(0, 10))
 	Discard[int](th.FromRange(0, 10))
 	DrainNB[int](th.FromRange(0, 10))
+
+	th.RunSynctestExpectBlock(t, "nil", func(t *testing.T) {
+		Drain[int](nil)
+	})
 }
 
 func TestBuffer(t *testing.T) {

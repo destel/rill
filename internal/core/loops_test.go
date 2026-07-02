@@ -1,6 +1,7 @@
 package core
 
 import (
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,8 +24,8 @@ func universalLoop[A, B any](ord bool, in <-chan A, done chan<- B, n int, f func
 
 func TestLoop(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
-		for _, n := range []int{1, 5} {
-			t.Run(th.Name("correctness", n), func(t *testing.T) {
+		for _, n := range []int{1, 3, 5} {
+			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
 				done := make(chan struct{})
 
@@ -39,15 +40,15 @@ func TestLoop(t *testing.T) {
 				th.ExpectValue(t, sum.Load(), 19*20/2)
 			})
 
-			t.Run(th.Name("concurrency", n), func(t *testing.T) {
+			th.RunSynctest(t, th.Name("concurrency", n), func(t *testing.T) {
 				in := th.FromRange(0, 100)
 				out := make(chan int)
 
-				monitor := th.NewConcurrencyMonitor(1 * time.Second)
+				var monitor th.ConcurrencyMonitor
 
 				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
-					monitor.Inc()
-					defer monitor.Dec()
+					monitor.Enter()
+					defer monitor.Exit()
 
 					<-canWrite
 
@@ -59,14 +60,16 @@ func TestLoop(t *testing.T) {
 				th.ExpectValue(t, monitor.Max(), n)
 			})
 
-			t.Run(th.Name("ordering", n), func(t *testing.T) {
-				in := th.FromRange(0, 20000)
+			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+				in := th.FromRange(0, 1000)
 				out := make(chan int)
 
 				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
+					if x%7 == 0 {
+						time.Sleep(1 * time.Second) // force out-of-order completion
+					}
 
 					<-canWrite
-
 					out <- x
 				})
 
@@ -86,11 +89,14 @@ func TestLoop(t *testing.T) {
 
 func TestForEach(t *testing.T) {
 	for _, n := range []int{1, 5} {
-		t.Run(th.Name("correctness", n), func(t *testing.T) {
+		th.RunSynctestExpectBlock(t, th.Name("nil", n), func(t *testing.T) {
+			ForEach(nil, n, func(int) {})
+		})
+
+		th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
 			in := th.FromRange(0, 20)
 
 			var sum atomic.Int64
-
 			ForEach(in, n, func(x int) {
 				sum.Add(int64(x))
 			})
@@ -98,31 +104,34 @@ func TestForEach(t *testing.T) {
 			th.ExpectValue(t, sum.Load(), 19*20/2)
 		})
 
-		t.Run(th.Name("concurrency", n), func(t *testing.T) {
+		th.RunSynctest(t, th.Name("concurrency", n), func(t *testing.T) {
 			in := th.FromRange(0, 100)
 
-			mon := th.NewConcurrencyMonitor(1 * time.Second)
+			var monitor th.ConcurrencyMonitor
 
 			ForEach(in, n, func(x int) {
-				mon.Inc()
-				defer mon.Dec()
+				monitor.Enter()
+				defer monitor.Exit()
 			})
 
-			th.ExpectValue(t, mon.Max(), n)
+			th.ExpectValue(t, monitor.Max(), n)
 		})
 
-		t.Run(th.Name("ordering", n), func(t *testing.T) {
-			in := th.FromRange(0, 20000)
-			out := make(chan int)
+		th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+			in := th.FromRange(0, 1000)
 
-			go func() {
-				ForEach(in, n, func(x int) {
-					out <- x
-				})
-				close(out)
-			}()
+			outSlice := make([]int, 0, 1000)
+			var mu sync.Mutex
 
-			outSlice := th.ToSlice(out)
+			ForEach(in, n, func(x int) {
+				if x%7 == 0 {
+					time.Sleep(1 * time.Second) // force out-of-order completion
+				}
+
+				mu.Lock()
+				outSlice = append(outSlice, x)
+				mu.Unlock()
+			})
 
 			if n == 1 {
 				th.ExpectSorted(t, outSlice)

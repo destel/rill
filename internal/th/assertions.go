@@ -107,38 +107,6 @@ func ExpectDrainedChan[A any](t *testing.T, ch <-chan A) {
 	}
 }
 
-func ExpectNeverClosedChan[A any](t *testing.T, ch <-chan A, waitFor time.Duration) {
-	t.Helper()
-	timeout := time.After(waitFor)
-	for {
-		select {
-		case _, ok := <-ch:
-			if !ok {
-				t.Errorf("expected channel to be never closed")
-				return
-			}
-		case <-timeout:
-			return
-		}
-	}
-}
-
-func ExpectHang(t *testing.T, waitFor time.Duration, f func()) {
-	t.Helper()
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-		f()
-	}()
-
-	select {
-	case <-done:
-		t.Errorf("expected hang")
-	case <-time.After(waitFor):
-	}
-}
-
 func ExpectNotHang(t *testing.T, waitFor time.Duration, f func()) {
 	t.Helper()
 	done := make(chan struct{})
@@ -155,15 +123,30 @@ func ExpectNotHang(t *testing.T, waitFor time.Duration, f func()) {
 	}
 }
 
-func ExpectError(t *testing.T, err error, message string) {
+func ExpectError(t *testing.T, err error, expectedMessage string) {
 	t.Helper()
 	if err == nil {
-		t.Errorf("expected error '%s', got nil", message)
+		t.Errorf("expected error '%s', got nil", expectedMessage)
 		return
 	}
 
-	if err.Error() != message {
-		t.Errorf("expected error '%s', got '%s'", message, err.Error())
+	if err.Error() != expectedMessage {
+		t.Errorf("expected error '%s', got '%s'", expectedMessage, err.Error())
+	}
+}
+
+func ExpectErrorSlice(t *testing.T, errs []error, expectedMessages []string) {
+	t.Helper()
+	if len(errs) != len(expectedMessages) {
+		t.Errorf("expected %d errors, got %d", len(expectedMessages), len(errs))
+		return
+	}
+
+	for i := range errs {
+		if errs[i].Error() != expectedMessages[i] {
+			t.Errorf("expected %v, got %v, mismatch at pos %d: %v != %v", expectedMessages, errs, i, expectedMessages[i], errs[i].Error())
+			return
+		}
 	}
 }
 

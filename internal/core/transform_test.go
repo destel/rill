@@ -2,7 +2,9 @@ package core
 
 import (
 	"fmt"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/destel/rill/internal/th"
 )
@@ -17,13 +19,12 @@ func universalFilterMap[A, B any](ord bool, in <-chan A, n int, f func(A) (B, bo
 func TestFilterMap(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
 		for _, n := range []int{1, 5} {
-
 			t.Run(th.Name("nil", n), func(t *testing.T) {
 				out := universalFilterMap(ord, nil, n, func(x int) (int, bool) { return x, true })
 				th.ExpectValue(t, out, nil)
 			})
 
-			t.Run(th.Name("correctness", n), func(t *testing.T) {
+			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
 				out := universalFilterMap(ord, in, n, func(x int) (string, bool) {
 					return fmt.Sprintf("%03d", x), x%2 == 0
@@ -39,14 +40,17 @@ func TestFilterMap(t *testing.T) {
 					expectedSlice = append(expectedSlice, fmt.Sprintf("%03d", i))
 				}
 
-				th.Sort(outSlice)
+				slices.Sort(outSlice)
 				th.ExpectSlice(t, outSlice, expectedSlice)
 			})
 
-			t.Run(th.Name("ordering", n), func(t *testing.T) {
-				in := th.FromRange(0, 20000)
+			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+				in := th.FromRange(0, 1000)
 
 				out := universalFilterMap(ord, in, n, func(x int) (int, bool) {
+					if x%7 == 0 {
+						time.Sleep(1 * time.Second) // force out-of-order completion
+					}
 					return x, x%2 == 0
 				})
 
