@@ -87,8 +87,29 @@ func TestBothOrderings(t *testing.T, f func(t *testing.T, ord bool)) {
 	})
 }
 
+// RunSynctest runs a subtest in a synctest bubble.
 func RunSynctest(t *testing.T, name string, f func(t *testing.T)) {
 	t.Run(name, func(t *testing.T) {
+		synctest.Test(t, f)
+	})
+}
+
+// RunSynctestExpectBlock runs a subtest in a synctest bubble and expects all goroutines to durably block.
+// The test will fail if all goroutines exit cleanly.
+func RunSynctestExpectBlock(t *testing.T, name string, f func(t *testing.T)) {
+	t.Run(name, func(t *testing.T) {
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Errorf("expected deadlock")
+				return
+			}
+			if strings.Contains(fmt.Sprint(r), "deadlock") {
+				return
+			}
+			panic(r) // re-panic if not a deadlock
+		}()
+
 		synctest.Test(t, f)
 	})
 }
