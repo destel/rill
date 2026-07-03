@@ -202,7 +202,7 @@ func TestAnyAll(t *testing.T) {
 		th.RunSynctest(t, th.Name("empty", n), func(t *testing.T) {
 			in := FromSlice([]int{}, nil)
 
-			res, err := All(in, 1, func(int) (bool, error) {
+			res, err := All(in, n, func(int) (bool, error) {
 				return false, nil
 			})
 
