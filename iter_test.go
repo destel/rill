@@ -3,22 +3,12 @@ package rill
 import (
 	"errors"
 	"fmt"
-	"iter"
+	"slices"
 	"testing"
-	"time"
+	"testing/synctest"
 
 	"github.com/destel/rill/internal/th"
 )
-
-func rangeInt(from, to int) iter.Seq[int] {
-	return func(yield func(i int) bool) {
-		for i := from; i < to; i++ {
-			if !yield(i) {
-				break
-			}
-		}
-	}
-}
 
 func TestToSeq2(t *testing.T) {
 	th.RunSynctestExpectBlock(t, "nil", func(t *testing.T) {
@@ -26,91 +16,94 @@ func TestToSeq2(t *testing.T) {
 		}
 	})
 
-	t.Run("errors", func(t *testing.T) {
-		in := FromSeq(rangeInt(0, 20), nil)
-		expectedErrs := []error{fmt.Errorf("err15"), fmt.Errorf("err18")}
-		in = replaceWithError(in, 15, expectedErrs[0])
-		in = replaceWithError(in, 18, expectedErrs[1])
+	th.RunSynctest(t, "normal", func(t *testing.T) {
+		in := FromChan(th.FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}), nil)
+		in = replaceWithError(in, 5, fmt.Errorf("err5"))
+		in = replaceWithError(in, 8, fmt.Errorf("err8"))
 
-		var outSlice []int
-		var outErrs []error
-		for i, err := range ToSeq2(in) {
-			outSlice = append(outSlice, i)
+		outSlice := make([]int, 0, 10)
+		errSlice := make([]string, 0, 10)
+
+		out := ToSeq2(in)
+		for val, err := range out {
+			outSlice = append(outSlice, val)
 			if err != nil {
-				outErrs = append(outErrs, err)
+				errSlice = append(errSlice, err.Error())
 			}
 		}
 
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19})
-		th.ExpectSlice(t, outErrs, expectedErrs)
-
-		time.Sleep(1 * time.Second)
+		synctest.Wait()
 		th.ExpectDrainedChan(t, in)
+
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+		th.ExpectSlice(t, errSlice, []string{"err5", "err8"})
 	})
 
-	t.Run("errors with break", func(t *testing.T) {
-		in := FromSeq(rangeInt(0, 20), nil)
-		in = replaceWithError(in, 15, fmt.Errorf("err15"))
-		in = replaceWithError(in, 18, fmt.Errorf("err18"))
+	th.RunSynctest(t, "early exit", func(t *testing.T) {
+		in := FromChan(th.FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}), nil)
+		in = replaceWithError(in, 8, fmt.Errorf("err8"))
 
-		var outSlice []int
-		var outErr error
+		outSlice := make([]int, 0, 10)
+		errSlice := make([]string, 0, 10)
 
-		// sceneraio: let's client side determine when to break
-		for i, err := range ToSeq2(in) {
-			if err != nil {
-				outErr = err
+		out := ToSeq2(in)
+		for val, err := range out {
+			if val == 5 {
 				break
 			}
-			outSlice = append(outSlice, i)
+
+			outSlice = append(outSlice, val)
+			if err != nil {
+				errSlice = append(errSlice, err.Error())
+			}
 		}
 
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14})
-		th.ExpectError(t, outErr, "err15")
-
-		time.Sleep(1 * time.Second)
+		synctest.Wait()
 		th.ExpectDrainedChan(t, in)
+
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
+		th.ExpectSlice(t, errSlice, nil)
 	})
 }
 
 func TestFromSeq(t *testing.T) {
-	t.Run("nil", func(t *testing.T) {
+	t.Run("nils", func(t *testing.T) {
 		in := FromSeq[int](nil, nil)
 		th.ExpectValue(t, in, nil)
 	})
 
-	t.Run("normal ", func(t *testing.T) {
-		in := FromSeq(rangeInt(0, 20), nil)
+	th.RunSynctest(t, "no error", func(t *testing.T) {
+		in := slices.Values([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+		out := FromSeq(in, nil)
 
-		outSlice, outErrs := toSliceAndErrors(in)
-		th.Sort(outSlice)
-
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19})
+		outSlice, outErrs := toSliceAndErrors(out)
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
 		th.ExpectSlice(t, outErrs, nil)
 	})
 
-	t.Run("with error", func(t *testing.T) {
-		in := FromSeq(rangeInt(0, 20), errors.New("err"))
-		a := <-in
-		th.ExpectDrainedChan(t, in)
-		th.ExpectError(t, a.Error, "err")
+	th.RunSynctest(t, "error", func(t *testing.T) {
+		in := slices.Values([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+		out := FromSeq(in, errors.New("some error"))
+
+		outSlice, outErrs := toSliceAndErrors(out)
+		th.ExpectSlice(t, outSlice, nil)
+		th.ExpectSlice(t, outErrs, []string{"some error"})
 	})
 }
 
 func TestFromSeq2(t *testing.T) {
-	t.Run("nil", func(t *testing.T) {
+	t.Run("nils", func(t *testing.T) {
 		in := FromSeq2[int](nil)
 		th.ExpectValue(t, in, nil)
 	})
 
-	t.Run("normal", func(t *testing.T) {
-		// generate from 0 to 7, and when the value is  5, yield error
-		err5 := errors.New("err5")
+	th.RunSynctest(t, "normal", func(t *testing.T) {
+		// generate from 0 to 9, and when the value is  5, yield error
 		gen := func(yield func(x int, err error) bool) {
-			for i := range 8 {
+			for i := range 10 {
 				var err error
 				if i == 5 {
-					err = err5
+					err = fmt.Errorf("err5")
 				}
 				if !yield(i, err) {
 					break
@@ -120,14 +113,8 @@ func TestFromSeq2(t *testing.T) {
 
 		in := FromSeq2(gen)
 
-		var outSlice []int
-		var outError []error
-		for a := range in {
-			outSlice = append(outSlice, a.Value)
-			outError = append(outError, a.Error)
-		}
-
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7})
-		th.ExpectSlice(t, outError, []error{nil, nil, nil, nil, nil, err5, nil, nil})
+		outSlice, outErrs := toSliceAndErrors(in)
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 6, 7, 8, 9})
+		th.ExpectSlice(t, outErrs, []string{"err5"})
 	})
 }
