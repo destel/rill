@@ -111,31 +111,25 @@ func TestSplit2(t *testing.T) {
 					case 1:
 						return false, nil
 					default:
-						return true, fmt.Errorf("err%06d", x)
+						return true, fmt.Errorf("%03d-err", x)
 					}
 				})
 
-				var outSliceTrue, outSliceFalse []int
-				var errSliceTrue, errSliceFalse []string
+				var outSliceTrue, outSliceFalse []string
 
 				th.DoConcurrently(
-					func() { outSliceTrue, errSliceTrue = toSliceAndErrors(outTrue) },
-					func() { outSliceFalse, errSliceFalse = toSliceAndErrors(outFalse) },
+					func() { outSliceTrue = toUnifiedStringSlice(outTrue, "%03d") },
+					func() { outSliceFalse = toUnifiedStringSlice(outFalse, "%03d") },
 				)
 
 				if ord || n == 1 {
 					th.ExpectSorted(t, outSliceTrue)
 					th.ExpectSorted(t, outSliceFalse)
-					th.ExpectSorted(t, errSliceTrue)
-					th.ExpectSorted(t, errSliceFalse)
 				} else {
 					th.ExpectUnsorted(t, outSliceTrue)
 					th.ExpectUnsorted(t, outSliceFalse)
-					th.ExpectUnsorted(t, errSliceTrue)
-					th.ExpectUnsorted(t, errSliceFalse)
 				}
 			})
-
 		}
 	})
 }

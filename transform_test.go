@@ -66,24 +66,20 @@ func TestMap(t *testing.T) {
 					}
 
 					if x%2 == 0 {
-						return x, fmt.Errorf("err%03d", x)
+						return 0, fmt.Errorf("%03d-err", x)
 					}
 
 					return x, nil
 				})
 
-				outSlice, errSlice := toSliceAndErrors(out)
+				outSlice := toUnifiedStringSlice(out, "%03d")
 
 				if ord || n == 1 {
 					th.ExpectSorted(t, outSlice)
-					th.ExpectSorted(t, errSlice)
 				} else {
 					th.ExpectUnsorted(t, outSlice)
-					th.ExpectUnsorted(t, errSlice)
 				}
-
 			})
-
 		}
 	})
 }
@@ -148,7 +144,7 @@ func TestFilter(t *testing.T) {
 
 					switch x % 3 {
 					case 2:
-						return false, fmt.Errorf("err%03d", x)
+						return false, fmt.Errorf("%03d-err", x)
 					case 1:
 						return false, nil
 					default:
@@ -157,14 +153,12 @@ func TestFilter(t *testing.T) {
 					}
 				})
 
-				outSlice, errSlice := toSliceAndErrors(out)
+				outSlice := toUnifiedStringSlice(out, "%03d")
 
 				if ord || n == 1 {
 					th.ExpectSorted(t, outSlice)
-					th.ExpectSorted(t, errSlice)
 				} else {
 					th.ExpectUnsorted(t, outSlice)
-					th.ExpectUnsorted(t, errSlice)
 				}
 			})
 
@@ -232,7 +226,7 @@ func TestFilterMap(t *testing.T) {
 
 					switch x % 3 {
 					case 2:
-						return x, false, fmt.Errorf("err%03d", x)
+						return x, false, fmt.Errorf("%03d-err", x)
 					case 1:
 						return x, false, nil
 					default:
@@ -241,16 +235,13 @@ func TestFilterMap(t *testing.T) {
 					}
 				})
 
-				outSlice, errSlice := toSliceAndErrors(out)
+				outSlice := toUnifiedStringSlice(out, "%03d")
 
 				if ord || n == 1 {
 					th.ExpectSorted(t, outSlice)
-					th.ExpectSorted(t, errSlice)
 				} else {
 					th.ExpectUnsorted(t, outSlice)
-					th.ExpectUnsorted(t, errSlice)
 				}
-
 			})
 
 		}
@@ -317,8 +308,8 @@ func TestFlatMap(t *testing.T) {
 					}
 
 					return Generate(func(send func(string), sendErr func(error)) {
-						send(fmt.Sprintf("%03dA", x))
-						sendErr(fmt.Errorf("err%03dA", x))
+						send(fmt.Sprintf("%03d-A", x))
+						sendErr(fmt.Errorf("%03d-A-err", x))
 
 						if x%9 == 0 {
 							// A gap between this item's A and B outputs, so the assertions below also
@@ -326,19 +317,17 @@ func TestFlatMap(t *testing.T) {
 							time.Sleep(1 * time.Second)
 						}
 
-						send(fmt.Sprintf("%03dB", x))
-						sendErr(fmt.Errorf("err%03dB", x))
+						send(fmt.Sprintf("%03d-B", x))
+						sendErr(fmt.Errorf("%03d-B-err", x))
 					})
 				})
 
-				outSlice, errSlice := toSliceAndErrors(out)
+				outSlice := toUnifiedStringSlice(out, "%s")
 
 				if ord || n == 1 {
 					th.ExpectSorted(t, outSlice)
-					th.ExpectSorted(t, errSlice)
 				} else {
 					th.ExpectUnsorted(t, outSlice)
-					th.ExpectUnsorted(t, errSlice)
 				}
 			})
 
@@ -401,7 +390,7 @@ func TestCatch(t *testing.T) {
 
 				in = OrderedMap(in, 1, func(x int) (int, error) {
 					if x%2 == 0 {
-						return x, fmt.Errorf("err%03d", x)
+						return x, fmt.Errorf("%03d-err", x)
 					}
 					return x, nil
 				})
@@ -414,17 +403,14 @@ func TestCatch(t *testing.T) {
 					return fmt.Errorf("%w wrapped", err)
 				})
 
-				outSlice, errSlice := toSliceAndErrors(out)
+				outSlice := toUnifiedStringSlice(out, "%03d")
 
 				if ord || n == 1 {
 					th.ExpectSorted(t, outSlice)
-					th.ExpectSorted(t, errSlice)
 				} else {
-					// Catch's f runs only on errors (values bypass it), so a delay can't
-					// reach the value stream to force it to be out of order.
-					// Only assert the error stream:
-					th.ExpectUnsorted(t, errSlice)
+					th.ExpectUnsorted(t, outSlice)
 				}
+
 			})
 
 		}

@@ -1,6 +1,9 @@
 package rill
 
-import "testing/synctest"
+import (
+	"fmt"
+	"testing/synctest"
+)
 
 func toSliceAndErrors[A any](in <-chan Try[A]) ([]A, []string) {
 	var values []A
@@ -16,6 +19,20 @@ func toSliceAndErrors[A any](in <-chan Try[A]) ([]A, []string) {
 	}
 
 	return values, errors
+}
+
+// Converts errors and values to strings and collects them into a single slice.
+// Uses the provided [fmt.Printf] format to stringify values.
+func toUnifiedStringSlice[A any](in <-chan Try[A], format string) []string {
+	var res []string
+	for x := range in {
+		if x.Error != nil {
+			res = append(res, x.Error.Error())
+			continue
+		}
+		res = append(res, fmt.Sprintf(format, x.Value))
+	}
+	return res
 }
 
 // Similar to toSliceAndErrors, but reads until all goroutines are durably blocked
