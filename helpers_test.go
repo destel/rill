@@ -2,8 +2,61 @@ package rill
 
 import (
 	"fmt"
+	"testing"
 	"testing/synctest"
+
+	"github.com/destel/rill/internal/th"
 )
+
+type ItemSlice[A any] = []Try[A]
+
+func appendVal[A any](s ItemSlice[A], value ...A) ItemSlice[A] {
+	for _, v := range value {
+		s = append(s, Try[A]{Value: v})
+	}
+	return s
+}
+
+func appendErr[A any](s ItemSlice[A], error ...error) ItemSlice[A] {
+	for _, e := range error {
+		s = append(s, Try[A]{Error: e})
+	}
+	return s
+}
+
+func appendStream[A any](s ItemSlice[A], stream Stream[A]) ItemSlice[A] {
+	for x := range stream {
+		s = append(s, x)
+	}
+	return s
+}
+
+func toItemSlice[A any](stream Stream[A]) ItemSlice[A] {
+	return appendStream(nil, stream)
+}
+
+func ExpectItemsMatch[A comparable](t *testing.T, actual, expected ItemSlice[A]) {
+	t.Helper()
+	type ComparableItem struct {
+		Value A
+		Error string
+	}
+
+	toComparable := func(s ItemSlice[A]) []ComparableItem {
+		res := make([]ComparableItem, len(s))
+		for i, item := range s {
+
+			if item.Error != nil {
+				res[i].Error = item.Error.Error()
+			} else {
+				res[i].Value = item.Value
+			}
+		}
+		return res
+	}
+
+	th.ExpectElementsMatch(t, toComparable(actual), toComparable(expected))
+}
 
 func toSliceAndErrors[A any](in <-chan Try[A]) ([]A, []string) {
 	var values []A

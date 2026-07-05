@@ -56,6 +56,28 @@ func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 	}
 }
 
+func ExpectElementsMatch[A comparable](t *testing.T, actual, expected []A) {
+	t.Helper()
+	if len(actual) != len(expected) {
+		t.Errorf("length mismatch: expected %v, got %v", expected, actual)
+		return
+	}
+
+	expectedMap := make(map[A]int, len(expected))
+	for _, v := range expected {
+		expectedMap[v]++
+	}
+	for _, v := range actual {
+		expectedMap[v]--
+	}
+	for el, count := range expectedMap {
+		if count != 0 {
+			t.Errorf("element %v mismatch: expected %v, got %v", el, expected, actual)
+			return
+		}
+	}
+}
+
 func ExpectMap[K, V comparable](t *testing.T, actual map[K]V, expected map[K]V) {
 	t.Helper()
 	if len(expected) != len(actual) {

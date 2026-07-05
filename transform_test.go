@@ -2,7 +2,6 @@ package rill
 
 import (
 	"fmt"
-	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27,34 +26,28 @@ func TestMap(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 20), nil)
+				in := FromChan(th.FromRange(0, 50), nil)
 				in = replaceWithError(in, 15, fmt.Errorf("err015"))
 
 				out := universalMap(ord, in, n, func(x int) (string, error) {
 					if x == 5 || x == 6 {
 						return "", fmt.Errorf("err%03d", x)
 					}
-
 					return fmt.Sprintf("%03d", x), nil
 				})
 
-				outSlice, errSlice := toSliceAndErrors(out)
+				outSlice := toItemSlice(out)
 
-				expectedSlice := make([]string, 0, 20)
-				expectedErrSlice := make([]string, 0, 20)
-				for i := range 20 {
+				var expectedSlice ItemSlice[string]
+				for i := range 50 {
 					if i == 5 || i == 6 || i == 15 {
-						expectedErrSlice = append(expectedErrSlice, fmt.Sprintf("err%03d", i))
+						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03d", i))
 						continue
 					}
-					expectedSlice = append(expectedSlice, fmt.Sprintf("%03d", i))
+					expectedSlice = appendVal(expectedSlice, fmt.Sprintf("%03d", i))
 				}
 
-				slices.Sort(outSlice)
-				slices.Sort(errSlice)
-
-				th.ExpectSlice(t, outSlice, expectedSlice)
-				th.ExpectSlice(t, errSlice, expectedErrSlice)
+				ExpectItemsMatch(t, outSlice, expectedSlice)
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
@@ -65,10 +58,9 @@ func TestMap(t *testing.T) {
 						time.Sleep(1 * time.Second) // force out-of-order completion
 					}
 
-					if x%2 == 0 {
+					if x%2 == 1 {
 						return 0, fmt.Errorf("%03d-err", x)
 					}
-
 					return x, nil
 				})
 
@@ -101,37 +93,30 @@ func TestFilter(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 20), nil)
+				in := FromChan(th.FromRange(0, 50), nil)
 				in = replaceWithError(in, 15, fmt.Errorf("err015"))
 
 				out := universalFilter(ord, in, n, func(x int) (bool, error) {
 					if x == 5 || x == 6 {
-						return x == 6, fmt.Errorf("err%03d", x)
+						return x == 5, fmt.Errorf("err%03d", x)
 					}
-
 					return x%2 == 0, nil
 				})
 
-				outSlice, errSlice := toSliceAndErrors(out)
+				outSlice := toItemSlice(out)
 
-				expectedSlice := make([]int, 0, 20)
-				expectedErrSlice := make([]string, 0, 20)
-				for i := range 20 {
+				var expectedSlice ItemSlice[int]
+				for i := range 50 {
 					if i == 5 || i == 6 || i == 15 {
-						expectedErrSlice = append(expectedErrSlice, fmt.Sprintf("err%03d", i))
+						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03d", i))
 						continue
 					}
-					if i%2 == 1 {
-						continue
+					if i%2 == 0 {
+						expectedSlice = appendVal(expectedSlice, i)
 					}
-					expectedSlice = append(expectedSlice, i)
 				}
 
-				slices.Sort(outSlice)
-				slices.Sort(errSlice)
-
-				th.ExpectSlice(t, outSlice, expectedSlice)
-				th.ExpectSlice(t, errSlice, expectedErrSlice)
+				ExpectItemsMatch(t, outSlice, expectedSlice)
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
@@ -149,7 +134,6 @@ func TestFilter(t *testing.T) {
 						return false, nil
 					default:
 						return true, nil
-
 					}
 				})
 
@@ -176,44 +160,36 @@ func universalFilterMap[A, B any](ord bool, in <-chan Try[A], n int, f func(A) (
 func TestFilterMap(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
 		for _, n := range []int{1, 5} {
-
 			t.Run(th.Name("nil", n), func(t *testing.T) {
 				out := universalFilterMap(ord, nil, n, func(x int) (int, bool, error) { return x, true, nil })
 				th.ExpectValue(t, out, nil)
 			})
 
 			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 20), nil)
+				in := FromChan(th.FromRange(0, 50), nil)
 				in = replaceWithError(in, 15, fmt.Errorf("err015"))
 
 				out := universalFilterMap(ord, in, n, func(x int) (string, bool, error) {
 					if x == 5 || x == 6 {
-						return "dummy", x == 6, fmt.Errorf("err%03d", x)
+						return "dummy", x == 5, fmt.Errorf("err%03d", x)
 					}
-
 					return fmt.Sprintf("%03d", x), x%2 == 0, nil
 				})
 
-				outSlice, errSlice := toSliceAndErrors(out)
+				outSlice := toItemSlice(out)
 
-				expectedSlice := make([]string, 0, 20)
-				expectedErrSlice := make([]string, 0, 20)
-				for i := range 20 {
+				var expectedSlice ItemSlice[string]
+				for i := range 50 {
 					if i == 5 || i == 6 || i == 15 {
-						expectedErrSlice = append(expectedErrSlice, fmt.Sprintf("err%03d", i))
+						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03d", i))
 						continue
 					}
-					if i%2 == 1 {
-						continue
+					if i%2 == 0 {
+						expectedSlice = appendVal(expectedSlice, fmt.Sprintf("%03d", i))
 					}
-					expectedSlice = append(expectedSlice, fmt.Sprintf("%03d", i))
 				}
 
-				slices.Sort(outSlice)
-				slices.Sort(errSlice)
-
-				th.ExpectSlice(t, outSlice, expectedSlice)
-				th.ExpectSlice(t, errSlice, expectedErrSlice)
+				ExpectItemsMatch(t, outSlice, expectedSlice)
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
@@ -231,7 +207,6 @@ func TestFilterMap(t *testing.T) {
 						return x, false, nil
 					default:
 						return x, true, nil
-
 					}
 				})
 
@@ -265,7 +240,7 @@ func TestFlatMap(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 20), nil)
+				in := FromChan(th.FromRange(0, 50), nil)
 				in = replaceWithError(in, 5, fmt.Errorf("err005I"))
 				in = replaceWithError(in, 15, fmt.Errorf("err015I"))
 
@@ -279,24 +254,20 @@ func TestFlatMap(t *testing.T) {
 					})
 				})
 
-				outSlice, errSlice := toSliceAndErrors(out)
+				outSlice := toItemSlice(out)
 
-				expectedSlice := make([]string, 0, 20*2)
-				expectedErrSlice := make([]string, 0, 20*2)
-				for i := range 20 {
+				var expectedSlice ItemSlice[string]
+				for i := range 50 {
 					if i == 5 || i == 15 {
-						expectedErrSlice = append(expectedErrSlice, fmt.Sprintf("err%03dI", i))
+						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03dI", i))
 						continue
 					}
-					expectedSlice = append(expectedSlice, fmt.Sprintf("%03dA", i), fmt.Sprintf("%03dB", i))
-					expectedErrSlice = append(expectedErrSlice, fmt.Sprintf("err%03dA", i), fmt.Sprintf("err%03dB", i))
+
+					expectedSlice = appendVal(expectedSlice, fmt.Sprintf("%03dA", i), fmt.Sprintf("%03dB", i))
+					expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03dA", i), fmt.Errorf("err%03dB", i))
 				}
 
-				slices.Sort(outSlice)
-				slices.Sort(errSlice)
-
-				th.ExpectSlice(t, outSlice, expectedSlice)
-				th.ExpectSlice(t, errSlice, expectedErrSlice)
+				ExpectItemsMatch(t, outSlice, expectedSlice)
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
@@ -352,7 +323,7 @@ func TestCatch(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 20), nil)
+				in := FromChan(th.FromRange(0, 50), nil)
 				in = replaceWithError(in, 5, fmt.Errorf("err05"))
 				in = replaceWithError(in, 10, fmt.Errorf("err10"))
 				in = replaceWithError(in, 15, fmt.Errorf("err15"))
@@ -368,21 +339,18 @@ func TestCatch(t *testing.T) {
 					return err // leave as is
 				})
 
-				outSlice, errSlice := toSliceAndErrors(out)
+				outSlice := toItemSlice(out)
 
-				expectedSlice := make([]int, 0, 20)
-				for i := range 20 {
+				var expectedSlice ItemSlice[int]
+				expectedSlice = appendErr(expectedSlice, fmt.Errorf("err10 wrapped"), fmt.Errorf("err15"))
+				for i := range 50 {
 					if i == 5 || i == 10 || i == 15 {
 						continue
 					}
-					expectedSlice = append(expectedSlice, i)
+					expectedSlice = appendVal(expectedSlice, i)
 				}
 
-				slices.Sort(outSlice)
-				slices.Sort(errSlice)
-
-				th.ExpectSlice(t, outSlice, expectedSlice)
-				th.ExpectSlice(t, errSlice, []string{"err10 wrapped", "err15"})
+				ExpectItemsMatch(t, outSlice, expectedSlice)
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
