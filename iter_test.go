@@ -12,7 +12,7 @@ import (
 
 func TestToSeq2(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		th.ExpectHang(t, func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
 			for range ToSeq2[int](nil) {
 			}
 		})

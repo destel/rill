@@ -77,16 +77,18 @@ func TestSplit2(t *testing.T) {
 				th.ExpectElementsMatch(t, outSliceFalse, expectedOutSliceFalse)
 			})
 
-			th.RunSynctestExpectBlock(t, th.Name("non concurrent reads", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 100), nil)
-				out1, out2 := universalSplit2(ord, in, n, func(x int) (bool, error) {
-					return x%2 == 0, nil
-				})
+			t.Run(th.Name("non concurrent reads", n), func(t *testing.T) {
+				th.ExpectBlock(t, func(t *testing.T) {
+					in := FromChan(th.FromRange(0, 100), nil)
+					out1, out2 := universalSplit2(ord, in, n, func(x int) (bool, error) {
+						return x%2 == 0, nil
+					})
 
-				// Reading out1 blocks forever: the producer gets stuck sending to the unread out2,
-				// so it stops feeding out1 too. The second call is never reached.
-				toItemSlice(out1)
-				toItemSlice(out2)
+					// Reading out1 blocks forever: the producer gets stuck sending to the unread out2,
+					// so it stops feeding out1 too. The second call is never reached.
+					toItemSlice(out1)
+					toItemSlice(out2)
+				})
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
@@ -160,13 +162,15 @@ func TestTee(t *testing.T) {
 		th.ExpectSlice(t, outSlice2, expected)
 	})
 
-	th.RunSynctestExpectBlock(t, th.Name("non concurrent reads"), func(t *testing.T) {
-		in := FromChan(th.FromRange(0, 10), nil)
-		out1, out2 := Tee(in)
+	t.Run(th.Name("non concurrent reads"), func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 10), nil)
+			out1, out2 := Tee(in)
 
-		// Reading out1 blocks forever: the producer gets stuck sending to the unread out2,
-		// so it stops feeding out1 too. The second call is never reached.
-		toItemSlice(out1)
-		toItemSlice(out2)
+			// Reading out1 blocks forever: the producer gets stuck sending to the unread out2,
+			// so it stops feeding out1 too. The second call is never reached.
+			toItemSlice(out1)
+			toItemSlice(out2)
+		})
 	})
 }

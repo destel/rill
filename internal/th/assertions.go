@@ -132,7 +132,11 @@ func ExpectDrainedChan[A any](t *testing.T, ch <-chan A) {
 	}
 }
 
-func ExpectHang(t *testing.T, f func(t *testing.T)) {
+// ExpectBlock runs f in a synctest bubble and asserts it does not complete cleanly.
+// It expects at least one of the following to be true:
+//   - f itself blocks and never returns (e.g. reading from a nil channel)
+//   - f returns, but a goroutine it spawned stays durably blocked (a leak)
+func ExpectBlock(t *testing.T, f func(t *testing.T)) {
 	t.Helper()
 	defer func() {
 		t.Helper()

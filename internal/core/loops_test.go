@@ -89,8 +89,10 @@ func TestLoop(t *testing.T) {
 
 func TestForEach(t *testing.T) {
 	for _, n := range []int{1, 5} {
-		th.RunSynctestExpectBlock(t, th.Name("nil", n), func(t *testing.T) {
-			ForEach(nil, n, func(int) {})
+		t.Run(th.Name("nil", n), func(t *testing.T) {
+			th.ExpectBlock(t, func(t *testing.T) {
+				ForEach(nil, n, func(int) {})
+			})
 		})
 
 		th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {

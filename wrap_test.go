@@ -46,7 +46,7 @@ func TestFromSlice(t *testing.T) {
 
 func TestToSlice(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		th.ExpectHang(t, func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
 			_, _ = ToSlice[int](nil)
 		})
 	})
@@ -80,7 +80,7 @@ func TestToSlice(t *testing.T) {
 
 func TestFromChan(t *testing.T) {
 	t.Run("nil no errors", func(t *testing.T) {
-		th.ExpectHang(t, func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
 			out := FromChan[int](nil, nil)
 			toItemSlice(out)
 		})
@@ -90,7 +90,7 @@ func TestFromChan(t *testing.T) {
 	t.Run("nil with error", func(t *testing.T) {
 		var outSlice []Item[int]
 
-		th.ExpectHang(t, func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
 			out := FromChan[int](nil, fmt.Errorf("err"))
 			for item := range out {
 				outSlice = appendTry(outSlice, item)

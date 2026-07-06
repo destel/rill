@@ -56,7 +56,7 @@ func TestMerge(t *testing.T) {
 		t.Run(th.Name("nil hang", numChans), func(t *testing.T) {
 			var outSlice []string
 
-			th.ExpectHang(t, func(t *testing.T) {
+			th.ExpectBlock(t, func(t *testing.T) {
 				ins := make([]<-chan string, numChans)
 				for i := 0; i < numChans-1; i++ {
 					ins[i] = makeSubChan(i)

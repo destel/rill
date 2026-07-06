@@ -50,8 +50,10 @@ func TestOnceWithWait(t *testing.T) {
 		})
 	})
 
-	th.RunSynctestExpectBlock(t, "Wait without Do", func(t *testing.T) {
-		var o OnceWithWait
-		o.Wait()
+	t.Run("Wait without Do", func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
+			var o OnceWithWait
+			o.Wait()
+		})
 	})
 }

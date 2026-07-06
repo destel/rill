@@ -11,8 +11,10 @@ import (
 )
 
 func TestErr(t *testing.T) {
-	th.RunSynctestExpectBlock(t, "nil", func(t *testing.T) {
-		_ = Err[int](nil)
+	t.Run("nil", func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
+			_ = Err[int](nil)
+		})
 	})
 
 	th.RunSynctest(t, "empty", func(t *testing.T) {
@@ -48,8 +50,10 @@ func TestErr(t *testing.T) {
 }
 
 func TestFirst(t *testing.T) {
-	th.RunSynctestExpectBlock(t, "nil", func(t *testing.T) {
-		_, _, _ = First[int](nil)
+	t.Run("nil", func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
+			_, _, _ = First[int](nil)
+		})
 	})
 
 	th.RunSynctest(t, "empty", func(t *testing.T) {
@@ -90,8 +94,10 @@ func TestFirst(t *testing.T) {
 
 func TestForEach(t *testing.T) {
 	for _, n := range []int{1, 5} {
-		th.RunSynctestExpectBlock(t, th.Name("nil", n), func(t *testing.T) {
-			_ = ForEach(nil, n, func(int) error { return nil })
+		t.Run(th.Name("nil", n), func(t *testing.T) {
+			th.ExpectBlock(t, func(t *testing.T) {
+				_ = ForEach(nil, n, func(int) error { return nil })
+			})
 		})
 
 		th.RunSynctest(t, th.Name("no errors", n), func(t *testing.T) {
@@ -195,8 +201,10 @@ func TestAnyAll(t *testing.T) {
 	}
 
 	for _, n := range []int{1, 5} {
-		th.RunSynctestExpectBlock(t, th.Name("nil", n), func(t *testing.T) {
-			_, _ = All(nil, n, func(int) (bool, error) { return true, nil })
+		t.Run(th.Name("nil", n), func(t *testing.T) {
+			th.ExpectBlock(t, func(t *testing.T) {
+				_, _ = All(nil, n, func(int) (bool, error) { return true, nil })
+			})
 		})
 
 		th.RunSynctest(t, th.Name("empty", n), func(t *testing.T) {
