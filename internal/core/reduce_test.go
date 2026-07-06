@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/destel/rill/internal/th"
@@ -10,26 +11,34 @@ import (
 
 func TestReduce(t *testing.T) {
 	for _, n := range []int{1, 4, 8} {
-		th.RunSynctestExpectBlock(t, th.Name("nil", n), func(t *testing.T) {
-			Reduce(nil, n, func(a, b int) int {
-				return a + b
+		t.Run(th.Name("nil", n), func(t *testing.T) {
+			th.ExpectHang(t, func(t *testing.T) {
+				Reduce(nil, n, func(a, b int) int {
+					return a + b
+				})
 			})
 		})
 
-		t.Run(th.Name("empty", n), func(t *testing.T) {
+		th.RunSynctest(t, th.Name("empty", n), func(t *testing.T) {
 			in := th.FromSlice([]int{})
 			_, ok := Reduce(in, n, func(a, b int) int {
 				return a + b
 			})
 
+			synctest.Wait()
+			th.ExpectDrainedChan(t, in)
+
 			th.ExpectValue(t, ok, false)
 		})
 
-		t.Run(th.Name("correctness", n), func(t *testing.T) {
+		th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
 			in := th.FromRange(0, 100)
 			out, ok := Reduce(in, n, func(a, b int) int {
 				return a + b
 			})
+
+			synctest.Wait()
+			th.ExpectDrainedChan(t, in)
 
 			th.ExpectValue(t, out, 99*100/2)
 			th.ExpectValue(t, ok, true)
@@ -55,18 +64,20 @@ func TestReduce(t *testing.T) {
 func TestMapReduce(t *testing.T) {
 	for _, nm := range []int{1, 4} {
 		for _, nr := range []int{1, 4, 8} {
-			th.RunSynctestExpectBlock(t, th.Name("nil", nm, nr), func(t *testing.T) {
-				MapReduce(nil,
-					nm, func(x int) (string, int) {
-						return "", 1
-					},
-					nr, func(a, b int) int {
-						return a + b
-					},
-				)
+			t.Run(th.Name("nil", nm, nr), func(t *testing.T) {
+				th.ExpectHang(t, func(t *testing.T) {
+					MapReduce(nil,
+						nm, func(x int) (string, int) {
+							return "", 1
+						},
+						nr, func(a, b int) int {
+							return a + b
+						},
+					)
+				})
 			})
 
-			t.Run(th.Name("empty", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, th.Name("empty", nm, nr), func(t *testing.T) {
 				in := th.FromSlice([]int{})
 				out := MapReduce(in,
 					nm, func(x int) (string, int) {
@@ -77,10 +88,13 @@ func TestMapReduce(t *testing.T) {
 					},
 				)
 
+				synctest.Wait()
+				th.ExpectDrainedChan(t, in)
+
 				th.ExpectMap(t, out, map[string]int{})
 			})
 
-			t.Run(th.Name("correctness", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, th.Name("correctness", nm, nr), func(t *testing.T) {
 				in := th.FromRange(0, 200)
 				out := MapReduce(in,
 					nm, func(x int) (string, int) {
@@ -91,6 +105,9 @@ func TestMapReduce(t *testing.T) {
 						return a + b
 					},
 				)
+
+				synctest.Wait()
+				th.ExpectDrainedChan(t, in)
 
 				th.ExpectMap(t, out, map[string]int{
 					"1-digit": (0 + 9) * 10 / 2,

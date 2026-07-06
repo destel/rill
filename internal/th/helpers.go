@@ -1,10 +1,8 @@
 package th
 
 import (
-	"cmp"
 	"fmt"
 	"math/rand"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -42,10 +40,6 @@ func Send[T any](ch chan<- T, items ...T) {
 	for _, item := range items {
 		ch <- item
 	}
-}
-
-func Sort[A cmp.Ordered](s []A) {
-	slices.Sort(s)
 }
 
 func RandomSleep(min, max time.Duration) {

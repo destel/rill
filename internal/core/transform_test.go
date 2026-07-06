@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"slices"
 	"testing"
 	"time"
 
@@ -32,7 +31,7 @@ func TestFilterMap(t *testing.T) {
 
 				outSlice := th.ToSlice(out)
 
-				expectedSlice := make([]string, 0, 20)
+				var expectedSlice []string
 				for i := range 20 {
 					if i%2 != 0 {
 						continue
@@ -40,8 +39,7 @@ func TestFilterMap(t *testing.T) {
 					expectedSlice = append(expectedSlice, fmt.Sprintf("%03d", i))
 				}
 
-				slices.Sort(outSlice)
-				th.ExpectSlice(t, outSlice, expectedSlice)
+				th.ExpectElementsMatch(t, outSlice, expectedSlice)
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {

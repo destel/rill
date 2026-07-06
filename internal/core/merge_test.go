@@ -1,7 +1,7 @@
 package core
 
 import (
-	"slices"
+	"fmt"
 	"testing"
 
 	"github.com/destel/rill/internal/th"
@@ -13,39 +13,67 @@ func TestMerge(t *testing.T) {
 		th.ExpectValue(t, out, nil)
 	})
 
+	makeSubChan := func(chanID int) <-chan string {
+		ch := make(chan string)
+		go func() {
+			defer close(ch)
+			ch <- fmt.Sprintf("%03dA", chanID)
+			ch <- fmt.Sprintf("%03dB", chanID)
+			ch <- fmt.Sprintf("%03dC", chanID)
+			ch <- fmt.Sprintf("%03dD", chanID)
+		}()
+		return ch
+	}
+
+	appendExpected := func(acc []string, chanID int) []string {
+		return append(acc,
+			fmt.Sprintf("%03dA", chanID),
+			fmt.Sprintf("%03dB", chanID),
+			fmt.Sprintf("%03dC", chanID),
+			fmt.Sprintf("%03dD", chanID),
+		)
+	}
+
 	for _, numChans := range []int{1, 3, 5, 10} {
 		th.RunSynctest(t, th.Name("correctness", numChans), func(t *testing.T) {
-			ins := make([]<-chan int, numChans)
+			ins := make([]<-chan string, numChans)
 
 			for i := range numChans {
-				ins[i] = th.FromRange(i*10, (i+1)*10)
+				ins[i] = makeSubChan(i)
 			}
 
 			out := Merge(ins...)
 			outSlice := th.ToSlice(out)
 
-			expectedSlice := make([]int, 0, numChans*10)
-			for i := 0; i < numChans*10; i++ {
-				expectedSlice = append(expectedSlice, i)
+			var expectedSlice []string
+			for i := range numChans {
+				expectedSlice = appendExpected(expectedSlice, i)
 			}
 
-			slices.Sort(outSlice)
-			th.ExpectSlice(t, outSlice, expectedSlice)
+			th.ExpectElementsMatch(t, outSlice, expectedSlice)
 		})
 
-		th.RunSynctestExpectBlock(t, th.Name("nil hang", numChans), func(t *testing.T) {
-			ins := make([]<-chan int, numChans)
+		t.Run(th.Name("nil hang", numChans), func(t *testing.T) {
+			var outSlice []string
 
+			th.ExpectHang(t, func(t *testing.T) {
+				ins := make([]<-chan string, numChans)
+				for i := 0; i < numChans-1; i++ {
+					ins[i] = makeSubChan(i)
+				}
+
+				out := Merge(ins...)
+				for x := range out {
+					outSlice = append(outSlice, x)
+				}
+			})
+
+			var expectedSlice []string
 			for i := 0; i < numChans-1; i++ {
-				ins[i] = th.FromRange(i*10, (i+1)*10)
+				expectedSlice = appendExpected(expectedSlice, i)
 			}
 
-			// make last channel nil
-			ins[numChans-1] = nil
-
-			out := Merge(ins...)
-			th.ToSlice(out)
+			th.ExpectElementsMatch(t, outSlice, expectedSlice)
 		})
-
 	}
 }

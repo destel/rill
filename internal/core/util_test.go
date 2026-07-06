@@ -8,9 +8,11 @@ import (
 )
 
 func TestDrain(t *testing.T) {
-	in := th.FromRange(0, 100)
-	Drain(in)
-	th.ExpectDrainedChan(t, in)
+	synctest.Test(t, func(t *testing.T) {
+		in := th.FromRange(0, 100)
+		Drain(in)
+		th.ExpectDrainedChan(t, in)
+	})
 }
 
 func TestDiscard(t *testing.T) {
@@ -55,6 +57,5 @@ func TestBuffer(t *testing.T) {
 		close(in)
 		inSlice := th.ToSlice(inBuf)
 		th.ExpectSlice(t, inSlice, []int{2, 4})
-
 	})
 }
