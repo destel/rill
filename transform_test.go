@@ -38,7 +38,7 @@ func TestMap(t *testing.T) {
 
 				outSlice := toItemSlice(out)
 
-				var expectedSlice ItemSlice[string]
+				var expectedSlice []Item[string]
 				for i := range 50 {
 					if i == 5 || i == 6 || i == 15 {
 						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03d", i))
@@ -47,7 +47,7 @@ func TestMap(t *testing.T) {
 					expectedSlice = appendVal(expectedSlice, fmt.Sprintf("%03d", i))
 				}
 
-				ExpectItemsMatch(t, outSlice, expectedSlice)
+				th.ExpectElementsMatch(t, outSlice, expectedSlice)
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
@@ -105,7 +105,7 @@ func TestFilter(t *testing.T) {
 
 				outSlice := toItemSlice(out)
 
-				var expectedSlice ItemSlice[int]
+				var expectedSlice []Item[int]
 				for i := range 50 {
 					if i == 5 || i == 6 || i == 15 {
 						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03d", i))
@@ -116,7 +116,7 @@ func TestFilter(t *testing.T) {
 					}
 				}
 
-				ExpectItemsMatch(t, outSlice, expectedSlice)
+				th.ExpectElementsMatch(t, outSlice, expectedSlice)
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
@@ -178,7 +178,7 @@ func TestFilterMap(t *testing.T) {
 
 				outSlice := toItemSlice(out)
 
-				var expectedSlice ItemSlice[string]
+				var expectedSlice []Item[string]
 				for i := range 50 {
 					if i == 5 || i == 6 || i == 15 {
 						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03d", i))
@@ -189,7 +189,7 @@ func TestFilterMap(t *testing.T) {
 					}
 				}
 
-				ExpectItemsMatch(t, outSlice, expectedSlice)
+				th.ExpectElementsMatch(t, outSlice, expectedSlice)
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
@@ -256,7 +256,7 @@ func TestFlatMap(t *testing.T) {
 
 				outSlice := toItemSlice(out)
 
-				var expectedSlice ItemSlice[string]
+				var expectedSlice []Item[string]
 				for i := range 50 {
 					if i == 5 || i == 15 {
 						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03dI", i))
@@ -267,7 +267,7 @@ func TestFlatMap(t *testing.T) {
 					expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03dA", i), fmt.Errorf("err%03dB", i))
 				}
 
-				ExpectItemsMatch(t, outSlice, expectedSlice)
+				th.ExpectElementsMatch(t, outSlice, expectedSlice)
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
@@ -341,16 +341,21 @@ func TestCatch(t *testing.T) {
 
 				outSlice := toItemSlice(out)
 
-				var expectedSlice ItemSlice[int]
-				expectedSlice = appendErr(expectedSlice, fmt.Errorf("err10 wrapped"), fmt.Errorf("err15"))
+				var expectedSlice []Item[int]
 				for i := range 50 {
-					if i == 5 || i == 10 || i == 15 {
-						continue
+					switch i {
+					case 5:
+						// skip
+					case 10:
+						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err10 wrapped")) // we only need messages to be equal
+					case 15:
+						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err15"))
+					default:
+						expectedSlice = appendVal(expectedSlice, i)
 					}
-					expectedSlice = appendVal(expectedSlice, i)
 				}
 
-				ExpectItemsMatch(t, outSlice, expectedSlice)
+				th.ExpectElementsMatch(t, outSlice, expectedSlice)
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {

@@ -42,9 +42,10 @@ func TestUnbatch(t *testing.T) {
 			return x, nil
 		})
 
-		values, errs := toSliceAndErrors(Unbatch(in))
+		out := Unbatch(in)
 
-		th.ExpectSlice(t, values, []int{1, 2, 5, 6, 9, 10})
-		th.ExpectSlice(t, errs, []string{"err3", "err7"})
+		outSlice, outErrs := toSliceAndErrors(out)
+		th.ExpectSlice(t, outSlice, []int{1, 2, 5, 6, 9, 10})
+		th.ExpectSlice(t, outErrs, []string{"err3", "err7"})
 	})
 }

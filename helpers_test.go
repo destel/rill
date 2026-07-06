@@ -2,62 +2,53 @@ package rill
 
 import (
 	"fmt"
-	"testing"
-	"testing/synctest"
-
-	"github.com/destel/rill/internal/th"
 )
 
-type ItemSlice[A any] = []Try[A]
+// Item[A] is a comparable variation of Try[A] that's used for testing.
+// Stores errors as messages
+type Item[A any] struct {
+	Value A
+	Error string
+}
 
-func appendVal[A any](s ItemSlice[A], value ...A) ItemSlice[A] {
+func (item Item[A]) String() string {
+	if item.Error != "" {
+		return item.Error
+	}
+	return fmt.Sprintf("%v", item.Value)
+}
+
+func appendVal[A any](s []Item[A], value ...A) []Item[A] {
 	for _, v := range value {
-		s = append(s, Try[A]{Value: v})
+		s = append(s, Item[A]{Value: v})
 	}
 	return s
 }
 
-func appendErr[A any](s ItemSlice[A], error ...error) ItemSlice[A] {
+func appendErr[A any](s []Item[A], error ...error) []Item[A] {
 	for _, e := range error {
-		s = append(s, Try[A]{Error: e})
+		s = append(s, Item[A]{Error: e.Error()})
 	}
 	return s
 }
 
-func appendStream[A any](s ItemSlice[A], stream Stream[A]) ItemSlice[A] {
-	for x := range stream {
-		s = append(s, x)
+func appendTry[A any](s []Item[A], item Try[A]) []Item[A] {
+	var errMessage string
+	if item.Error != nil {
+		errMessage = item.Error.Error()
+	}
+	return append(s, Item[A]{Value: item.Value, Error: errMessage})
+}
+
+func toItemSlice[A any](in <-chan Try[A]) []Item[A] {
+	var s []Item[A]
+	for x := range in {
+		s = appendTry(s, x)
 	}
 	return s
 }
 
-func toItemSlice[A any](stream Stream[A]) ItemSlice[A] {
-	return appendStream(nil, stream)
-}
-
-func ExpectItemsMatch[A comparable](t *testing.T, actual, expected ItemSlice[A]) {
-	t.Helper()
-	type ComparableItem struct {
-		Value A
-		Error string
-	}
-
-	toComparable := func(s ItemSlice[A]) []ComparableItem {
-		res := make([]ComparableItem, len(s))
-		for i, item := range s {
-
-			if item.Error != nil {
-				res[i].Error = item.Error.Error()
-			} else {
-				res[i].Value = item.Value
-			}
-		}
-		return res
-	}
-
-	th.ExpectElementsMatch(t, toComparable(actual), toComparable(expected))
-}
-
+// Converts a stream in a slice of values and a slice of error messages.
 func toSliceAndErrors[A any](in <-chan Try[A]) ([]A, []string) {
 	var values []A
 	var errors []string
@@ -67,7 +58,6 @@ func toSliceAndErrors[A any](in <-chan Try[A]) ([]A, []string) {
 			errors = append(errors, x.Error.Error())
 			continue
 		}
-
 		values = append(values, x.Value)
 	}
 
@@ -88,43 +78,17 @@ func toUnifiedStringSlice[A any](in <-chan Try[A], format string) []string {
 	return res
 }
 
-// Similar to toSliceAndErrors, but reads until all goroutines are durably blocked
-// The third return is true only if the channel was fully consumed.
-func toSliceAndErrorsNB[A any](in <-chan Try[A]) ([]A, []string, bool) {
-	var values []A
-	var errors []string
-
-	for {
-		// Wait for all goroutines to be durably blocked.
-		// This makes the non-blocking read below deterministic.
-		synctest.Wait()
-
-		select {
-		case x, ok := <-in:
-			if !ok {
-				return values, errors, true
-			}
-
-			if x.Error != nil {
-				errors = append(errors, x.Error.Error())
-				continue
-			}
-
-			values = append(values, x.Value)
-		default:
-			return values, errors, false
-		}
-	}
-}
-
 func replaceWithError[A comparable](in <-chan Try[A], value A, err error) <-chan Try[A] {
 	out := make(chan Try[A])
 
 	go func() {
 		defer close(out)
 
+		var zero A
+
 		for x := range in {
 			if x.Error == nil && x.Value == value {
+				x.Value = zero
 				x.Error = err
 			}
 			out <- x

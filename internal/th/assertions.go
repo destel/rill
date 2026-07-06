@@ -3,8 +3,11 @@ package th
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -44,13 +47,13 @@ func ExpectValueInDelta[A number](t *testing.T, actual A, expected A, delta A) {
 func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 	t.Helper()
 	if len(expected) != len(actual) {
-		t.Errorf("expected %v, got %v", expected, actual)
+		t.Errorf("length mismatch %d!=%d: expected %v, actual %v", len(expected), len(actual), expected, actual)
 		return
 	}
 
 	for i := range expected {
 		if expected[i] != actual[i] {
-			t.Errorf("expected %v, got %v, mismatch at pos %d: %v != %v", expected, actual, i, expected[i], actual[i])
+			t.Errorf("expected %v, actual %v, mismatch at pos %d: %v != %v", expected, actual, i, expected[i], actual[i])
 			return
 		}
 	}
@@ -59,7 +62,7 @@ func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 func ExpectElementsMatch[A comparable](t *testing.T, actual, expected []A) {
 	t.Helper()
 	if len(actual) != len(expected) {
-		t.Errorf("length mismatch: expected %v, got %v", expected, actual)
+		t.Errorf("length mismatch %d!=%d: expected %v, actual %v", len(expected), len(actual), expected, actual)
 		return
 	}
 
@@ -72,7 +75,7 @@ func ExpectElementsMatch[A comparable](t *testing.T, actual, expected []A) {
 	}
 	for el, count := range expectedMap {
 		if count != 0 {
-			t.Errorf("element %v mismatch: expected %v, got %v", el, expected, actual)
+			t.Errorf("element %v mismatch: expected %v, actual %v", el, expected, actual)
 			return
 		}
 	}
@@ -129,6 +132,24 @@ func ExpectDrainedChan[A any](t *testing.T, ch <-chan A) {
 	}
 }
 
+func ExpectHang(t *testing.T, f func(t *testing.T)) {
+	t.Helper()
+	defer func() {
+		t.Helper()
+		r := recover()
+		if r == nil {
+			t.Errorf("expected deadlock")
+			return
+		}
+		if strings.Contains(fmt.Sprint(r), "deadlock") {
+			return
+		}
+		panic(r) // re-panic if not a deadlock
+	}()
+
+	synctest.Test(t, f)
+}
+
 func ExpectNotHang(t *testing.T, waitFor time.Duration, f func()) {
 	t.Helper()
 	done := make(chan struct{})
@@ -154,21 +175,6 @@ func ExpectError(t *testing.T, err error, expectedMessage string) {
 
 	if err.Error() != expectedMessage {
 		t.Errorf("expected error '%s', got '%s'", expectedMessage, err.Error())
-	}
-}
-
-func ExpectErrorSlice(t *testing.T, errs []error, expectedMessages []string) {
-	t.Helper()
-	if len(errs) != len(expectedMessages) {
-		t.Errorf("expected %d errors, got %d", len(expectedMessages), len(errs))
-		return
-	}
-
-	for i := range errs {
-		if errs[i].Error() != expectedMessages[i] {
-			t.Errorf("expected %v, got %v, mismatch at pos %d: %v != %v", expectedMessages, errs, i, expectedMessages[i], errs[i].Error())
-			return
-		}
 	}
 }
 
