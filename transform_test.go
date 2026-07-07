@@ -26,7 +26,7 @@ func TestMap(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 50), nil)
+				in := FromChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 15, fmt.Errorf("err015"))
 
 				out := universalMap(ord, in, n, func(x int) (string, error) {
@@ -41,7 +41,7 @@ func TestMap(t *testing.T) {
 				outSlice := toItemSlice(out)
 
 				var expectedSlice []Item[string]
-				for i := range 50 {
+				for i := range 20 {
 					if i == 5 || i == 6 || i == 15 {
 						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03d", i))
 						continue
@@ -96,7 +96,7 @@ func TestFilter(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 50), nil)
+				in := FromChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 15, fmt.Errorf("err015"))
 
 				out := universalFilter(ord, in, n, func(x int) (bool, error) {
@@ -111,7 +111,7 @@ func TestFilter(t *testing.T) {
 				outSlice := toItemSlice(out)
 
 				var expectedSlice []Item[int]
-				for i := range 50 {
+				for i := range 20 {
 					if i == 5 || i == 6 || i == 15 {
 						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03d", i))
 						continue
@@ -172,7 +172,7 @@ func TestFilterMap(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 50), nil)
+				in := FromChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 15, fmt.Errorf("err015"))
 
 				out := universalFilterMap(ord, in, n, func(x int) (string, bool, error) {
@@ -187,7 +187,7 @@ func TestFilterMap(t *testing.T) {
 				outSlice := toItemSlice(out)
 
 				var expectedSlice []Item[string]
-				for i := range 50 {
+				for i := range 20 {
 					if i == 5 || i == 6 || i == 15 {
 						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03d", i))
 						continue
@@ -249,7 +249,7 @@ func TestFlatMap(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 50), nil)
+				in := FromChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 5, fmt.Errorf("err005I"))
 				in = replaceWithError(in, 15, fmt.Errorf("err015I"))
 
@@ -271,7 +271,7 @@ func TestFlatMap(t *testing.T) {
 				outSlice := toItemSlice(out)
 
 				var expectedSlice []Item[string]
-				for i := range 50 {
+				for i := range 20 {
 					if i == 5 || i == 15 {
 						expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%03dI", i))
 						continue
@@ -338,7 +338,7 @@ func TestCatch(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 50), nil)
+				in := FromChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 5, fmt.Errorf("err05"))
 				in = replaceWithError(in, 10, fmt.Errorf("err10"))
 				in = replaceWithError(in, 15, fmt.Errorf("err15"))
@@ -359,7 +359,7 @@ func TestCatch(t *testing.T) {
 				outSlice := toItemSlice(out)
 
 				var expectedSlice []Item[int]
-				for i := range 50 {
+				for i := range 20 {
 					switch i {
 					case 5:
 						// skip

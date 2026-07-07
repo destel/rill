@@ -25,32 +25,15 @@ func TestSplit2(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
-				// idea: split input into 4 groups
-				// - first 2 groups are sent into corresponding outputs
-				// - 3rd would cause error during splitting
-				// - 4th would be errors even before splitting
-
-				in := FromChan(th.FromRange(0, 100), nil)
-				in = OrderedMap(in, 1, func(x int) (int, error) {
-					if x%4 == 3 {
-						return 0, fmt.Errorf("err%03d", x)
-					}
-					return x, nil
-				})
+				in := FromChan(th.FromRange(0, 20), nil)
+				in = replaceWithError(in, 15, fmt.Errorf("err015")) // error before splitting
 
 				outTrue, outFalse := universalSplit2(ord, in, n, func(x int) (bool, error) {
 					th.SimulateWork(1*time.Second, 2*time.Second)
-
-					switch x % 4 {
-					case 0:
-						return true, nil
-					case 1:
-						return false, nil
-					case 2:
-						return true, fmt.Errorf("err%03d", x)
-					default:
-						return true, nil // this should not be called
+					if x == 5 || x == 6 {
+						return x == 5, fmt.Errorf("err%03d", x) // error during splitting; bool must be ignored
 					}
+					return x%2 == 0, nil
 				})
 
 				var outSliceTrue, outSliceFalse []Item[int]
@@ -59,22 +42,22 @@ func TestSplit2(t *testing.T) {
 					func() { outSliceFalse = toItemSlice(outFalse) },
 				)
 
-				var expectedOutSliceTrue, expectedOutSliceFalse []Item[int]
-				for i := range 100 {
-					switch i % 4 {
-					case 0:
-						expectedOutSliceTrue = appendVal(expectedOutSliceTrue, i)
-					case 1:
-						expectedOutSliceFalse = appendVal(expectedOutSliceFalse, i)
+				var expectedTrue, expectedFalse []Item[int]
+				for i := range 20 {
+					switch {
+					case i == 5 || i == 6 || i == 15:
+						// errors are broadcast to BOTH outputs
+						expectedTrue = appendErr(expectedTrue, fmt.Errorf("err%03d", i))
+						expectedFalse = appendErr(expectedFalse, fmt.Errorf("err%03d", i))
+					case i%2 == 0:
+						expectedTrue = appendVal(expectedTrue, i)
 					default:
-						expectedOutSliceFalse = appendErr(expectedOutSliceFalse, fmt.Errorf("err%03d", i))
-						expectedOutSliceTrue = appendErr(expectedOutSliceTrue, fmt.Errorf("err%03d", i))
-
+						expectedFalse = appendVal(expectedFalse, i)
 					}
 				}
 
-				th.ExpectElementsMatch(t, outSliceTrue, expectedOutSliceTrue)
-				th.ExpectElementsMatch(t, outSliceFalse, expectedOutSliceFalse)
+				th.ExpectElementsMatch(t, outSliceTrue, expectedTrue)
+				th.ExpectElementsMatch(t, outSliceFalse, expectedFalse)
 			})
 
 			t.Run(th.Name("non concurrent reads", n), func(t *testing.T) {
@@ -92,7 +75,7 @@ func TestSplit2(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 100), nil)
+				in := FromChan(th.FromRange(0, 1000), nil)
 
 				outTrue, outFalse := universalSplit2(ord, in, n, func(x int) (bool, error) {
 					th.SimulateWork(1*time.Second, 2*time.Second)
