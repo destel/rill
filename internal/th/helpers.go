@@ -36,12 +36,6 @@ func FromRange(start, end int) <-chan int {
 	return ch
 }
 
-func Send[T any](ch chan<- T, items ...T) {
-	for _, item := range items {
-		ch <- item
-	}
-}
-
 // SimulateWork sleeps for a random time in [min, max]. Call it inside a
 // worker function (in a synctest bubble) to enforce concurrent execution
 // instead of relying on scheduler luck.
