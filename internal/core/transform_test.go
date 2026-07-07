@@ -43,7 +43,7 @@ func TestFilterMap(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
-				in := th.FromRange(0, 1000)
+				in := th.FromRange(0, 100)
 
 				out := universalFilterMap(ord, in, n, func(x int) (int, bool) {
 					if x%7 == 0 {

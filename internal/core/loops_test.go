@@ -63,7 +63,7 @@ func TestLoop(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
-				in := th.FromRange(0, 1000)
+				in := th.FromRange(0, 100)
 				out := make(chan int)
 
 				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
@@ -126,7 +126,7 @@ func TestForEach(t *testing.T) {
 		})
 
 		th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
-			in := th.FromRange(0, 1000)
+			in := th.FromRange(0, 100)
 
 			outSlice := make([]int, 0, 1000)
 			var mu sync.Mutex

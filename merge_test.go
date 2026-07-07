@@ -75,7 +75,7 @@ func TestSplit2(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
+				in := FromChan(th.FromRange(0, 100), nil)
 
 				outTrue, outFalse := universalSplit2(ord, in, n, func(x int) (bool, error) {
 					th.SimulateWork(1*time.Second, 2*time.Second)

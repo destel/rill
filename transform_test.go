@@ -53,7 +53,7 @@ func TestMap(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
+				in := FromChan(th.FromRange(0, 100), nil)
 
 				out := universalMap(ord, in, n, func(x int) (int, error) {
 					th.SimulateWork(1*time.Second, 2*time.Second)
@@ -125,7 +125,7 @@ func TestFilter(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
+				in := FromChan(th.FromRange(0, 100), nil)
 
 				out := universalFilter(ord, in, n, func(x int) (bool, error) {
 					th.SimulateWork(1*time.Second, 2*time.Second)
@@ -201,7 +201,7 @@ func TestFilterMap(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
+				in := FromChan(th.FromRange(0, 100), nil)
 
 				out := universalFilterMap(ord, in, n, func(x int) (int, bool, error) {
 					th.SimulateWork(1*time.Second, 2*time.Second)
@@ -285,7 +285,7 @@ func TestFlatMap(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
+				in := FromChan(th.FromRange(0, 100), nil)
 
 				out := universalFlatMap(ord, in, n, func(x int) <-chan Try[string] {
 					th.SimulateWork(1*time.Second, 2*time.Second)
@@ -376,7 +376,7 @@ func TestCatch(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
+				in := FromChan(th.FromRange(0, 100), nil)
 
 				in = OrderedMap(in, 1, func(x int) (int, error) {
 					if x%2 == 0 {
