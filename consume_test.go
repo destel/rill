@@ -119,11 +119,11 @@ func TestForEach(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = replaceWithError(in, 200, fmt.Errorf("err200"))
 
-			var cnt atomic.Int64
+			var iterations atomic.Int64
 			err := ForEach(in, n, func(x int) error {
 				th.SimulateWork(1*time.Second, 2*time.Second)
 
-				cnt.Add(1)
+				iterations.Add(1)
 				return nil
 			})
 
@@ -131,7 +131,8 @@ func TestForEach(t *testing.T) {
 			th.ExpectDrainedChan(t, in)
 
 			th.ExpectError(t, err, "err200")
-			if cnt.Load() > 250 {
+
+			if iterations.Load() > 250 {
 				t.Errorf("early return did not happen")
 			}
 		})
@@ -139,110 +140,198 @@ func TestForEach(t *testing.T) {
 		th.RunSynctest(t, th.Name("error in func", n), func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 
-			var cnt atomic.Int64
+			var iterations atomic.Int64
 			err := ForEach(in, n, func(x int) error {
 				th.SimulateWork(1*time.Second, 2*time.Second)
 
-				if x == 100 {
-					return fmt.Errorf("err100")
+				if x == 200 {
+					return fmt.Errorf("err200")
 				}
-				cnt.Add(1)
+				iterations.Add(1)
 				return nil
 			})
 
 			th.WaitForInflightWork()
 			th.ExpectDrainedChan(t, in)
 
-			th.ExpectError(t, err, "err100")
-			if cnt.Load() > 150 {
+			th.ExpectError(t, err, "err200")
+
+			if iterations.Load() > 250 {
 				t.Errorf("early return did not happen")
 			}
 		})
 	}
 }
 
-func TestAnyAll(t *testing.T) {
-	cases := []struct {
-		name string
-
-		inputErrorPos     int
-		functionErrorPos  int
-		conditionBreakPos int
-
-		expectError        string
-		expectedResult     bool
-		expectedIterations int
-	}{
-		{name: "no errors,cond is true", inputErrorPos: -1, functionErrorPos: -1, conditionBreakPos: -1, expectedResult: true, expectError: "", expectedIterations: 1000},
-		{name: "no errors,cond is false", inputErrorPos: -1, functionErrorPos: -1, conditionBreakPos: 200, expectedResult: false, expectError: "", expectedIterations: 200},
-
-		{name: "early error in input,cond is true", inputErrorPos: 300, functionErrorPos: -1, conditionBreakPos: -1, expectedResult: false, expectError: "err300", expectedIterations: 300},
-		{name: "early error in input,cond is false", inputErrorPos: 300, functionErrorPos: -1, conditionBreakPos: 500, expectedResult: false, expectError: "err300", expectedIterations: 300},
-		{name: "late error in input,cond is false", inputErrorPos: 700, functionErrorPos: -1, conditionBreakPos: 500, expectedResult: false, expectError: "", expectedIterations: 500},
-
-		{name: "early error in func,cond is true", inputErrorPos: -1, functionErrorPos: 200, conditionBreakPos: -1, expectedResult: false, expectError: "err200", expectedIterations: 200},
-		{name: "early error in func,cond is false", inputErrorPos: -1, functionErrorPos: 200, conditionBreakPos: 400, expectedResult: false, expectError: "err200", expectedIterations: 200},
-		{name: "late error in func,cond is false", inputErrorPos: -1, functionErrorPos: 600, conditionBreakPos: 400, expectedResult: false, expectError: "", expectedIterations: 400},
-	}
-
+func TestAny(t *testing.T) {
 	for _, n := range []int{1, 5} {
 		t.Run(th.Name("nil", n), func(t *testing.T) {
 			th.ExpectBlock(t, func(t *testing.T) {
-				_, _ = All(nil, n, func(int) (bool, error) { return true, nil })
+				_, _ = Any(nil, n, func(int) (bool, error) { return true, nil })
 			})
 		})
 
 		th.RunSynctest(t, th.Name("empty", n), func(t *testing.T) {
 			in := FromSlice([]int{}, nil)
 
-			res, err := All(in, n, func(int) (bool, error) {
+			res, err := Any(in, n, func(int) (bool, error) {
 				return false, nil
 			})
 
 			th.ExpectDrainedChan(t, in)
 
 			th.ExpectNoError(t, err)
-			th.ExpectValue(t, res, true)
+			th.ExpectValue(t, res, false)
 		})
 
-		for _, testCase := range cases {
-			th.RunSynctest(t, th.Name(testCase.name, n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
-				if testCase.inputErrorPos >= 0 {
-					in = replaceWithError(in, testCase.inputErrorPos, fmt.Errorf("err%03d", testCase.inputErrorPos))
-				}
-
-				var cnt atomic.Int64
-				ok, err := All(in, n, func(x int) (bool, error) {
-					th.SimulateWork(1*time.Second, 2*time.Second)
-
-					if x == testCase.functionErrorPos {
-						return false, fmt.Errorf("err%03d", testCase.functionErrorPos)
-					}
-
-					cnt.Add(1)
-					return x != testCase.conditionBreakPos, nil
-				})
-
-				th.WaitForInflightWork()
-				th.ExpectDrainedChan(t, in)
-
-				if testCase.expectError != "" {
-					th.ExpectError(t, err, testCase.expectError)
-				} else {
-					th.ExpectNoError(t, err)
-				}
-
-				th.ExpectValue(t, ok, testCase.expectedResult)
-
-				if cnt := cnt.Load(); cnt > int64(testCase.expectedIterations+50) {
-					t.Errorf("early return did not happen")
-				} else if cnt < int64(testCase.expectedIterations) {
-					t.Errorf("early return misconfigured in the test case")
-				}
+		th.RunSynctest(t, th.Name("none satisfy", n), func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 100), nil)
+			res, err := Any(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				return false, nil
 			})
 
-		}
+			th.ExpectDrainedChan(t, in)
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, res, false)
+		})
+
+		th.RunSynctest(t, th.Name("one satisfies", n), func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 1000), nil)
+			in = replaceWithError(in, 500, fmt.Errorf("err500")) // this won't pass through
+
+			var iterations atomic.Int64
+			res, err := Any(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				iterations.Add(1)
+
+				if x == 200 {
+					return true, nil // this is the early exit condition
+				}
+				return false, nil
+			})
+
+			th.WaitForInflightWork()
+			th.ExpectDrainedChan(t, in)
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, res, true)
+
+			if iterations.Load() > 250 {
+				t.Errorf("early return did not happen")
+			}
+		})
+
+		th.RunSynctest(t, th.Name("error in input", n), func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 1000), nil)
+			in = replaceWithError(in, 200, fmt.Errorf("err200")) // this is the early exit condition
+
+			var iterations atomic.Int64
+			res, err := Any(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				iterations.Add(1)
+				return false, nil
+			})
+
+			th.WaitForInflightWork()
+			th.ExpectDrainedChan(t, in)
+
+			th.ExpectError(t, err, "err200")
+			th.ExpectValue(t, res, false)
+
+			if iterations.Load() > 250 {
+				t.Errorf("early return did not happen")
+			}
+		})
+
+		th.RunSynctest(t, th.Name("error in func", n), func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 1000), nil)
+			in = replaceWithError(in, 500, fmt.Errorf("err500")) // this won't pass through
+
+			var iterations atomic.Int64
+			res, err := Any(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				iterations.Add(1)
+
+				if x == 200 {
+					return false, fmt.Errorf("err200")
+				}
+				return false, nil
+			})
+
+			th.WaitForInflightWork()
+			th.ExpectDrainedChan(t, in)
+
+			th.ExpectError(t, err, "err200")
+			th.ExpectValue(t, res, false)
+
+			if iterations.Load() > 250 {
+				t.Errorf("early return did not happen")
+			}
+		})
+	}
+}
+
+func TestAll(t *testing.T) {
+	// All is a thin negating wrapper over Any (All == !Any(!f)). Concurrency and
+	// short-circuiting live in Any and are covered by TestAny; these are just
+	// semantic smoke checks that the negation is wired correctly.
+
+	t.Run("nil", func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
+			_, _ = All(nil, 1, func(int) (bool, error) { return true, nil })
+		})
+	})
+
+	th.RunSynctest(t, "empty", func(t *testing.T) {
+		res, err := All(FromSlice([]int{}, nil), 1, func(int) (bool, error) {
+			return false, nil
+		})
+		th.ExpectNoError(t, err)
+		th.ExpectValue(t, res, true)
+	})
+
+	th.RunSynctest(t, "all satisfy", func(t *testing.T) {
+		res, err := All(FromSlice([]int{2, 4, 6}, nil), 1, func(x int) (bool, error) {
+			return x%2 == 0, nil
+		})
+		th.ExpectNoError(t, err)
+		th.ExpectValue(t, res, true)
+	})
+
+	th.RunSynctest(t, "one does not satisfy", func(t *testing.T) {
+		res, err := All(FromSlice([]int{2, 3, 4}, nil), 1, func(x int) (bool, error) {
+			return x%2 == 0, nil
+		})
+		th.ExpectNoError(t, err)
+		th.ExpectValue(t, res, false)
+	})
+}
+
+func TestAnyAllAlwaysFalseOnError(t *testing.T) {
+	// Test that both Any and All always return false when the predicate returns an error.
+
+	testCases := []struct {
+		name     string
+		function func(in <-chan Try[int], n int, f func(int) (bool, error)) (bool, error)
+		ret      bool
+	}{
+		{"All-false", All[int], false},
+		{"All-true", All[int], true},
+		{"Any-false", Any[int], false},
+		{"Any-true", Any[int], true},
 	}
 
+	for _, testCase := range testCases {
+		th.RunSynctest(t, testCase.name, func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 100), nil)
+			res, err := testCase.function(in, 1, func(int) (bool, error) {
+				return testCase.ret, fmt.Errorf("some error")
+			})
+
+			th.ExpectError(t, err, "some error")
+			th.ExpectValue(t, res, false)
+		})
+	}
 }
