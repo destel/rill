@@ -39,6 +39,8 @@ func TestSplit2(t *testing.T) {
 				})
 
 				outTrue, outFalse := universalSplit2(ord, in, n, func(x int) (bool, error) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
+
 					switch x % 4 {
 					case 0:
 						return true, nil
@@ -52,14 +54,12 @@ func TestSplit2(t *testing.T) {
 				})
 
 				var outSliceTrue, outSliceFalse []Item[int]
-
 				th.DoConcurrently(
 					func() { outSliceTrue = toItemSlice(outTrue) },
 					func() { outSliceFalse = toItemSlice(outFalse) },
 				)
 
 				var expectedOutSliceTrue, expectedOutSliceFalse []Item[int]
-
 				for i := range 100 {
 					switch i % 4 {
 					case 0:
@@ -79,7 +79,7 @@ func TestSplit2(t *testing.T) {
 
 			t.Run(th.Name("non concurrent reads", n), func(t *testing.T) {
 				th.ExpectBlock(t, func(t *testing.T) {
-					in := FromChan(th.FromRange(0, 100), nil)
+					in := FromChan(th.FromRange(0, 20), nil)
 					out1, out2 := universalSplit2(ord, in, n, func(x int) (bool, error) {
 						return x%2 == 0, nil
 					})
@@ -92,11 +92,12 @@ func TestSplit2(t *testing.T) {
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
+				in := FromChan(th.FromRange(0, 100), nil)
 
 				outTrue, outFalse := universalSplit2(ord, in, n, func(x int) (bool, error) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
 					if x%7 == 0 {
-						time.Sleep(1 * time.Second) // force out-of-order completion
+						time.Sleep(10 * time.Second) // force out-of-order completion
 					}
 
 					switch x % 3 {

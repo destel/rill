@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/destel/rill/internal/th"
@@ -22,10 +21,10 @@ func TestReduce(t *testing.T) {
 			in := FromSlice([]int{}, nil)
 
 			_, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
 				return x + y, nil
 			})
 
-			synctest.Wait()
 			th.ExpectDrainedChan(t, in)
 
 			th.ExpectNoError(t, err)
@@ -36,10 +35,10 @@ func TestReduce(t *testing.T) {
 			in := FromSlice([]int{5}, nil)
 
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
 				return x + y, nil
 			})
 
-			synctest.Wait()
 			th.ExpectDrainedChan(t, in)
 
 			th.ExpectNoError(t, err)
@@ -51,10 +50,11 @@ func TestReduce(t *testing.T) {
 			in := FromSlice([]int{}, fmt.Errorf("err0"))
 
 			_, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
 				return x + y, nil
 			})
 
-			synctest.Wait()
+			th.WaitForInflightWork()
 			th.ExpectDrainedChan(t, in)
 
 			th.ExpectError(t, err, "err0")
@@ -65,10 +65,10 @@ func TestReduce(t *testing.T) {
 			in := FromChan(th.FromRange(0, 100), nil)
 
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
 				return x + y, nil
 			})
 
-			synctest.Wait()
 			th.ExpectDrainedChan(t, in)
 
 			th.ExpectNoError(t, err)
@@ -82,15 +82,13 @@ func TestReduce(t *testing.T) {
 
 			var cnt atomic.Int64
 			_, _, err := Reduce(in, n, func(x, y int) (int, error) {
-				// Balance per-item work so early exit stays observable
-				// See comments in TestForEach for more details
-				th.RandomSleep(1*time.Second, 2*time.Second)
+				th.SimulateWork(1*time.Second, 2*time.Second)
 
 				cnt.Add(1)
 				return x + y, nil
 			})
 
-			time.Sleep(10 * time.Second)
+			th.WaitForInflightWork()
 			th.ExpectDrainedChan(t, in)
 
 			th.ExpectError(t, err, "err200")
@@ -104,9 +102,7 @@ func TestReduce(t *testing.T) {
 
 			var cnt atomic.Int64
 			_, _, err := Reduce(in, n, func(x, y int) (int, error) {
-				// Balance per-item work so early exit stays observable
-				// See comments in TestForEach for more details
-				th.RandomSleep(1*time.Second, 2*time.Second)
+				th.SimulateWork(1*time.Second, 2*time.Second)
 
 				if cnt.Add(1) == 200 {
 					return 0, fmt.Errorf("err200")
@@ -115,7 +111,7 @@ func TestReduce(t *testing.T) {
 				return x + y, nil
 			})
 
-			time.Sleep(10 * time.Second)
+			th.WaitForInflightWork()
 			th.ExpectDrainedChan(t, in)
 
 			th.ExpectError(t, err, "err200")
@@ -146,14 +142,15 @@ func TestMapReduce(t *testing.T) {
 
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
+						th.SimulateWork(1*time.Second, 2*time.Second)
 						s := fmt.Sprint(x)
 						return fmt.Sprintf("%d-digit", len(s)), x, nil
 					},
 					nr, func(x, y int) (int, error) {
+						th.SimulateWork(10*time.Second, 20*time.Second)
 						return x + y, nil
 					})
 
-				synctest.Wait()
 				th.ExpectDrainedChan(t, in)
 
 				th.ExpectNoError(t, err)
@@ -165,15 +162,16 @@ func TestMapReduce(t *testing.T) {
 
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
+						th.SimulateWork(1*time.Second, 2*time.Second)
 						s := fmt.Sprint(x)
 						return fmt.Sprintf("%d-digit", len(s)), x, nil
 					},
 					nr, func(x, y int) (int, error) {
+						th.SimulateWork(10*time.Second, 20*time.Second)
 						return x + y, nil
 					},
 				)
 
-				synctest.Wait()
 				th.ExpectDrainedChan(t, in)
 
 				th.ExpectNoError(t, err)
@@ -191,24 +189,21 @@ func TestMapReduce(t *testing.T) {
 				var cntMap, cntReduce atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						// Balance per-item work so early exit stays observable
-						// See comments in TestForEach for more details
-						th.RandomSleep(1*time.Second, 2*time.Second)
+						th.SimulateWork(1*time.Second, 2*time.Second)
 
 						cntMap.Add(1)
 						s := fmt.Sprint(x)
 						return fmt.Sprintf("%d-digit", len(s)), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						// Reducer must be slower than mapper to achieve full concurrency.
-						th.RandomSleep(10*time.Second, 20*time.Second)
+						th.SimulateWork(10*time.Second, 20*time.Second)
 
 						cntReduce.Add(1)
 						return x + y, nil
 					},
 				)
 
-				time.Sleep(30 * time.Second)
+				th.WaitForInflightWork()
 				th.ExpectDrainedChan(t, in)
 
 				th.ExpectError(t, err, "err200")
@@ -228,9 +223,7 @@ func TestMapReduce(t *testing.T) {
 				var cntMap, cntReduce atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						// Balance per-item work so early exit stays observable
-						// See comments in TestForEach for more details
-						th.RandomSleep(1*time.Second, 2*time.Second)
+						th.SimulateWork(1*time.Second, 2*time.Second)
 
 						if cntMap.Add(1) == 200 {
 							return "", 0, fmt.Errorf("err200")
@@ -239,15 +232,14 @@ func TestMapReduce(t *testing.T) {
 						return fmt.Sprintf("%d-digit", len(s)), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						// Reducer must be slower than mapper to achieve full concurrency.
-						th.RandomSleep(10*time.Second, 20*time.Second)
+						th.SimulateWork(10*time.Second, 20*time.Second)
 
 						cntReduce.Add(1)
 						return x + y, nil
 					},
 				)
 
-				time.Sleep(30 * time.Second)
+				th.WaitForInflightWork()
 				th.ExpectDrainedChan(t, in)
 
 				th.ExpectError(t, err, "err200")
@@ -267,17 +259,14 @@ func TestMapReduce(t *testing.T) {
 				var cntMap, cntReduce atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						// Balance per-item work so early exit stays observable
-						// See comments in TestForEach for more details
-						th.RandomSleep(1*time.Second, 2*time.Second)
+						th.SimulateWork(1*time.Second, 2*time.Second)
 
 						cntMap.Add(1)
 						s := fmt.Sprint(x)
 						return fmt.Sprintf("%d-digit", len(s)), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						// Reducer must be slower than mapper to achieve full concurrency.
-						th.RandomSleep(10*time.Second, 20*time.Second)
+						th.SimulateWork(10*time.Second, 20*time.Second)
 
 						if cntReduce.Add(1) == 200 {
 							return 0, fmt.Errorf("err200")
@@ -286,7 +275,7 @@ func TestMapReduce(t *testing.T) {
 					},
 				)
 
-				time.Sleep(30 * time.Second)
+				th.WaitForInflightWork()
 				th.ExpectDrainedChan(t, in)
 
 				th.ExpectError(t, err, "err200")

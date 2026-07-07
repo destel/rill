@@ -32,6 +32,7 @@ func TestLoop(t *testing.T) {
 				var sum atomic.Int64
 
 				universalLoop(ord, in, done, n, func(x int, canWrite <-chan struct{}) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
 					<-canWrite
 					sum.Add(int64(x))
 				})
@@ -44,11 +45,12 @@ func TestLoop(t *testing.T) {
 				in := th.FromRange(0, 100)
 				out := make(chan int)
 
-				var monitor th.ConcurrencyMonitor
+				var gauge th.InFlightGauge
 
 				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
-					monitor.Enter()
-					defer monitor.Exit()
+					gauge.Enter()
+					defer gauge.Exit()
+					th.SimulateWork(1*time.Second, 2*time.Second)
 
 					<-canWrite
 
@@ -57,7 +59,7 @@ func TestLoop(t *testing.T) {
 
 				Drain(out)
 
-				th.ExpectValue(t, monitor.Max(), n)
+				th.ExpectValue(t, gauge.Max(), n)
 			})
 
 			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
@@ -65,8 +67,9 @@ func TestLoop(t *testing.T) {
 				out := make(chan int)
 
 				universalLoop(ord, in, out, n, func(x int, canWrite <-chan struct{}) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
 					if x%7 == 0 {
-						time.Sleep(1 * time.Second) // force out-of-order completion
+						time.Sleep(10 * time.Second) // force out-of-order completion
 					}
 
 					<-canWrite
@@ -80,7 +83,6 @@ func TestLoop(t *testing.T) {
 				} else {
 					th.ExpectUnsorted(t, outSlice)
 				}
-
 			})
 		}
 
@@ -100,8 +102,11 @@ func TestForEach(t *testing.T) {
 
 			var sum atomic.Int64
 			ForEach(in, n, func(x int) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
 				sum.Add(int64(x))
 			})
+
+			th.ExpectDrainedChan(t, in)
 
 			th.ExpectValue(t, sum.Load(), 19*20/2)
 		})
@@ -109,14 +114,15 @@ func TestForEach(t *testing.T) {
 		th.RunSynctest(t, th.Name("concurrency", n), func(t *testing.T) {
 			in := th.FromRange(0, 100)
 
-			var monitor th.ConcurrencyMonitor
+			var gauge th.InFlightGauge
 
 			ForEach(in, n, func(x int) {
-				monitor.Enter()
-				defer monitor.Exit()
+				gauge.Enter()
+				defer gauge.Exit()
+				th.SimulateWork(1*time.Second, 2*time.Second)
 			})
 
-			th.ExpectValue(t, monitor.Max(), n)
+			th.ExpectValue(t, gauge.Max(), n)
 		})
 
 		th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
@@ -126,8 +132,9 @@ func TestForEach(t *testing.T) {
 			var mu sync.Mutex
 
 			ForEach(in, n, func(x int) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
 				if x%7 == 0 {
-					time.Sleep(1 * time.Second) // force out-of-order completion
+					time.Sleep(10 * time.Second) // force out-of-order completion
 				}
 
 				mu.Lock()

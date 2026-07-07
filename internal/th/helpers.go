@@ -42,9 +42,30 @@ func Send[T any](ch chan<- T, items ...T) {
 	}
 }
 
-func RandomSleep(min, max time.Duration) {
-	d := min + time.Duration(rand.Int63n(int64(max-min)))
+// SimulateWork sleeps for a random time in [min, max]. Call it inside a
+// worker function (in a synctest bubble) to enforce concurrent execution
+// instead of relying on scheduler luck.
+//
+// A random sleep imitates real IO-bound work, where each worker spends most of
+// its time blocked on a network call, and every call takes a similar but not
+// identical time.
+//
+// Since each worker sleeps at least min per iteration, one worker can't grab most
+// of the items. The min and max values also limit how uneven the work can get. In the worst
+// case, the fastest and slowest workers stay within (n-1)*max/min items of each
+// other. Tests rely on this to check exact numbers, such as how many items still
+// run after an early exit.
+func SimulateWork(min, max time.Duration) {
+	d := min + time.Duration(rand.Int63n(int64(max-min+1)))
 	time.Sleep(d)
+}
+
+// WaitForInflightWork is just a sleep with a semantic name.
+// It fast-forwards fake time far enough that any goroutines currently
+// simulating work have a chance to complete.
+// Mostly used with early-exit tests.
+func WaitForInflightWork() {
+	time.Sleep(1 * time.Hour)
 }
 
 func DoConcurrently(ff ...func()) {

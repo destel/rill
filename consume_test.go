@@ -21,25 +21,24 @@ func TestErr(t *testing.T) {
 		in := FromChan(th.FromSlice([]int{}), nil)
 		err := Err(in)
 
-		synctest.Wait()
 		th.ExpectDrainedChan(t, in)
 
 		th.ExpectNoError(t, err)
 	})
 
 	th.RunSynctest(t, "no errors", func(t *testing.T) {
-		in := FromChan(th.FromRange(0, 100), nil)
+		in := FromChan(th.FromRange(0, 20), nil)
 		err := Err(in)
 
-		synctest.Wait()
 		th.ExpectDrainedChan(t, in)
 
 		th.ExpectNoError(t, err)
 	})
 
 	th.RunSynctest(t, "error", func(t *testing.T) {
-		in := FromChan(th.FromRange(0, 100), nil)
+		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
+		in = replaceWithError(in, 15, fmt.Errorf("err015"))
 		err := Err(in)
 
 		synctest.Wait()
@@ -60,7 +59,6 @@ func TestFirst(t *testing.T) {
 		in := FromChan(th.FromSlice([]int{}), nil)
 		_, ok, err := First(in)
 
-		synctest.Wait()
 		th.ExpectDrainedChan(t, in)
 
 		th.ExpectNoError(t, err)
@@ -68,7 +66,7 @@ func TestFirst(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "value is first", func(t *testing.T) {
-		in := FromChan(th.FromRange(1, 100), nil)
+		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
 		x, ok, err := First(in)
 
@@ -77,18 +75,18 @@ func TestFirst(t *testing.T) {
 
 		th.ExpectNoError(t, err)
 		th.ExpectValue(t, ok, true)
-		th.ExpectValue(t, x, 1)
+		th.ExpectValue(t, x, 0)
 	})
 
 	th.RunSynctest(t, "error is first", func(t *testing.T) {
-		in := FromChan(th.FromRange(1, 100), nil)
-		in = replaceWithError(in, 1, fmt.Errorf("err001"))
+		in := FromChan(th.FromRange(0, 20), nil)
+		in = replaceWithError(in, 0, fmt.Errorf("err000"))
 		_, _, err := First(in)
 
 		synctest.Wait()
 		th.ExpectDrainedChan(t, in)
 
-		th.ExpectError(t, err, "err001")
+		th.ExpectError(t, err, "err000")
 	})
 }
 
@@ -101,19 +99,20 @@ func TestForEach(t *testing.T) {
 		})
 
 		th.RunSynctest(t, th.Name("no errors", n), func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 10), nil)
+			in := FromChan(th.FromRange(0, 20), nil)
 
 			var sum atomic.Int64
 			err := ForEach(in, n, func(x int) error {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+
 				sum.Add(int64(x))
 				return nil
 			})
 
-			synctest.Wait()
 			th.ExpectDrainedChan(t, in)
 
 			th.ExpectNoError(t, err)
-			th.ExpectValue(t, sum.Load(), int64(9*10/2))
+			th.ExpectValue(t, sum.Load(), int64(19*20/2))
 		})
 
 		th.RunSynctest(t, th.Name("error in input", n), func(t *testing.T) {
@@ -122,26 +121,13 @@ func TestForEach(t *testing.T) {
 
 			var cnt atomic.Int64
 			err := ForEach(in, n, func(x int) error {
-				// Early exit isn't instantaneous in concurrent code: one goroutine detects the
-				// condition and initiates the exit, and it takes time to propagate to the others.
-				// Until it does, the other workers keep pulling items from the input.
-				//
-				// For this test we can't rely entirely on the scheduler. We might get unlucky and the early exit
-				// will propagate slowly enough that the other workers reach the end of the input channel.
-				//
-				// We use sleeps and synctest to give every item a roughly equal but randomized amount of work.
-				// This aligns with real-world pipelines, and it bounds how far the fastest worker can overrun the slowest one,
-				// and therefore how many extra items can get processed after the early exit was initiated.
-				// The upper bound is:
-				//   maxExtra = (n - 1) * maxSleep / minSleep
-				th.RandomSleep(1*time.Second, 2*time.Second)
+				th.SimulateWork(1*time.Second, 2*time.Second)
 
 				cnt.Add(1)
 				return nil
 			})
 
-			// Make sure all sleeping workers have had a chance to finish
-			time.Sleep(10 * time.Second)
+			th.WaitForInflightWork()
 			th.ExpectDrainedChan(t, in)
 
 			th.ExpectError(t, err, "err200")
@@ -155,8 +141,7 @@ func TestForEach(t *testing.T) {
 
 			var cnt atomic.Int64
 			err := ForEach(in, n, func(x int) error {
-				// Balance per-item work so early exit stays observable
-				th.RandomSleep(1*time.Second, 2*time.Second)
+				th.SimulateWork(1*time.Second, 2*time.Second)
 
 				if x == 100 {
 					return fmt.Errorf("err100")
@@ -165,7 +150,7 @@ func TestForEach(t *testing.T) {
 				return nil
 			})
 
-			time.Sleep(10 * time.Second)
+			th.WaitForInflightWork()
 			th.ExpectDrainedChan(t, in)
 
 			th.ExpectError(t, err, "err100")
@@ -214,7 +199,6 @@ func TestAnyAll(t *testing.T) {
 				return false, nil
 			})
 
-			synctest.Wait()
 			th.ExpectDrainedChan(t, in)
 
 			th.ExpectNoError(t, err)
@@ -230,9 +214,7 @@ func TestAnyAll(t *testing.T) {
 
 				var cnt atomic.Int64
 				ok, err := All(in, n, func(x int) (bool, error) {
-					// Balance per-item work so early exit stays observable
-					// See comments in TestForEach for more details
-					th.RandomSleep(1*time.Second, 2*time.Second)
+					th.SimulateWork(1*time.Second, 2*time.Second)
 
 					if x == testCase.functionErrorPos {
 						return false, fmt.Errorf("err%03d", testCase.functionErrorPos)
@@ -242,7 +224,7 @@ func TestAnyAll(t *testing.T) {
 					return x != testCase.conditionBreakPos, nil
 				})
 
-				time.Sleep(10 * time.Second)
+				th.WaitForInflightWork()
 				th.ExpectDrainedChan(t, in)
 
 				if testCase.expectError != "" {

@@ -30,6 +30,8 @@ func TestMap(t *testing.T) {
 				in = replaceWithError(in, 15, fmt.Errorf("err015"))
 
 				out := universalMap(ord, in, n, func(x int) (string, error) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
+
 					if x == 5 || x == 6 {
 						return "", fmt.Errorf("err%03d", x)
 					}
@@ -54,8 +56,9 @@ func TestMap(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 
 				out := universalMap(ord, in, n, func(x int) (int, error) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
 					if x%7 == 0 {
-						time.Sleep(1 * time.Second) // force out-of-order completion
+						time.Sleep(10 * time.Second) // force out-of-order completion
 					}
 
 					if x%2 == 1 {
@@ -97,6 +100,8 @@ func TestFilter(t *testing.T) {
 				in = replaceWithError(in, 15, fmt.Errorf("err015"))
 
 				out := universalFilter(ord, in, n, func(x int) (bool, error) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
+
 					if x == 5 || x == 6 {
 						return x == 5, fmt.Errorf("err%03d", x)
 					}
@@ -123,8 +128,9 @@ func TestFilter(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 
 				out := universalFilter(ord, in, n, func(x int) (bool, error) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
 					if x%7 == 0 {
-						time.Sleep(1 * time.Second) // force out-of-order completion
+						time.Sleep(10 * time.Second) // force out-of-order completion
 					}
 
 					switch x % 3 {
@@ -170,6 +176,8 @@ func TestFilterMap(t *testing.T) {
 				in = replaceWithError(in, 15, fmt.Errorf("err015"))
 
 				out := universalFilterMap(ord, in, n, func(x int) (string, bool, error) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
+
 					if x == 5 || x == 6 {
 						return "dummy", x == 5, fmt.Errorf("err%03d", x)
 					}
@@ -196,8 +204,9 @@ func TestFilterMap(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 
 				out := universalFilterMap(ord, in, n, func(x int) (int, bool, error) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
 					if x%7 == 0 {
-						time.Sleep(1 * time.Second) // force out-of-order completion
+						time.Sleep(10 * time.Second) // force out-of-order completion
 					}
 
 					switch x % 3 {
@@ -246,9 +255,14 @@ func TestFlatMap(t *testing.T) {
 
 				// Each item emits a mini-stream of interleaved values and errors
 				out := universalFlatMap(ord, in, n, func(x int) <-chan Try[string] {
+					th.SimulateWork(1*time.Second, 2*time.Second)
+
 					return Generate(func(send func(string), sendErr func(error)) {
 						send(fmt.Sprintf("%03dA", x))
 						sendErr(fmt.Errorf("err%03dA", x))
+
+						th.SimulateWork(1*time.Second, 2*time.Second)
+
 						send(fmt.Sprintf("%03dB", x))
 						sendErr(fmt.Errorf("err%03dB", x))
 					})
@@ -274,8 +288,9 @@ func TestFlatMap(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 
 				out := universalFlatMap(ord, in, n, func(x int) <-chan Try[string] {
+					th.SimulateWork(1*time.Second, 2*time.Second)
 					if x%7 == 0 {
-						time.Sleep(1 * time.Second) // force out-of-order completion
+						time.Sleep(10 * time.Second) // force out-of-order completion
 					}
 
 					return Generate(func(send func(string), sendErr func(error)) {
@@ -285,7 +300,7 @@ func TestFlatMap(t *testing.T) {
 						if x%9 == 0 {
 							// A gap between this item's A and B outputs, so the assertions below also
 							// cover the case where a single item yields its values non-contiguously.
-							time.Sleep(1 * time.Second)
+							th.SimulateWork(2*time.Second, 4*time.Second)
 						}
 
 						send(fmt.Sprintf("%03d-B", x))
@@ -329,6 +344,8 @@ func TestCatch(t *testing.T) {
 				in = replaceWithError(in, 15, fmt.Errorf("err15"))
 
 				out := universalCatch(ord, in, n, func(err error) error {
+					th.SimulateWork(1*time.Second, 2*time.Second)
+
 					if err.Error() == "err05" {
 						return nil // handled
 					}
@@ -370,8 +387,9 @@ func TestCatch(t *testing.T) {
 
 				var i atomic.Int64
 				out := universalCatch(ord, in, n, func(err error) error {
+					th.SimulateWork(1*time.Second, 2*time.Second)
 					if i.Add(1)%7 == 0 {
-						time.Sleep(1 * time.Second) // force out-of-order completion
+						time.Sleep(10 * time.Second) // force out-of-order completion
 					}
 					return fmt.Errorf("%w wrapped", err)
 				})
