@@ -18,7 +18,7 @@ func TestErr(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "empty", func(t *testing.T) {
-		in := FromChan(th.FromSlice([]int{}), nil)
+		in := FromSlice([]int{}, nil)
 		err := Err(in)
 
 		th.ExpectDrainedChan(t, in)
@@ -56,7 +56,7 @@ func TestFirst(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "empty", func(t *testing.T) {
-		in := FromChan(th.FromSlice([]int{}), nil)
+		in := FromSlice([]int{}, nil)
 		_, ok, err := First(in)
 
 		th.ExpectDrainedChan(t, in)
