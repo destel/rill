@@ -74,18 +74,6 @@ func DoConcurrently(ff ...func()) {
 	wg.Wait()
 }
 
-func DoConcurrentlyN(n int, f func(i int)) {
-	var wg sync.WaitGroup
-
-	for i := range n {
-		wg.Go(func() {
-			f(i)
-		})
-	}
-
-	wg.Wait()
-}
-
 // Name generates a test name.
 // Works the same way as fmt.Sprint, but adds spaces between all arguments.
 func Name(args ...any) string {

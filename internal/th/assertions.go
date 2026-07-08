@@ -18,32 +18,6 @@ func ExpectValue[A comparable](t *testing.T, actual A, expected A) {
 	}
 }
 
-func ExpectValueLTE[A number](t *testing.T, actual A, expected A) {
-	t.Helper()
-	if actual > expected {
-		t.Errorf("expected %v <= %v", actual, expected)
-	}
-}
-
-func ExpectValueGTE[A number](t *testing.T, actual A, expected A) {
-	t.Helper()
-	if actual < expected {
-		t.Errorf("expected %v >= %v", actual, expected)
-	}
-}
-
-func ExpectValueInDelta[A number](t *testing.T, actual A, expected A, delta A) {
-	t.Helper()
-	diff := actual - expected
-	if diff < 0 {
-		diff = -diff
-	}
-
-	if diff > delta {
-		t.Errorf("expected %v in [%v-%v]", actual, expected-delta, expected+delta)
-	}
-}
-
 func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 	t.Helper()
 	if len(expected) != len(actual) {
@@ -100,10 +74,6 @@ func ExpectMap[K, V comparable](t *testing.T, actual map[K]V, expected map[K]V) 
 			return
 		}
 	}
-}
-
-type number interface {
-	~int | ~int64
 }
 
 func ExpectSorted[T cmp.Ordered](t *testing.T, arr []T) {
@@ -189,12 +159,3 @@ func ExpectNoError(t *testing.T, err error) {
 	}
 }
 
-func ExpectNotPanic(t *testing.T, f func()) {
-	t.Helper()
-	defer func() {
-		if r := recover(); r != nil {
-			t.Errorf("unexpected panic: %v", r)
-		}
-	}()
-	f()
-}
