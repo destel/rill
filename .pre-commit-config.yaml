@@ -1,0 +1,6 @@
+# Update policy: when CI lint fails but the local hook passes, run `prek autoupdate`
+repos:
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.12.2
+    hooks:
+      - id: golangci-lint-full
