@@ -44,11 +44,11 @@ func FromRange(start, end int) <-chan int {
 // its time blocked on a network call, and every call takes a similar but not
 // identical time.
 //
-// Since each worker sleeps at least min per iteration, one worker can't grab most
-// of the items. The min and max values also limit how uneven the work can get. In the worst
-// case, the fastest and slowest workers stay within (n-1)*max/min items of each
-// other. Tests rely on this to check exact numbers, such as how many items still
-// run after an early exit.
+// Since each worker sleeps at least min per iteration, no single worker can race
+// ahead and grab most of the items. Workers move through the input at different,
+// variable speeds, but they're guaranteed to stay within (n-1)*maxSleep/minSleep items of
+// each other. Tests rely on this bound to check how many extra items were
+// processed after an early return.
 func SimulateWork(min, max time.Duration) {
 	d := min + time.Duration(rand.Int63n(int64(max-min+1)))
 	time.Sleep(d)

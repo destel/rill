@@ -123,7 +123,7 @@ func TestMapReduce(t *testing.T) {
 
 				// To reach max concurrency in the reduce phase, the map phase must outpace it
 				// rather than become the bottleneck. Under synctest we get that by giving
-				// mappers a much smaller hold than reducers.
+				// mappers a much smaller work than reducers.
 				var mapGauge th.InFlightGauge
 				var reduceGauge th.InFlightGauge
 
