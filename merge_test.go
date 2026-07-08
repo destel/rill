@@ -129,7 +129,7 @@ func TestTee(t *testing.T) {
 		th.ExpectValue(t, out2, nil)
 	})
 
-	th.RunSynctest(t, th.Name("correctness"), func(t *testing.T) {
+	th.RunSynctest(t, "correctness", func(t *testing.T) {
 		// Create input with mixed values and errors
 		in := FromChan(th.FromRange(0, 10), nil)
 		in = replaceWithError(in, 2, fmt.Errorf("err2"))
@@ -156,7 +156,7 @@ func TestTee(t *testing.T) {
 		th.ExpectSlice(t, outSlice2, expected)
 	})
 
-	t.Run(th.Name("non concurrent reads"), func(t *testing.T) {
+	t.Run("non concurrent reads", func(t *testing.T) {
 		th.ExpectBlock(t, func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 10), nil)
 			out1, out2 := Tee(in)

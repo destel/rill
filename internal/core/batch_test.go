@@ -26,7 +26,7 @@ func TestBatch(t *testing.T) {
 		th.ExpectValue(t, Batch[string](nil, 10, 10*time.Second), nil)
 	})
 
-	th.RunSynctest(t, th.Name("empty"), func(t *testing.T) {
+	th.RunSynctest(t, "empty", func(t *testing.T) {
 		in := make(chan int)
 		close(in)
 
@@ -36,7 +36,7 @@ func TestBatch(t *testing.T) {
 		th.ExpectValue(t, len(outSlice), 0)
 	})
 
-	th.RunSynctest(t, th.Name("slow input"), func(t *testing.T) {
+	th.RunSynctest(t, "slow input", func(t *testing.T) {
 		in := th.FromRange(0, 10)
 		in = addDelayAfter(in, 2, 1*time.Second)
 		in = addDelayAfter(in, 5, 10*time.Second)
@@ -53,7 +53,7 @@ func TestBatch(t *testing.T) {
 		th.ExpectSlice(t, outSlice[3], []int{9})
 	})
 
-	th.RunSynctest(t, th.Name("fast input"), func(t *testing.T) {
+	th.RunSynctest(t, "fast input", func(t *testing.T) {
 		in := th.FromRange(0, 10)
 		in = addDelayAfter(in, 2, 1*time.Second)
 		in = addDelayAfter(in, 5, 1*time.Second)
@@ -67,7 +67,7 @@ func TestBatch(t *testing.T) {
 		th.ExpectSlice(t, outSlice[2], []int{8, 9})
 	})
 
-	th.RunSynctest(t, th.Name("no timeout"), func(t *testing.T) {
+	th.RunSynctest(t, "no timeout", func(t *testing.T) {
 		in := th.FromRange(0, 10)
 
 		out := Batch(in, 4, -1)
@@ -84,7 +84,7 @@ func TestUnbatch(t *testing.T) {
 		th.ExpectValue(t, Unbatch[string](nil), nil)
 	})
 
-	th.RunSynctest(t, th.Name("normal"), func(t *testing.T) {
+	th.RunSynctest(t, "normal", func(t *testing.T) {
 		in := th.FromSlice([][]int{{1, 2, 3}, {4}, {5, 6, 7, 8}, {9, 10}})
 
 		out := Unbatch(in)
