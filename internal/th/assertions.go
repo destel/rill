@@ -102,26 +102,70 @@ func ExpectDrainedChan[A any](t *testing.T, ch <-chan A) {
 	}
 }
 
-// ExpectBlock runs f in a synctest bubble and asserts it does not complete cleanly.
-// It expects at least one of the following to be true:
-//   - f itself blocks and never returns (e.g. reading from a nil channel)
-//   - f returns, but a goroutine it spawned stays durably blocked (a leak)
+// ExpectBlock runs f in a synctest bubble and asserts that the main goroutine
+// is durably blocked.
 func ExpectBlock(t *testing.T, f func(t *testing.T)) {
 	t.Helper()
+	outcome := checkBlock(t, f)
+
+	if outcome == 0 {
+		t.Errorf("expected the main goroutine to block, but everything completed")
+		return
+	}
+	if outcome == 1 {
+		t.Errorf("expected the main goroutine to block, but it returned and only background goroutines remained blocked (did you mean ExpectLeak?)")
+		return
+	}
+}
+
+// ExpectLeak runs f in a synctest bubble and asserts that at least one background goroutine
+// is durably blocked, while the main goroutine completes cleanly.
+func ExpectLeak(t *testing.T, f func(t *testing.T)) {
+	t.Helper()
+	outcome := checkBlock(t, f)
+
+	if outcome == 0 {
+		t.Errorf("expected at least one background goroutine to leak, but everything completed")
+		return
+	}
+	if outcome == 2 {
+		t.Errorf("expected only background goroutines to block, but the main goroutine blocked too (did you mean ExpectBlock?)")
+		return
+	}
+}
+
+// outcomes:
+// 0 - nothing blocked
+// 1 - some goroutines blocked, but not main
+// 2 - main blocked and possibly some goroutines also blocked
+func checkBlock(t *testing.T, f func(t *testing.T)) (outcome int) {
+	mainBlocked := true
+
 	defer func() {
-		t.Helper()
 		r := recover()
+
 		if r == nil {
-			t.Errorf("expected deadlock")
+			outcome = 0
 			return
 		}
-		if strings.Contains(fmt.Sprint(r), "deadlock") {
-			return
+
+		if !strings.HasPrefix(fmt.Sprint(r), "deadlock:") {
+			panic(r) // re-panic if not a deadlock message
 		}
-		panic(r) // re-panic if not a deadlock
+
+		if mainBlocked {
+			outcome = 2
+		} else {
+			outcome = 1
+		}
 	}()
 
-	synctest.Test(t, f)
+	synctest.Test(t, func(t *testing.T) {
+		f(t)
+		mainBlocked = false
+	})
+
+	return
 }
 
 func ExpectNotHang(t *testing.T, waitFor time.Duration, f func()) {
@@ -158,4 +202,3 @@ func ExpectNoError(t *testing.T, err error) {
 		t.Errorf("unexpected error '%v'", err)
 	}
 }
-
