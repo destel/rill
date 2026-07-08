@@ -74,6 +74,18 @@ func TestToSeq2(t *testing.T) {
 
 		th.ExpectSlice(t, outSlice, expectedSlice)
 	})
+
+	t.Run("unclosed", func(t *testing.T) {
+		th.ExpectLeak(t, func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 20), nil)
+			in = th.DontClose(in)
+
+			out := ToSeq2(in)
+			for range out {
+				break // early return immediately
+			}
+		})
+	})
 }
 
 func TestFromSeq(t *testing.T) {

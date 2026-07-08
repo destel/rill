@@ -46,6 +46,16 @@ func TestErr(t *testing.T) {
 
 		th.ExpectError(t, err, "err010")
 	})
+
+	t.Run("unclosed", func(t *testing.T) {
+		th.ExpectLeak(t, func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 20), nil)
+			in = replaceWithError(in, 10, fmt.Errorf("err010"))
+			in = th.DontClose(in)
+
+			_ = Err(in)
+		})
+	})
 }
 
 func TestFirst(t *testing.T) {
@@ -87,6 +97,14 @@ func TestFirst(t *testing.T) {
 		th.ExpectDrainedChan(t, in)
 
 		th.ExpectError(t, err, "err000")
+	})
+
+	t.Run("unclosed", func(t *testing.T) {
+		th.ExpectLeak(t, func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 20), nil)
+			in = th.DontClose(in)
+			_, _, _ = First(in)
+		})
 	})
 }
 
@@ -159,6 +177,18 @@ func TestForEach(t *testing.T) {
 			if iterations.Load() > 250 {
 				t.Errorf("early return did not happen")
 			}
+		})
+
+		t.Run("unclosed", func(t *testing.T) {
+			th.ExpectLeak(t, func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 1000), nil)
+				in = replaceWithError(in, 200, fmt.Errorf("err200"))
+				in = th.DontClose(in)
+
+				_ = ForEach(in, n, func(int) error {
+					return nil
+				})
+			})
 		})
 	}
 }
@@ -269,6 +299,18 @@ func TestAny(t *testing.T) {
 			if iterations.Load() > 250 {
 				t.Errorf("early return did not happen")
 			}
+		})
+
+		t.Run("unclosed", func(t *testing.T) {
+			th.ExpectLeak(t, func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 1000), nil)
+				in = replaceWithError(in, 200, fmt.Errorf("err200"))
+				in = th.DontClose(in)
+
+				_, _ = Any(in, n, func(int) (bool, error) {
+					return false, nil
+				})
+			})
 		})
 	}
 }

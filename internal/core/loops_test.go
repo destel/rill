@@ -25,6 +25,16 @@ func universalLoop[A, B any](ord bool, in <-chan A, done chan<- B, n int, f func
 func TestLoop(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
 		for _, n := range []int{1, 3, 5} {
+			t.Run(th.Name("nil", n), func(t *testing.T) {
+				th.ExpectBlock(t, func(t *testing.T) {
+					done := make(chan struct{})
+					universalLoop(ord, nil, done, n, func(x int, canWrite <-chan struct{}) {
+						<-canWrite
+					})
+					<-done
+				})
+			})
+
 			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
 				in := th.FromRange(0, 20)
 				done := make(chan struct{})

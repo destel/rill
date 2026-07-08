@@ -76,6 +76,16 @@ func TestToSlice(t *testing.T) {
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
 		th.ExpectError(t, err, "err005")
 	})
+
+	t.Run("unclosed", func(t *testing.T) {
+		th.ExpectLeak(t, func(t *testing.T) {
+			in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+			in = replaceWithError(in, 5, fmt.Errorf("err005"))
+			in = th.DontClose(in)
+
+			_, _ = ToSlice(in)
+		})
+	})
 }
 
 func TestFromChan(t *testing.T) {

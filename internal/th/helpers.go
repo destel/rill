@@ -36,6 +36,17 @@ func FromRange(start, end int) <-chan int {
 	return ch
 }
 
+func DontClose[A any](in <-chan A) <-chan A {
+	out := make(chan A)
+	go func() {
+		for x := range in {
+			out <- x
+		}
+		// don't close out
+	}()
+	return out
+}
+
 // SimulateWork sleeps for a random time in [min, max]. Call it inside a
 // worker function (in a synctest bubble) to enforce concurrent execution
 // instead of relying on scheduler luck.

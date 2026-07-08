@@ -118,6 +118,18 @@ func TestReduce(t *testing.T) {
 				t.Errorf("early exit did not happen")
 			}
 		})
+
+		t.Run("unclosed", func(t *testing.T) {
+			th.ExpectLeak(t, func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 1000), nil)
+				in = replaceWithError(in, 200, fmt.Errorf("err200"))
+				in = th.DontClose(in)
+
+				_, _, _ = Reduce(in, n, func(x, y int) (int, error) {
+					return x + y, nil
+				})
+			})
+		})
 	}
 }
 
@@ -276,6 +288,23 @@ func TestMapReduce(t *testing.T) {
 				if iterationsReduce.Load() > 250 {
 					t.Errorf("early exit did not happen")
 				}
+			})
+
+			t.Run("unclosed", func(t *testing.T) {
+				th.ExpectLeak(t, func(t *testing.T) {
+					in := FromChan(th.FromRange(0, 1000), nil)
+					in = replaceWithError(in, 200, fmt.Errorf("err200"))
+					in = th.DontClose(in)
+
+					_, _ = MapReduce(in,
+						nm, func(int) (string, int, error) {
+							return "", 0, nil
+						},
+						nr, func(int, int) (int, error) {
+							return 0, nil
+						},
+					)
+				})
 			})
 
 		}
