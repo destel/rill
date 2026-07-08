@@ -6,7 +6,7 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Batch take a stream of items and returns a stream of batches based on a maximum size and a timeout.
+// Batch takes a stream of items and returns a stream of batches based on a maximum size and a timeout.
 //
 // A batch is emitted when one of the following conditions is met:
 //   - The batch reaches the maximum size

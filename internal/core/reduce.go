@@ -80,7 +80,7 @@ func reduceIntoMap[K comparable, V any](m map[K]V, k K, v V, f func(V, V) V) {
 }
 
 // MapReduce applies a map-reduce pattern to the input channel.
-// First inout is converted into key-value pairs using the mapper function and nm goroutines.
+// First input is converted into key-value pairs using the mapper function and nm goroutines.
 // If there are multiple values for the same key, they are reduced into a single value using the reducer function and nr goroutines.
 // The result is a map where each key is associated with a single value.
 func MapReduce[A any, K comparable, V any](in <-chan A, nm int, mapper func(A) (K, V), nr int, reducer func(V, V) V) map[K]V {
