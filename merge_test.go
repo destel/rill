@@ -3,10 +3,20 @@ package rill
 import (
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/destel/rill/internal/th"
 )
+
+// Full behavior of Merge is tested in the internal/core package.
+// This test only pins the wrapper wiring.
+func TestMerge(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		out := Merge(th.FromRange(0, 5), th.FromRange(5, 10))
+		th.ExpectElementsMatch(t, th.ToSlice(out), []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+	})
+}
 
 func universalSplit2[A any](ord bool, in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
 	if ord {
