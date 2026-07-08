@@ -43,7 +43,7 @@ func TestMerge(t *testing.T) {
 
 			go func() {
 				// write to the channels in a round-robin fashion
-				for i := 0; i < 100; i++ {
+				for i := range 100 {
 					th.SimulateWork(1*time.Second, 2*time.Second)
 					insWritable[i%len(insWritable)] <- i
 				}
@@ -57,7 +57,7 @@ func TestMerge(t *testing.T) {
 			outSlice := th.ToSlice(out)
 
 			var expectedSlice []int
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				expectedSlice = append(expectedSlice, i)
 			}
 

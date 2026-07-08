@@ -130,7 +130,7 @@ func TestFromSeq2(t *testing.T) {
 		gen := func(yield func(x int, err error) bool) {
 			for i := range 10 {
 				var err error
-				var val int = i
+				var val = i
 
 				if i == 5 {
 					val = 0
