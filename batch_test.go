@@ -31,21 +31,19 @@ func TestUnbatch(t *testing.T) {
 	// most logic is covered by the common package tests
 
 	th.RunSynctest(t, "correctness", func(t *testing.T) {
-		in := FromSlice([][]int{{1, 2}, {3, 4}, {5, 6}, {7, 8}, {9, 10}}, nil)
-		in = OrderedMap(in, 1, func(x []int) ([]int, error) {
-			if x[0] == 3 {
-				return nil, fmt.Errorf("err3")
-			}
-			if x[0] == 7 {
-				return nil, fmt.Errorf("err7")
-			}
-			return x, nil
+		in := Generate(func(send func([]int), sendErr func(error)) {
+			send([]int{1, 2})
+			sendErr(fmt.Errorf("err1"))
+			send([]int{10, 11, 12})
+			send([]int{13, 14})
+			sendErr(fmt.Errorf("err2"))
+			send([]int{20, 21})
 		})
 
 		out := Unbatch(in)
 
 		outSlice, outErrs := toSliceAndErrors(out)
-		th.ExpectSlice(t, outSlice, []int{1, 2, 5, 6, 9, 10})
-		th.ExpectSlice(t, outErrs, []string{"err3", "err7"})
+		th.ExpectSlice(t, outSlice, []int{1, 2, 10, 11, 12, 13, 14, 20, 21})
+		th.ExpectSlice(t, outErrs, []string{"err1", "err2"})
 	})
 }
