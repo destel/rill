@@ -9,8 +9,9 @@ import (
 )
 
 func TestReduce(t *testing.T) {
-	for _, n := range []int{1, 4, 8} {
-		t.Run(th.Name("nil", n), func(t *testing.T) {
+	th.TestLevels(t, []int{1, 4, 8}, func(t *testing.T, n int) {
+
+		t.Run("nil", func(t *testing.T) {
 			th.ExpectBlock(t, func(t *testing.T) {
 				Reduce(nil, n, func(a, b int) int {
 					return a + b
@@ -18,7 +19,7 @@ func TestReduce(t *testing.T) {
 			})
 		})
 
-		th.RunSynctest(t, th.Name("empty", n), func(t *testing.T) {
+		th.RunSynctest(t, "empty", func(t *testing.T) {
 			in := th.FromSlice([]int{})
 			_, ok := Reduce(in, n, func(a, b int) int {
 				th.SimulateWork(1*time.Second, 2*time.Second)
@@ -30,7 +31,7 @@ func TestReduce(t *testing.T) {
 			th.ExpectValue(t, ok, false)
 		})
 
-		th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
+		th.RunSynctest(t, "correctness", func(t *testing.T) {
 			in := th.FromRange(0, 100)
 			out, ok := Reduce(in, n, func(a, b int) int {
 				th.SimulateWork(1*time.Second, 2*time.Second)
@@ -43,7 +44,7 @@ func TestReduce(t *testing.T) {
 			th.ExpectValue(t, ok, true)
 		})
 
-		th.RunSynctest(t, th.Name("concurrency", n), func(t *testing.T) {
+		th.RunSynctest(t, "concurrency", func(t *testing.T) {
 			in := th.FromRange(0, 100)
 
 			var gauge th.InFlightGauge
@@ -58,13 +59,15 @@ func TestReduce(t *testing.T) {
 
 			th.ExpectValue(t, gauge.Max(), n)
 		})
-	}
+
+	})
 }
 
 func TestMapReduce(t *testing.T) {
-	for _, nm := range []int{1, 4} {
-		for _, nr := range []int{1, 4, 8} {
-			t.Run(th.Name("nil", nm, nr), func(t *testing.T) {
+	th.TestVariants(t, "nm", []int{1, 4}, func(t *testing.T, nm int) {
+		th.TestVariants(t, "nr", []int{1, 4, 8}, func(t *testing.T, nr int) {
+
+			t.Run("nil", func(t *testing.T) {
 				th.ExpectBlock(t, func(t *testing.T) {
 					MapReduce(nil,
 						nm, func(x int) (string, int) {
@@ -77,7 +80,7 @@ func TestMapReduce(t *testing.T) {
 				})
 			})
 
-			th.RunSynctest(t, th.Name("empty", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "empty", func(t *testing.T) {
 				in := th.FromSlice([]int{})
 				out := MapReduce(in,
 					nm, func(x int) (string, int) {
@@ -95,7 +98,7 @@ func TestMapReduce(t *testing.T) {
 				th.ExpectMap(t, out, map[string]int{})
 			})
 
-			th.RunSynctest(t, th.Name("correctness", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "correctness", func(t *testing.T) {
 				in := th.FromRange(0, 200)
 				out := MapReduce(in,
 					nm, func(x int) (string, int) {
@@ -118,7 +121,7 @@ func TestMapReduce(t *testing.T) {
 				})
 			})
 
-			th.RunSynctest(t, th.Name("concurrency", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "concurrency", func(t *testing.T) {
 				in := th.FromRange(0, 100)
 
 				// To reach max concurrency in the reduce phase, the map phase must outpace it
@@ -148,6 +151,6 @@ func TestMapReduce(t *testing.T) {
 				th.ExpectValue(t, reduceGauge.Max(), nr)
 			})
 
-		}
-	}
+		})
+	})
 }

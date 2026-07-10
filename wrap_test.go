@@ -26,8 +26,8 @@ func TestFromSlice(t *testing.T) {
 		th.ExpectSlice(t, outSlice, expectedSlice)
 	})
 
-	for _, inputSize := range []int{0, 20, 4000} {
-		th.RunSynctest(t, th.Name("no error", inputSize), func(t *testing.T) {
+	th.TestVariants(t, "input_size", []int{0, 20, 4000}, func(t *testing.T, inputSize int) {
+		th.RunSynctest(t, "no error", func(t *testing.T) {
 			var inSlice []int
 			var expectedSlice []Item[int]
 
@@ -41,7 +41,7 @@ func TestFromSlice(t *testing.T) {
 
 			th.ExpectSlice(t, outSlice, expectedSlice)
 		})
-	}
+	})
 }
 
 func TestToSlice(t *testing.T) {

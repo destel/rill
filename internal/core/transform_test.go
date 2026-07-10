@@ -17,13 +17,14 @@ func universalFilterMap[A, B any](ord bool, in <-chan A, n int, f func(A) (B, bo
 
 func TestFilterMap(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
-		for _, n := range []int{1, 5} {
-			t.Run(th.Name("nil", n), func(t *testing.T) {
+		th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
+
+			t.Run("nil", func(t *testing.T) {
 				out := universalFilterMap(ord, nil, n, func(x int) (int, bool) { return x, true })
 				th.ExpectValue(t, out, nil)
 			})
 
-			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
+			th.RunSynctest(t, "correctness", func(t *testing.T) {
 				in := th.FromRange(0, 20)
 				out := universalFilterMap(ord, in, n, func(x int) (string, bool) {
 					return fmt.Sprintf("%03d", x), x%2 == 0
@@ -42,7 +43,7 @@ func TestFilterMap(t *testing.T) {
 				th.ExpectElementsMatch(t, outSlice, expectedSlice)
 			})
 
-			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+			th.RunSynctest(t, "ordering", func(t *testing.T) {
 				in := th.FromRange(0, 100)
 
 				out := universalFilterMap(ord, in, n, func(x int) (int, bool) {
@@ -61,6 +62,6 @@ func TestFilterMap(t *testing.T) {
 				}
 			})
 
-		}
+		})
 	})
 }

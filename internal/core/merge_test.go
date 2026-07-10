@@ -13,8 +13,9 @@ func TestMerge(t *testing.T) {
 		th.ExpectValue(t, out, nil)
 	})
 
-	for _, numChans := range []int{1, 3, 5, 10} {
-		th.RunSynctest(t, th.Name("correctness", numChans), func(t *testing.T) {
+	th.TestVariants(t, "num_chans", []int{1, 3, 5, 10}, func(t *testing.T, numChans int) {
+
+		th.RunSynctest(t, "correctness", func(t *testing.T) {
 			ins := make([]<-chan int, numChans)
 
 			for i := range numChans {
@@ -32,7 +33,7 @@ func TestMerge(t *testing.T) {
 			th.ExpectElementsMatch(t, outSlice, expectedSlice)
 		})
 
-		th.RunSynctest(t, th.Name("per input independence", numChans), func(t *testing.T) {
+		th.RunSynctest(t, "per input independence", func(t *testing.T) {
 			ins := make([]<-chan int, numChans)
 			insWritable := make([]chan int, numChans)
 			for i := range numChans {
@@ -64,7 +65,7 @@ func TestMerge(t *testing.T) {
 			th.ExpectSlice(t, outSlice, expectedSlice) // exact order
 		})
 
-		t.Run(th.Name("nil hang", numChans), func(t *testing.T) {
+		t.Run("nil hang", func(t *testing.T) {
 			th.ExpectBlock(t, func(t *testing.T) {
 				ins := make([]<-chan int, numChans)
 				for i := range numChans {
@@ -78,5 +79,6 @@ func TestMerge(t *testing.T) {
 				Drain(out)
 			})
 		})
-	}
+
+	})
 }

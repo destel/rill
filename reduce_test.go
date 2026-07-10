@@ -10,14 +10,15 @@ import (
 )
 
 func TestReduce(t *testing.T) {
-	for _, n := range []int{1, 4} {
-		t.Run(th.Name("nil", n), func(t *testing.T) {
+	th.TestLevels(t, []int{1, 4}, func(t *testing.T, n int) {
+
+		t.Run("nil", func(t *testing.T) {
 			th.ExpectBlock(t, func(t *testing.T) {
 				_, _, _ = Reduce(nil, n, func(x, y int) (int, error) { return x + y, nil })
 			})
 		})
 
-		th.RunSynctest(t, th.Name("empty", n), func(t *testing.T) {
+		th.RunSynctest(t, "empty", func(t *testing.T) {
 			in := FromSlice([]int{}, nil)
 
 			_, ok, err := Reduce(in, n, func(x, y int) (int, error) {
@@ -31,7 +32,7 @@ func TestReduce(t *testing.T) {
 			th.ExpectValue(t, ok, false)
 		})
 
-		th.RunSynctest(t, th.Name("single item", n), func(t *testing.T) {
+		th.RunSynctest(t, "single item", func(t *testing.T) {
 			in := FromSlice([]int{5}, nil)
 
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
@@ -46,7 +47,7 @@ func TestReduce(t *testing.T) {
 			th.ExpectValue(t, ok, true)
 		})
 
-		th.RunSynctest(t, th.Name("single error stream", n), func(t *testing.T) {
+		th.RunSynctest(t, "single error stream", func(t *testing.T) {
 			in := FromSlice([]int{}, fmt.Errorf("err0"))
 
 			_, ok, err := Reduce(in, n, func(x, y int) (int, error) {
@@ -61,7 +62,7 @@ func TestReduce(t *testing.T) {
 			th.ExpectValue(t, ok, false)
 		})
 
-		th.RunSynctest(t, th.Name("no errors", n), func(t *testing.T) {
+		th.RunSynctest(t, "no errors", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 100), nil)
 
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
@@ -76,7 +77,7 @@ func TestReduce(t *testing.T) {
 			th.ExpectValue(t, ok, true)
 		})
 
-		th.RunSynctest(t, th.Name("error in input", n), func(t *testing.T) {
+		th.RunSynctest(t, "error in input", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = replaceWithError(in, 200, fmt.Errorf("err200"))
 
@@ -97,7 +98,7 @@ func TestReduce(t *testing.T) {
 			}
 		})
 
-		th.RunSynctest(t, th.Name("error in func", n), func(t *testing.T) {
+		th.RunSynctest(t, "error in func", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 
 			var iterations atomic.Int64
@@ -130,13 +131,15 @@ func TestReduce(t *testing.T) {
 				})
 			})
 		})
-	}
+
+	})
 }
 
 func TestMapReduce(t *testing.T) {
-	for _, nm := range []int{1, 4} {
-		for _, nr := range []int{1, 4} {
-			t.Run(th.Name("nil", nm, nr), func(t *testing.T) {
+	th.TestVariants(t, "nm", []int{1, 4}, func(t *testing.T, nm int) {
+		th.TestVariants(t, "nr", []int{1, 4}, func(t *testing.T, nr int) {
+
+			t.Run("nil", func(t *testing.T) {
 				th.ExpectBlock(t, func(t *testing.T) {
 					_, _ = MapReduce(nil,
 						nm, func(x int) (string, int, error) {
@@ -148,7 +151,7 @@ func TestMapReduce(t *testing.T) {
 				})
 			})
 
-			th.RunSynctest(t, th.Name("empty", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "empty", func(t *testing.T) {
 				in := FromSlice([]int{}, nil)
 
 				out, err := MapReduce(in,
@@ -167,7 +170,7 @@ func TestMapReduce(t *testing.T) {
 				th.ExpectMap(t, out, map[string]int{})
 			})
 
-			th.RunSynctest(t, th.Name("no errors", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "no errors", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 200), nil)
 
 				out, err := MapReduce(in,
@@ -191,7 +194,7 @@ func TestMapReduce(t *testing.T) {
 				})
 			})
 
-			th.RunSynctest(t, th.Name("error in input", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "error in input", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 				in = replaceWithError(in, 200, fmt.Errorf("err200"))
 
@@ -223,7 +226,7 @@ func TestMapReduce(t *testing.T) {
 				}
 			})
 
-			th.RunSynctest(t, th.Name("error in mapper", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "error in mapper", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 
 				var iterationsMap, iterationsReduce atomic.Int64
@@ -257,7 +260,7 @@ func TestMapReduce(t *testing.T) {
 				}
 			})
 
-			th.RunSynctest(t, th.Name("error in reducer", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "error in reducer", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 
 				var iterationsMap, iterationsReduce atomic.Int64
@@ -307,6 +310,6 @@ func TestMapReduce(t *testing.T) {
 				})
 			})
 
-		}
-	}
+		})
+	})
 }

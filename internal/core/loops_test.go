@@ -24,8 +24,9 @@ func universalLoop[A, B any](ord bool, in <-chan A, done chan<- B, n int, f func
 
 func TestLoop(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
-		for _, n := range []int{1, 3, 5} {
-			t.Run(th.Name("nil", n), func(t *testing.T) {
+		th.TestLevels(t, []int{1, 3, 5}, func(t *testing.T, n int) {
+
+			t.Run("nil", func(t *testing.T) {
 				th.ExpectBlock(t, func(t *testing.T) {
 					done := make(chan struct{})
 					universalLoop(ord, nil, done, n, func(x int, canWrite <-chan struct{}) {
@@ -35,7 +36,7 @@ func TestLoop(t *testing.T) {
 				})
 			})
 
-			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
+			th.RunSynctest(t, "correctness", func(t *testing.T) {
 				in := th.FromRange(0, 20)
 				done := make(chan struct{})
 
@@ -51,7 +52,7 @@ func TestLoop(t *testing.T) {
 				th.ExpectValue(t, sum.Load(), 19*20/2)
 			})
 
-			th.RunSynctest(t, th.Name("concurrency", n), func(t *testing.T) {
+			th.RunSynctest(t, "concurrency", func(t *testing.T) {
 				in := th.FromRange(0, 100)
 				out := make(chan int)
 
@@ -72,7 +73,7 @@ func TestLoop(t *testing.T) {
 				th.ExpectValue(t, gauge.Max(), n)
 			})
 
-			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+			th.RunSynctest(t, "ordering", func(t *testing.T) {
 				in := th.FromRange(0, 100)
 				out := make(chan int)
 
@@ -94,20 +95,21 @@ func TestLoop(t *testing.T) {
 					th.ExpectUnsorted(t, outSlice)
 				}
 			})
-		}
 
+		})
 	})
 }
 
 func TestForEach(t *testing.T) {
-	for _, n := range []int{1, 5} {
-		t.Run(th.Name("nil", n), func(t *testing.T) {
+	th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
+
+		t.Run("nil", func(t *testing.T) {
 			th.ExpectBlock(t, func(t *testing.T) {
 				ForEach(nil, n, func(int) {})
 			})
 		})
 
-		th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
+		th.RunSynctest(t, "correctness", func(t *testing.T) {
 			in := th.FromRange(0, 20)
 
 			var sum atomic.Int64
@@ -121,7 +123,7 @@ func TestForEach(t *testing.T) {
 			th.ExpectValue(t, sum.Load(), 19*20/2)
 		})
 
-		th.RunSynctest(t, th.Name("concurrency", n), func(t *testing.T) {
+		th.RunSynctest(t, "concurrency", func(t *testing.T) {
 			in := th.FromRange(0, 100)
 
 			var gauge th.InFlightGauge
@@ -135,7 +137,7 @@ func TestForEach(t *testing.T) {
 			th.ExpectValue(t, gauge.Max(), n)
 		})
 
-		th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+		th.RunSynctest(t, "ordering", func(t *testing.T) {
 			in := th.FromRange(0, 100)
 
 			outSlice := make([]int, 0, 1000)
@@ -158,5 +160,6 @@ func TestForEach(t *testing.T) {
 				th.ExpectUnsorted(t, outSlice)
 			}
 		})
-	}
+
+	})
 }

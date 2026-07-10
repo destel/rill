@@ -18,14 +18,14 @@ func universalMap[A, B any](ord bool, in <-chan Try[A], n int, f func(A) (B, err
 
 func TestMap(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
-		for _, n := range []int{1, 5} {
+		th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
 
-			t.Run(th.Name("nil", n), func(t *testing.T) {
+			t.Run("nil", func(t *testing.T) {
 				out := universalMap(ord, nil, n, func(x int) (int, error) { return x, nil })
 				th.ExpectValue(t, out, nil)
 			})
 
-			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
+			th.RunSynctest(t, "correctness", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 15, fmt.Errorf("err015"))
 
@@ -52,7 +52,7 @@ func TestMap(t *testing.T) {
 				th.ExpectElementsMatch(t, outSlice, expectedSlice)
 			})
 
-			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+			th.RunSynctest(t, "ordering", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 100), nil)
 
 				out := universalMap(ord, in, n, func(x int) (int, error) {
@@ -75,7 +75,8 @@ func TestMap(t *testing.T) {
 					th.ExpectUnsorted(t, outSlice)
 				}
 			})
-		}
+
+		})
 	})
 }
 
@@ -88,14 +89,14 @@ func universalFilter(ord bool, in <-chan Try[int], n int, f func(int) (bool, err
 
 func TestFilter(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
-		for _, n := range []int{1, 5} {
+		th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
 
-			t.Run(th.Name("nil", n), func(t *testing.T) {
+			t.Run("nil", func(t *testing.T) {
 				out := universalFilter(ord, nil, n, func(x int) (bool, error) { return true, nil })
 				th.ExpectValue(t, out, nil)
 			})
 
-			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
+			th.RunSynctest(t, "correctness", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 15, fmt.Errorf("err015"))
 
@@ -124,7 +125,7 @@ func TestFilter(t *testing.T) {
 				th.ExpectElementsMatch(t, outSlice, expectedSlice)
 			})
 
-			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+			th.RunSynctest(t, "ordering", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 100), nil)
 
 				out := universalFilter(ord, in, n, func(x int) (bool, error) {
@@ -152,7 +153,7 @@ func TestFilter(t *testing.T) {
 				}
 			})
 
-		}
+		})
 	})
 }
 
@@ -165,13 +166,14 @@ func universalFilterMap[A, B any](ord bool, in <-chan Try[A], n int, f func(A) (
 
 func TestFilterMap(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
-		for _, n := range []int{1, 5} {
-			t.Run(th.Name("nil", n), func(t *testing.T) {
+		th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
+
+			t.Run("nil", func(t *testing.T) {
 				out := universalFilterMap(ord, nil, n, func(x int) (int, bool, error) { return x, true, nil })
 				th.ExpectValue(t, out, nil)
 			})
 
-			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
+			th.RunSynctest(t, "correctness", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 15, fmt.Errorf("err015"))
 
@@ -200,7 +202,7 @@ func TestFilterMap(t *testing.T) {
 				th.ExpectElementsMatch(t, outSlice, expectedSlice)
 			})
 
-			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+			th.RunSynctest(t, "ordering", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 100), nil)
 
 				out := universalFilterMap(ord, in, n, func(x int) (int, bool, error) {
@@ -228,7 +230,7 @@ func TestFilterMap(t *testing.T) {
 				}
 			})
 
-		}
+		})
 	})
 }
 
@@ -241,14 +243,14 @@ func universalFlatMap[A, B any](ord bool, in <-chan Try[A], n int, f func(A) <-c
 
 func TestFlatMap(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
-		for _, n := range []int{1, 5} {
+		th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
 
-			t.Run(th.Name("nil", n), func(t *testing.T) {
+			t.Run("nil", func(t *testing.T) {
 				out := universalFlatMap(ord, nil, n, func(x int) <-chan Try[string] { return nil })
 				th.ExpectValue(t, out, nil)
 			})
 
-			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
+			th.RunSynctest(t, "correctness", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 5, fmt.Errorf("err005I"))
 				in = replaceWithError(in, 15, fmt.Errorf("err015I"))
@@ -284,7 +286,7 @@ func TestFlatMap(t *testing.T) {
 				th.ExpectElementsMatch(t, outSlice, expectedSlice)
 			})
 
-			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+			th.RunSynctest(t, "ordering", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 100), nil)
 
 				out := universalFlatMap(ord, in, n, func(x int) <-chan Try[string] {
@@ -317,7 +319,7 @@ func TestFlatMap(t *testing.T) {
 				}
 			})
 
-		}
+		})
 	})
 }
 
@@ -330,14 +332,14 @@ func universalCatch(ord bool, in <-chan Try[int], n int, f func(error) error) <-
 
 func TestCatch(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
-		for _, n := range []int{1, 5} {
+		th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
 
-			t.Run(th.Name("nil", n), func(t *testing.T) {
+			t.Run("nil", func(t *testing.T) {
 				out := universalCatch(ord, nil, n, func(err error) error { return nil })
 				th.ExpectValue(t, out, nil)
 			})
 
-			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
+			th.RunSynctest(t, "correctness", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 5, fmt.Errorf("err05"))
 				in = replaceWithError(in, 10, fmt.Errorf("err10"))
@@ -375,7 +377,7 @@ func TestCatch(t *testing.T) {
 				th.ExpectElementsMatch(t, outSlice, expectedSlice)
 			})
 
-			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+			th.RunSynctest(t, "ordering", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 100), nil)
 
 				in = OrderedMap(in, 1, func(x int) (int, error) {
@@ -404,6 +406,6 @@ func TestCatch(t *testing.T) {
 
 			})
 
-		}
+		})
 	})
 }

@@ -27,14 +27,15 @@ func universalSplit2[A any](ord bool, in <-chan Try[A], n int, f func(A) (bool, 
 
 func TestSplit2(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
-		for _, n := range []int{1, 5} {
-			t.Run(th.Name("nil", n), func(t *testing.T) {
+		th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
+
+			t.Run("nil", func(t *testing.T) {
 				outTrue, outFalse := universalSplit2(ord, nil, n, func(string) (bool, error) { return true, nil })
 				th.ExpectValue(t, outTrue, nil)
 				th.ExpectValue(t, outFalse, nil)
 			})
 
-			th.RunSynctest(t, th.Name("correctness", n), func(t *testing.T) {
+			th.RunSynctest(t, "correctness", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 20), nil)
 				in = replaceWithError(in, 15, fmt.Errorf("err015")) // error before splitting
 
@@ -70,7 +71,7 @@ func TestSplit2(t *testing.T) {
 				th.ExpectElementsMatch(t, outSliceFalse, expectedFalse)
 			})
 
-			t.Run(th.Name("non concurrent reads", n), func(t *testing.T) {
+			t.Run("non concurrent reads", func(t *testing.T) {
 				th.ExpectBlock(t, func(t *testing.T) {
 					in := FromChan(th.FromRange(0, 20), nil)
 					out1, out2 := universalSplit2(ord, in, n, func(x int) (bool, error) {
@@ -84,7 +85,7 @@ func TestSplit2(t *testing.T) {
 				})
 			})
 
-			th.RunSynctest(t, th.Name("ordering", n), func(t *testing.T) {
+			th.RunSynctest(t, "ordering", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 100), nil)
 
 				outTrue, outFalse := universalSplit2(ord, in, n, func(x int) (bool, error) {
@@ -118,7 +119,8 @@ func TestSplit2(t *testing.T) {
 					th.ExpectUnsorted(t, outSliceFalse)
 				}
 			})
-		}
+
+		})
 	})
 }
 

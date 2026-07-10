@@ -3,7 +3,6 @@ package th
 import (
 	"fmt"
 	"math/rand"
-	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -85,13 +84,6 @@ func DoConcurrently(ff ...func()) {
 	wg.Wait()
 }
 
-// Name generates a test name.
-// Works the same way as fmt.Sprint, but adds spaces between all arguments.
-func Name(args ...any) string {
-	res := fmt.Sprintln(args...)
-	return strings.TrimSpace(res)
-}
-
 func TestBothOrderings(t *testing.T, f func(t *testing.T, ord bool)) {
 	t.Run("unordered", func(t *testing.T) {
 		f(t, false)
@@ -100,6 +92,18 @@ func TestBothOrderings(t *testing.T, f func(t *testing.T, ord bool)) {
 	t.Run("ordered", func(t *testing.T) {
 		f(t, true)
 	})
+}
+
+func TestVariants[V any](t *testing.T, name string, variants []V, f func(t *testing.T, v V)) {
+	for _, v := range variants {
+		t.Run(fmt.Sprintf("%s=%v", name, v), func(t *testing.T) {
+			f(t, v)
+		})
+	}
+}
+
+func TestLevels(t *testing.T, levels []int, f func(t *testing.T, n int)) {
+	TestVariants(t, "n", levels, f)
 }
 
 // RunSynctest runs a subtest in a synctest bubble.

@@ -109,14 +109,15 @@ func TestFirst(t *testing.T) {
 }
 
 func TestForEach(t *testing.T) {
-	for _, n := range []int{1, 5} {
-		t.Run(th.Name("nil", n), func(t *testing.T) {
+	th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
+
+		t.Run("nil", func(t *testing.T) {
 			th.ExpectBlock(t, func(t *testing.T) {
 				_ = ForEach(nil, n, func(int) error { return nil })
 			})
 		})
 
-		th.RunSynctest(t, th.Name("no errors", n), func(t *testing.T) {
+		th.RunSynctest(t, "no errors", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 20), nil)
 
 			var sum atomic.Int64
@@ -133,7 +134,7 @@ func TestForEach(t *testing.T) {
 			th.ExpectValue(t, sum.Load(), int64(19*20/2))
 		})
 
-		th.RunSynctest(t, th.Name("error in input", n), func(t *testing.T) {
+		th.RunSynctest(t, "error in input", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = replaceWithError(in, 200, fmt.Errorf("err200"))
 
@@ -155,7 +156,7 @@ func TestForEach(t *testing.T) {
 			}
 		})
 
-		th.RunSynctest(t, th.Name("error in func", n), func(t *testing.T) {
+		th.RunSynctest(t, "error in func", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 
 			var iterations atomic.Int64
@@ -190,18 +191,20 @@ func TestForEach(t *testing.T) {
 				})
 			})
 		})
-	}
+
+	})
 }
 
 func TestAny(t *testing.T) {
-	for _, n := range []int{1, 5} {
-		t.Run(th.Name("nil", n), func(t *testing.T) {
+	th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
+
+		t.Run("nil", func(t *testing.T) {
 			th.ExpectBlock(t, func(t *testing.T) {
 				_, _ = Any(nil, n, func(int) (bool, error) { return true, nil })
 			})
 		})
 
-		th.RunSynctest(t, th.Name("empty", n), func(t *testing.T) {
+		th.RunSynctest(t, "empty", func(t *testing.T) {
 			in := FromSlice([]int{}, nil)
 
 			res, err := Any(in, n, func(int) (bool, error) {
@@ -214,7 +217,7 @@ func TestAny(t *testing.T) {
 			th.ExpectValue(t, res, false)
 		})
 
-		th.RunSynctest(t, th.Name("none satisfy", n), func(t *testing.T) {
+		th.RunSynctest(t, "none satisfy", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 100), nil)
 			res, err := Any(in, n, func(x int) (bool, error) {
 				th.SimulateWork(1*time.Second, 2*time.Second)
@@ -227,7 +230,7 @@ func TestAny(t *testing.T) {
 			th.ExpectValue(t, res, false)
 		})
 
-		th.RunSynctest(t, th.Name("one satisfies", n), func(t *testing.T) {
+		th.RunSynctest(t, "one satisfies", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = replaceWithError(in, 500, fmt.Errorf("err500")) // this won't pass through
 
@@ -253,7 +256,7 @@ func TestAny(t *testing.T) {
 			}
 		})
 
-		th.RunSynctest(t, th.Name("error in input", n), func(t *testing.T) {
+		th.RunSynctest(t, "error in input", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = replaceWithError(in, 200, fmt.Errorf("err200")) // this is the early exit condition
 
@@ -275,7 +278,7 @@ func TestAny(t *testing.T) {
 			}
 		})
 
-		th.RunSynctest(t, th.Name("error in func", n), func(t *testing.T) {
+		th.RunSynctest(t, "error in func", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = replaceWithError(in, 500, fmt.Errorf("err500")) // this won't pass through
 
@@ -312,7 +315,8 @@ func TestAny(t *testing.T) {
 				})
 			})
 		})
-	}
+
+	})
 }
 
 func TestAll(t *testing.T) {
