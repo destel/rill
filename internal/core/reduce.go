@@ -66,6 +66,14 @@ type keyValue[K, V any] struct {
 	Value V
 }
 
+// smallerFirst returns the two maps ordered so that the smaller one comes first.
+func smallerFirst[K comparable, V any](m1, m2 map[K]V) (small, big map[K]V) {
+	if len(m1) < len(m2) {
+		return m1, m2
+	}
+	return m2, m1
+}
+
 // reduceIntoMap is a helper function that adds a new key-value pair to the map or reduces the value of an existing key.
 func reduceIntoMap[K comparable, V any](m map[K]V, k K, v V, f func(V, V) V) {
 	if oldV, ok := m[k]; ok {
@@ -116,15 +124,11 @@ func MapReduce[A any, K comparable, V any](in <-chan A, nm int, mapper func(A) (
 
 	// Phase 3: Merge all partial maps into a single one
 	res, _ := Reduce(partialResults, nr/2, func(m1, m2 map[K]V) map[K]V {
-		// Always merge smaller map into a bigger one
-		if len(m2) > len(m1) {
-			m1, m2 = m2, m1
+		small, big := smallerFirst(m1, m2)
+		for k, v := range small {
+			reduceIntoMap(big, k, v, reducer)
 		}
-
-		for k, v := range m2 {
-			reduceIntoMap(m1, k, v, reducer)
-		}
-		return m1
+		return big
 	})
 
 	return res

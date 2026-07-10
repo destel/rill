@@ -154,3 +154,16 @@ func TestMapReduce(t *testing.T) {
 		})
 	})
 }
+
+func TestSmallerFirst(t *testing.T) {
+	small := map[string]int{"a": 1}
+	big := map[string]int{"b": 2, "c": 3}
+
+	m1, m2 := smallerFirst(small, big)
+	th.ExpectMap(t, m1, small)
+	th.ExpectMap(t, m2, big)
+
+	m1, m2 = smallerFirst(big, small)
+	th.ExpectMap(t, m1, small)
+	th.ExpectMap(t, m2, big)
+}
