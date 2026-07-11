@@ -69,6 +69,8 @@ func TestBatch(t *testing.T) {
 
 	th.RunSynctest(t, "no timeout", func(t *testing.T) {
 		in := th.FromRange(0, 10)
+		in = addDelayAfter(in, 1, 30*time.Second)
+		in = addDelayAfter(in, 5, 30*time.Second)
 
 		out := Batch(in, 4, -1)
 		outSlice := th.ToSlice(out)
