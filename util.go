@@ -14,7 +14,7 @@ func Discard[A any](in <-chan A) {
 
 // DrainNB is a non-blocking version of [Drain]. It does draining in a separate goroutine.
 //
-// Deprecated: use [Discard] instead
+// Deprecated: use [Discard] instead. DrainNB will be removed in v1.0.
 func DrainNB[A any](in <-chan A) {
 	core.Discard(in)
 }
