@@ -9,59 +9,67 @@ import (
 )
 
 func TestReduce(t *testing.T) {
-	for _, n := range []int{1, 4, 8} {
-		t.Run(th.Name("nil", n), func(t *testing.T) {
-			th.ExpectHang(t, 1*time.Second, func() {
-				_, _ = Reduce[int](nil, n, func(a, b int) int {
+	th.TestLevels(t, []int{1, 4, 8}, func(t *testing.T, n int) {
+
+		t.Run("nil", func(t *testing.T) {
+			th.ExpectBlock(t, func(t *testing.T) {
+				Reduce(nil, n, func(a, b int) int {
 					return a + b
 				})
 			})
 		})
 
-		t.Run(th.Name("empty", n), func(t *testing.T) {
+		th.RunSynctest(t, "empty", func(t *testing.T) {
 			in := th.FromSlice([]int{})
 			_, ok := Reduce(in, n, func(a, b int) int {
+				th.SimulateWork(1*time.Second, 2*time.Second)
 				return a + b
 			})
+
+			th.ExpectDrainedChan(t, in)
 
 			th.ExpectValue(t, ok, false)
 		})
 
-		t.Run(th.Name("correctness", n), func(t *testing.T) {
+		th.RunSynctest(t, "correctness", func(t *testing.T) {
 			in := th.FromRange(0, 100)
 			out, ok := Reduce(in, n, func(a, b int) int {
+				th.SimulateWork(1*time.Second, 2*time.Second)
 				return a + b
 			})
+
+			th.ExpectDrainedChan(t, in)
 
 			th.ExpectValue(t, out, 99*100/2)
 			th.ExpectValue(t, ok, true)
 		})
 
-		t.Run(th.Name("concurrency", n), func(t *testing.T) {
+		th.RunSynctest(t, "concurrency", func(t *testing.T) {
 			in := th.FromRange(0, 100)
 
-			monitor := th.NewConcurrencyMonitor(1 * time.Second)
+			var gauge th.InFlightGauge
 
 			_, _ = Reduce(in, n, func(a, b int) int {
-				monitor.Inc()
-				defer monitor.Dec()
+				gauge.Enter()
+				defer gauge.Exit()
+				th.SimulateWork(1*time.Second, 2*time.Second)
 
 				return a + b
 			})
 
-			th.ExpectValue(t, monitor.Max(), n)
+			th.ExpectValue(t, gauge.Max(), n)
 		})
-	}
+
+	})
 }
 
 func TestMapReduce(t *testing.T) {
-	for _, nm := range []int{1, 4} {
-		for _, nr := range []int{1, 4, 8} {
-			t.Run(th.Name("nil", nm, nr), func(t *testing.T) {
-				nm, nr := nm, nr
-				th.ExpectHang(t, 1*time.Second, func() {
-					var in chan int
-					_ = MapReduce(in,
+	th.TestVariants(t, "nm", []int{1, 4}, func(t *testing.T, nm int) {
+		th.TestVariants(t, "nr", []int{1, 4, 8}, func(t *testing.T, nr int) {
+
+			t.Run("nil", func(t *testing.T) {
+				th.ExpectBlock(t, func(t *testing.T) {
+					MapReduce(nil,
 						nm, func(x int) (string, int) {
 							return "", 1
 						},
@@ -72,31 +80,39 @@ func TestMapReduce(t *testing.T) {
 				})
 			})
 
-			t.Run(th.Name("empty", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "empty", func(t *testing.T) {
 				in := th.FromSlice([]int{})
 				out := MapReduce(in,
 					nm, func(x int) (string, int) {
+						th.SimulateWork(1*time.Second, 2*time.Second)
 						return fmt.Sprintf("%d mod 3", x%3), 1
 					},
 					nr, func(a, b int) int {
+						th.SimulateWork(10*time.Second, 20*time.Second)
 						return a + b
 					},
 				)
+
+				th.ExpectDrainedChan(t, in)
 
 				th.ExpectMap(t, out, map[string]int{})
 			})
 
-			t.Run(th.Name("correctness", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "correctness", func(t *testing.T) {
 				in := th.FromRange(0, 200)
 				out := MapReduce(in,
 					nm, func(x int) (string, int) {
+						th.SimulateWork(1*time.Second, 2*time.Second)
 						s := fmt.Sprint(x)
 						return fmt.Sprintf("%d-digit", len(s)), x
 					},
 					nr, func(a, b int) int {
+						th.SimulateWork(10*time.Second, 20*time.Second)
 						return a + b
 					},
 				)
+
+				th.ExpectDrainedChan(t, in)
 
 				th.ExpectMap(t, out, map[string]int{
 					"1-digit": (0 + 9) * 10 / 2,
@@ -105,33 +121,49 @@ func TestMapReduce(t *testing.T) {
 				})
 			})
 
-			t.Run(th.Name("concurrency", nm, nr), func(t *testing.T) {
-				// Need a really high number of items to reliably "catch" the max concurrency.
+			th.RunSynctest(t, "concurrency", func(t *testing.T) {
 				in := th.FromRange(0, 100)
 
-				mapMonitor := th.NewConcurrencyMonitor(1 * time.Second)
-				reduceMonitor := th.NewConcurrencyMonitor(1 * time.Second)
+				// To reach max concurrency in the reduce phase, the map phase must outpace it
+				// rather than become the bottleneck. Under synctest we get that by giving
+				// mappers a much smaller work than reducers.
+				var mapGauge th.InFlightGauge
+				var reduceGauge th.InFlightGauge
 
 				_ = MapReduce(in,
 					nm, func(x int) (string, int) {
-						mapMonitor.Inc()
-						defer mapMonitor.Dec()
+						mapGauge.Enter()
+						defer mapGauge.Exit()
+						th.SimulateWork(1*time.Second, 2*time.Second)
 
 						return fmt.Sprintf("%d mod 3", x%3), 1
 					},
 					nr, func(a, b int) int {
-						reduceMonitor.Inc()
-						defer reduceMonitor.Dec()
+						reduceGauge.Enter()
+						defer reduceGauge.Exit()
+						th.SimulateWork(10*time.Second, 20*time.Second)
 
 						return a + b
 					},
 				)
 
-				th.ExpectValue(t, mapMonitor.Max(), nm)
-				th.ExpectValue(t, reduceMonitor.Max(), nr)
-
+				th.ExpectValue(t, mapGauge.Max(), nm)
+				th.ExpectValue(t, reduceGauge.Max(), nr)
 			})
 
-		}
-	}
+		})
+	})
+}
+
+func TestSmallerFirst(t *testing.T) {
+	small := map[string]int{"a": 1}
+	big := map[string]int{"b": 2, "c": 3}
+
+	m1, m2 := smallerFirst(small, big)
+	th.ExpectMap(t, m1, small)
+	th.ExpectMap(t, m2, big)
+
+	m1, m2 = smallerFirst(big, small)
+	th.ExpectMap(t, m1, small)
+	th.ExpectMap(t, m2, big)
 }

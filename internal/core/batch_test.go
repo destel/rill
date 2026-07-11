@@ -8,90 +8,86 @@ import (
 )
 
 func TestBatch(t *testing.T) {
+	addDelayAfter := func(in <-chan int, value int, delay time.Duration) <-chan int {
+		out := make(chan int)
+		go func() {
+			defer close(out)
+			for x := range in {
+				out <- x
+				if x == value {
+					time.Sleep(delay)
+				}
+			}
+		}()
+		return out
+	}
+
 	t.Run("nil", func(t *testing.T) {
-		var nilChan chan []string
-		th.ExpectValue(t, Batch(nilChan, 10, 10*time.Second), nil)
+		th.ExpectValue(t, Batch[string](nil, 10, 10*time.Second), nil)
 	})
 
-	t.Run("fast", func(t *testing.T) {
+	th.RunSynctest(t, "empty", func(t *testing.T) {
 		in := make(chan int)
-		go func() {
-			defer close(in)
-			th.Send(in, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-		}()
+		close(in)
 
-		out := Batch(in, 4, 500*time.Millisecond)
+		out := Batch(in, 10, 5*time.Second)
 
+		outSlice := th.ToSlice(out)
+		th.ExpectValue(t, len(outSlice), 0)
+	})
+
+	th.RunSynctest(t, "slow input", func(t *testing.T) {
+		in := th.FromRange(0, 10)
+		in = addDelayAfter(in, 2, 1*time.Second)
+		in = addDelayAfter(in, 5, 10*time.Second)
+		in = addDelayAfter(in, 8, 10*time.Second)
+
+		out := Batch(in, 4, 5*time.Second)
+
+		outSlice := th.ToSlice(out)
+
+		th.ExpectValue(t, len(outSlice), 4)
+		th.ExpectSlice(t, outSlice[0], []int{0, 1, 2, 3})
+		th.ExpectSlice(t, outSlice[1], []int{4, 5})
+		th.ExpectSlice(t, outSlice[2], []int{6, 7, 8})
+		th.ExpectSlice(t, outSlice[3], []int{9})
+	})
+
+	th.RunSynctest(t, "fast input", func(t *testing.T) {
+		in := th.FromRange(0, 10)
+		in = addDelayAfter(in, 2, 1*time.Second)
+		in = addDelayAfter(in, 5, 1*time.Second)
+		in = addDelayAfter(in, 8, 1*time.Second)
+
+		out := Batch(in, 4, 5*time.Second)
 		outSlice := th.ToSlice(out)
 		th.ExpectValue(t, len(outSlice), 3)
-		th.ExpectSlice(t, outSlice[0], []int{1, 2, 3, 4})
-		th.ExpectSlice(t, outSlice[1], []int{5, 6, 7, 8})
-		th.ExpectSlice(t, outSlice[2], []int{9, 10})
+		th.ExpectSlice(t, outSlice[0], []int{0, 1, 2, 3})
+		th.ExpectSlice(t, outSlice[1], []int{4, 5, 6, 7})
+		th.ExpectSlice(t, outSlice[2], []int{8, 9})
 	})
 
-	t.Run("slow", func(t *testing.T) {
-		in := make(chan int)
-		go func() {
-			defer close(in)
-			th.Send(in, 1, 2, 3, 4, 5)
-			time.Sleep(1 * time.Second)
-			th.Send(in, 6, 7, 8, 9, 10)
-		}()
-
-		out := Batch(in, 4, 500*time.Millisecond)
-
-		outSlice := th.ToSlice(out)
-		th.ExpectValue(t, len(outSlice), 4)
-		th.ExpectSlice(t, outSlice[0], []int{1, 2, 3, 4})
-		th.ExpectSlice(t, outSlice[1], []int{5})
-		th.ExpectSlice(t, outSlice[2], []int{6, 7, 8, 9})
-		th.ExpectSlice(t, outSlice[3], []int{10})
-	})
-
-	t.Run("slow wo timeout", func(t *testing.T) {
-		in := make(chan int)
-		go func() {
-			defer close(in)
-			th.Send(in, 1, 2, 3, 4, 5)
-			time.Sleep(1 * time.Second)
-			th.Send(in, 6, 7, 8, 9, 10)
-		}()
+	th.RunSynctest(t, "no timeout", func(t *testing.T) {
+		in := th.FromRange(0, 10)
+		in = addDelayAfter(in, 1, 30*time.Second)
+		in = addDelayAfter(in, 5, 30*time.Second)
 
 		out := Batch(in, 4, -1)
-
 		outSlice := th.ToSlice(out)
 		th.ExpectValue(t, len(outSlice), 3)
-		th.ExpectSlice(t, outSlice[0], []int{1, 2, 3, 4})
-		th.ExpectSlice(t, outSlice[1], []int{5, 6, 7, 8})
-		th.ExpectSlice(t, outSlice[2], []int{9, 10})
+		th.ExpectSlice(t, outSlice[0], []int{0, 1, 2, 3})
+		th.ExpectSlice(t, outSlice[1], []int{4, 5, 6, 7})
+		th.ExpectSlice(t, outSlice[2], []int{8, 9})
 	})
-
-	for _, timeout := range []time.Duration{-1, 10 * time.Second} {
-		t.Run(th.Name("ordering", timeout), func(t *testing.T) {
-			in := th.FromRange(0, 20000)
-
-			out := Batch(in, 1000, timeout)
-
-			for batch := range out {
-				th.ExpectSorted(t, batch)
-			}
-
-		})
-	}
 }
 
 func TestUnbatch(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		var nilChan chan []string
-		th.ExpectValue(t, Unbatch(nilChan), nil)
+		th.ExpectValue(t, Unbatch[string](nil), nil)
 	})
 
-	t.Run("normal", func(t *testing.T) {
-		in := make(chan []int)
-		go func() {
-			defer close(in)
-			th.Send(in, []int{1, 2, 3}, []int{4}, []int{5, 6, 7, 8}, []int{9, 10})
-		}()
+	th.RunSynctest(t, "normal", func(t *testing.T) {
+		in := th.FromSlice([][]int{{1, 2, 3}, {4}, {5, 6, 7, 8}, {9, 10}})
 
 		out := Unbatch(in)
 		outSlice := th.ToSlice(out)

@@ -51,7 +51,7 @@ func TestOnceWithWait(t *testing.T) {
 	})
 
 	t.Run("Wait without Do", func(t *testing.T) {
-		th.ExpectHang(t, 1*time.Second, func() {
+		th.ExpectBlock(t, func(t *testing.T) {
 			var o OnceWithWait
 			o.Wait()
 		})

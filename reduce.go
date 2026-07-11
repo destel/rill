@@ -1,6 +1,8 @@
 package rill
 
 import (
+	"cmp"
+
 	"github.com/destel/rill/internal/core"
 )
 
@@ -37,12 +39,7 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 				return zeroTry
 			}
 
-			if err := a1.Error; err != nil {
-				setReturns(zero, false, err)
-				return zeroTry
-			}
-
-			if err := a2.Error; err != nil {
+			if err := cmp.Or(a1.Error, a2.Error); err != nil {
 				setReturns(zero, false, err)
 				return zeroTry
 			}

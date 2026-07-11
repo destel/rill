@@ -10,295 +10,306 @@ import (
 )
 
 func TestReduce(t *testing.T) {
-	for _, n := range []int{1, 4} {
-		t.Run(th.Name("empty", n), func(t *testing.T) {
+	th.TestLevels(t, []int{1, 4}, func(t *testing.T, n int) {
+
+		t.Run("nil", func(t *testing.T) {
+			th.ExpectBlock(t, func(t *testing.T) {
+				_, _, _ = Reduce(nil, n, func(x, y int) (int, error) { return x + y, nil })
+			})
+		})
+
+		th.RunSynctest(t, "empty", func(t *testing.T) {
 			in := FromSlice([]int{}, nil)
 
 			_, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-
+				th.SimulateWork(1*time.Second, 2*time.Second)
 				return x + y, nil
 			})
+
+			th.ExpectDrainedChan(t, in)
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, ok, false)
-			th.ExpectDrainedChan(t, in)
 		})
 
-		t.Run(th.Name("single item", n), func(t *testing.T) {
-			t.Run("no error", func(t *testing.T) {
-				in := FromSlice([]int{5}, nil)
+		th.RunSynctest(t, "single item", func(t *testing.T) {
+			in := FromSlice([]int{5}, nil)
 
-				out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-					return x + y, nil
-				})
-
-				th.ExpectNoError(t, err)
-				th.ExpectValue(t, out, 5)
-				th.ExpectValue(t, ok, true)
-				th.ExpectDrainedChan(t, in)
-			})
-
-			t.Run("error", func(t *testing.T) {
-				in := FromSlice([]int{}, fmt.Errorf("err0"))
-
-				_, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-					return x + y, nil
-				})
-
-				th.ExpectError(t, err, "err0")
-				th.ExpectValue(t, ok, false)
-				th.ExpectDrainedChan(t, in)
-			})
-		})
-
-		t.Run(th.Name("no errors", n), func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 100), nil)
-
-			var cnt atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				cnt.Add(1)
+				th.SimulateWork(1*time.Second, 2*time.Second)
 				return x + y, nil
 			})
+
+			th.ExpectDrainedChan(t, in)
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, out, 5)
+			th.ExpectValue(t, ok, true)
+		})
+
+		th.RunSynctest(t, "single error stream", func(t *testing.T) {
+			in := FromSlice([]int{}, fmt.Errorf("err0"))
+
+			_, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				return x + y, nil
+			})
+
+			th.WaitForInflightWork()
+			th.ExpectDrainedChan(t, in)
+
+			th.ExpectError(t, err, "err0")
+			th.ExpectValue(t, ok, false)
+		})
+
+		th.RunSynctest(t, "no errors", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 100), nil)
+
+			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				return x + y, nil
+			})
+
+			th.ExpectDrainedChan(t, in)
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, out, 99*100/2)
 			th.ExpectValue(t, ok, true)
-			th.ExpectValue(t, cnt.Load(), 99)
-			th.ExpectDrainedChan(t, in)
 		})
 
-		t.Run(th.Name("error in input", n), func(t *testing.T) {
+		th.RunSynctest(t, "error in input", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
-			in = replaceWithError(in, 100, fmt.Errorf("err100"))
+			in = replaceWithError(in, 200, fmt.Errorf("err200"))
 
-			var cnt atomic.Int64
+			var iterations atomic.Int64
 			_, _, err := Reduce(in, n, func(x, y int) (int, error) {
-				cnt.Add(1)
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				iterations.Add(1)
 				return x + y, nil
 			})
 
-			th.ExpectError(t, err, "err100")
-			if cnt.Load() > 900 {
-				t.Errorf("early exit did not happen")
-			}
-
-			time.Sleep(1 * time.Second)
-
+			th.WaitForInflightWork()
 			th.ExpectDrainedChan(t, in)
-			if cnt.Load() > 900 {
-				t.Errorf("extra calls to f were made")
+
+			th.ExpectError(t, err, "err200")
+
+			if iterations.Load() > 250 {
+				t.Errorf("early exit did not happen")
 			}
 		})
 
-		// This one is needed to cover the case when the first argument
-		// of user function is an error.
-		t.Run(th.Name("error in first input item", n), func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 1000), nil)
-			in = replaceWithError(in, 0, fmt.Errorf("err0"))
-
-			var cnt atomic.Int64
-			_, _, err := Reduce(in, n, func(x, y int) (int, error) {
-				cnt.Add(1)
-				return x + y, nil
-			})
-
-			th.ExpectError(t, err, "err0")
-			if cnt.Load() > 100 {
-				t.Errorf("early exit did not happen")
-			}
-
-			time.Sleep(1 * time.Second)
-
-			th.ExpectDrainedChan(t, in)
-			if cnt.Load() > 100 {
-				t.Errorf("extra calls to f were made")
-			}
-		})
-
-		t.Run(th.Name("error in func", n), func(t *testing.T) {
+		th.RunSynctest(t, "error in func", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 
-			var cnt atomic.Int64
+			var iterations atomic.Int64
 			_, _, err := Reduce(in, n, func(x, y int) (int, error) {
-				if cnt.Add(1) == 100 {
-					return 0, fmt.Errorf("err100")
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				if iterations.Add(1) == 200 {
+					return 0, fmt.Errorf("err200")
 				}
-
 				return x + y, nil
 			})
 
-			th.ExpectError(t, err, "err100")
-			if cnt.Load() > 900 {
+			th.WaitForInflightWork()
+			th.ExpectDrainedChan(t, in)
+
+			th.ExpectError(t, err, "err200")
+
+			if iterations.Load() > 250 {
 				t.Errorf("early exit did not happen")
 			}
-
-			time.Sleep(1 * time.Second)
-
-			th.ExpectDrainedChan(t, in)
-			if cnt.Load() > 900 {
-				t.Errorf("extra calls to f were made")
-			}
 		})
-	}
+
+		t.Run("unclosed", func(t *testing.T) {
+			th.ExpectLeak(t, func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 1000), nil)
+				in = replaceWithError(in, 200, fmt.Errorf("err200"))
+				in = th.DontClose(in)
+
+				_, _, _ = Reduce(in, n, func(x, y int) (int, error) {
+					return x + y, nil
+				})
+			})
+		})
+
+	})
 }
 
 func TestMapReduce(t *testing.T) {
-	for _, nm := range []int{1, 4} {
-		for _, nr := range []int{1, 4} {
-			t.Run(th.Name("empty", nm, nr), func(t *testing.T) {
+	th.TestVariants(t, "nm", []int{1, 4}, func(t *testing.T, nm int) {
+		th.TestVariants(t, "nr", []int{1, 4}, func(t *testing.T, nr int) {
+
+			t.Run("nil", func(t *testing.T) {
+				th.ExpectBlock(t, func(t *testing.T) {
+					_, _ = MapReduce(nil,
+						nm, func(x int) (string, int, error) {
+							return fmt.Sprint(x), x, nil
+						},
+						nr, func(x, y int) (int, error) {
+							return x + y, nil
+						})
+				})
+			})
+
+			th.RunSynctest(t, "empty", func(t *testing.T) {
 				in := FromSlice([]int{}, nil)
 
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						s := fmt.Sprint(x)
-						return fmt.Sprintf("%d-digit", len(s)), x, nil
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
+						th.SimulateWork(10*time.Second, 20*time.Second)
 						return x + y, nil
 					})
 
+				th.ExpectDrainedChan(t, in)
+
 				th.ExpectNoError(t, err)
 				th.ExpectMap(t, out, map[string]int{})
-				th.ExpectDrainedChan(t, in)
 			})
 
-			t.Run(th.Name("no errors", nm, nr), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
+			th.RunSynctest(t, "no errors", func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 200), nil)
 
-				var cntMap, cntReduce atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						cntMap.Add(1)
-						s := fmt.Sprint(x)
-						return fmt.Sprintf("%d-digit", len(s)), x, nil
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						cntReduce.Add(1)
+						th.SimulateWork(10*time.Second, 20*time.Second)
 						return x + y, nil
 					},
 				)
+
+				th.ExpectDrainedChan(t, in)
 
 				th.ExpectNoError(t, err)
 				th.ExpectMap(t, out, map[string]int{
 					"1-digit": (0 + 9) * 10 / 2,
 					"2-digit": (10 + 99) * 90 / 2,
-					"3-digit": (100 + 999) * 900 / 2,
+					"3-digit": (100 + 199) * 100 / 2,
 				})
-				th.ExpectValue(t, cntMap.Load(), 1000)
-				th.ExpectValue(t, cntReduce.Load(), 9+89+899)
-				th.ExpectDrainedChan(t, in)
 			})
 
-			t.Run(th.Name("error in input", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "error in input", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
-				in = replaceWithError(in, 100, fmt.Errorf("err100"))
+				in = replaceWithError(in, 200, fmt.Errorf("err200"))
 
-				var cntMap, cntReduce atomic.Int64
-				_, err := MapReduce(in,
+				var iterationsMap, iterationsReduce atomic.Int64
+				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						cntMap.Add(1)
-						s := fmt.Sprint(x)
-						return fmt.Sprintf("%d-digit", len(s)), x, nil
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						iterationsMap.Add(1)
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						cntReduce.Add(1)
+						th.SimulateWork(10*time.Second, 20*time.Second)
+						iterationsReduce.Add(1)
 						return x + y, nil
 					},
 				)
 
-				th.ExpectError(t, err, "err100")
-				if cntMap.Load() > 900 {
-					t.Errorf("early exit did not happen")
-				}
-				if cntReduce.Load() > 900 {
-					t.Errorf("early exit did not happen")
-				}
-
-				time.Sleep(1 * time.Second)
-
+				th.WaitForInflightWork()
 				th.ExpectDrainedChan(t, in)
-				if cntMap.Load() > 900 {
-					t.Errorf("extra calls to f were made")
+
+				th.ExpectError(t, err, "err200")
+				th.ExpectMap(t, out, map[string]int{})
+
+				if iterationsMap.Load() > 250 {
+					t.Errorf("early exit did not happen")
 				}
-				if cntReduce.Load() > 900 {
-					t.Errorf("extra calls to f were made")
+				if iterationsReduce.Load() > 250 {
+					t.Errorf("early exit did not happen")
 				}
 			})
 
-			t.Run(th.Name("error in mapper", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "error in mapper", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 
-				var cntMap, cntReduce atomic.Int64
-				_, err := MapReduce(in,
+				var iterationsMap, iterationsReduce atomic.Int64
+				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						if cntMap.Add(1) == 100 {
-							return "", 0, fmt.Errorf("err100")
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						if iterationsMap.Add(1) == 200 {
+							return "", 0, fmt.Errorf("err200")
 						}
-						s := fmt.Sprint(x)
-						return fmt.Sprintf("%d-digit", len(s)), x, nil
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						cntReduce.Add(1)
+						th.SimulateWork(10*time.Second, 20*time.Second)
+
+						iterationsReduce.Add(1)
 						return x + y, nil
 					},
 				)
 
-				th.ExpectError(t, err, "err100")
-				if cntMap.Load() > 900 {
-					t.Errorf("early exit did not happen")
-				}
-				if cntReduce.Load() > 900 {
-					t.Errorf("early exit did not happen")
-				}
-
-				time.Sleep(1 * time.Second)
-
+				th.WaitForInflightWork()
 				th.ExpectDrainedChan(t, in)
-				if cntMap.Load() > 900 {
-					t.Errorf("extra calls to f were made")
+
+				th.ExpectError(t, err, "err200")
+				th.ExpectMap(t, out, map[string]int{})
+
+				if iterationsMap.Load() > 250 {
+					t.Errorf("early exit did not happen")
 				}
-				if cntReduce.Load() > 900 {
-					t.Errorf("extra calls to f were made")
+				if iterationsReduce.Load() > 250 {
+					t.Errorf("early exit did not happen")
 				}
 			})
 
-			t.Run(th.Name("error in reducer", nm, nr), func(t *testing.T) {
+			th.RunSynctest(t, "error in reducer", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 
-				var cntMap, cntReduce atomic.Int64
-				_, err := MapReduce(in,
+				var iterationsMap, iterationsReduce atomic.Int64
+				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						cntMap.Add(1)
-						s := fmt.Sprint(x)
-						return fmt.Sprintf("%d-digit", len(s)), x, nil
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						iterationsMap.Add(1)
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						if cntReduce.Add(1) == 100 {
-							return 0, fmt.Errorf("err100")
+						th.SimulateWork(10*time.Second, 20*time.Second)
+						if iterationsReduce.Add(1) == 200 {
+							return 0, fmt.Errorf("err200")
 						}
 						return x + y, nil
 					},
 				)
 
-				th.ExpectError(t, err, "err100")
-				if cntMap.Load() > 900 {
-					t.Errorf("early exit did not happen")
-				}
-				if cntReduce.Load() > 900 {
-					t.Errorf("early exit did not happen")
-				}
-
-				time.Sleep(1 * time.Second)
-
+				th.WaitForInflightWork()
 				th.ExpectDrainedChan(t, in)
-				if cntMap.Load() > 900 {
-					t.Errorf("extra calls to f were made")
+
+				th.ExpectError(t, err, "err200")
+				th.ExpectMap(t, out, map[string]int{})
+
+				if iterationsMap.Load() > 250 {
+					t.Errorf("early exit did not happen")
 				}
-				if cntReduce.Load() > 900 {
-					t.Errorf("extra calls to f were made")
+				if iterationsReduce.Load() > 250 {
+					t.Errorf("early exit did not happen")
 				}
 			})
 
-		}
-	}
+			t.Run("unclosed", func(t *testing.T) {
+				th.ExpectLeak(t, func(t *testing.T) {
+					in := FromChan(th.FromRange(0, 1000), nil)
+					in = replaceWithError(in, 200, fmt.Errorf("err200"))
+					in = th.DontClose(in)
+
+					_, _ = MapReduce(in,
+						nm, func(int) (string, int, error) {
+							return "", 0, nil
+						},
+						nr, func(int, int) (int, error) {
+							return 0, nil
+						},
+					)
+				})
+			})
+
+		})
+	})
 }

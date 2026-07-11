@@ -1,10 +1,9 @@
 package rill
 
 import (
+	"fmt"
 	"testing"
 	"time"
-
-	"github.com/destel/rill/internal/th"
 )
 
 const benchmarkInputSize = 100000
@@ -106,7 +105,7 @@ func runBenchmark(b *testing.B, name string, body func(in <-chan Try[int])) {
 
 func BenchmarkForEach(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
-		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) {
+		runBenchmark(b, fmt.Sprint(n), func(in <-chan Try[int]) {
 			_ = ForEach(in, n, func(x int) error {
 				benchmarkIteration()
 				return nil
@@ -117,7 +116,7 @@ func BenchmarkForEach(b *testing.B) {
 
 func BenchmarkMapAndDrain(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
-		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) {
+		runBenchmark(b, fmt.Sprint(n), func(in <-chan Try[int]) {
 			out := Map(in, n, func(x int) (int, error) {
 				benchmarkIteration()
 				return x, nil
@@ -130,7 +129,7 @@ func BenchmarkMapAndDrain(b *testing.B) {
 
 func BenchmarkReduce(b *testing.B) {
 	for _, n := range []int{1, 2, 4, 8} {
-		runBenchmark(b, th.Name(n), func(in <-chan Try[int]) {
+		runBenchmark(b, fmt.Sprint(n), func(in <-chan Try[int]) {
 			_, _, _ = Reduce(in, n, func(x, y int) (int, error) {
 				benchmarkIteration()
 				return x, nil

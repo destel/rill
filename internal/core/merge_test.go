@@ -13,40 +13,72 @@ func TestMerge(t *testing.T) {
 		th.ExpectValue(t, out, nil)
 	})
 
-	for _, numChans := range []int{1, 3, 5, 10} {
-		t.Run(th.Name("correctness", numChans), func(t *testing.T) {
+	th.TestVariants(t, "num_chans", []int{1, 3, 5, 10}, func(t *testing.T, numChans int) {
+
+		th.RunSynctest(t, "correctness", func(t *testing.T) {
 			ins := make([]<-chan int, numChans)
 
 			for i := range numChans {
-				ins[i] = th.FromRange(i*10, (i+1)*10)
+				ins[i] = th.FromRange(20*i, 20*(i+1))
 			}
 
 			out := Merge(ins...)
 			outSlice := th.ToSlice(out)
 
-			expectedSlice := make([]int, 0, numChans*10)
-			for i := 0; i < numChans*10; i++ {
+			var expectedSlice []int
+			for i := range 20 * numChans {
 				expectedSlice = append(expectedSlice, i)
 			}
 
-			th.Sort(outSlice)
-			th.ExpectSlice(t, outSlice, expectedSlice)
+			th.ExpectElementsMatch(t, outSlice, expectedSlice)
 		})
 
-		t.Run(th.Name("nil hang", numChans), func(t *testing.T) {
+		th.RunSynctest(t, "per input independence", func(t *testing.T) {
 			ins := make([]<-chan int, numChans)
-
-			for i := 0; i < numChans-1; i++ {
-				ins[i] = th.FromRange(i*10, (i+1)*10)
+			insWritable := make([]chan int, numChans)
+			for i := range numChans {
+				ch := make(chan int)
+				insWritable[i] = ch
+				ins[i] = ch
 			}
 
-			// make last channel nil
-			ins[numChans-1] = nil
+			go func() {
+				// write to the channels in a round-robin fashion
+				for i := range 100 {
+					th.SimulateWork(1*time.Second, 2*time.Second)
+					insWritable[i%len(insWritable)] <- i
+				}
+
+				for _, ch := range insWritable {
+					close(ch)
+				}
+			}()
 
 			out := Merge(ins...)
+			outSlice := th.ToSlice(out)
 
-			th.ExpectNeverClosedChan(t, out, 1*time.Second)
+			var expectedSlice []int
+			for i := range 100 {
+				expectedSlice = append(expectedSlice, i)
+			}
+
+			th.ExpectSlice(t, outSlice, expectedSlice) // exact order
 		})
 
-	}
+		t.Run("nil hang", func(t *testing.T) {
+			th.ExpectBlock(t, func(t *testing.T) {
+				ins := make([]<-chan int, numChans)
+				for i := range numChans {
+					if i == len(ins)/2 {
+						continue // leave the middle channel nil
+					}
+					ins[i] = th.FromRange(20*i, 20*(i+1))
+				}
+
+				out := Merge(ins...)
+				Drain(out)
+			})
+		})
+
+	})
 }

@@ -21,7 +21,7 @@ jobs:
           go-version: ${{ matrix.go-version }}
 
       - name: Run tests
-        run: go test -race ./...
+        run: go test -race -shuffle=on -count=10 -timeout=2m ./...
 
 
   coverage:
@@ -31,7 +31,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.25.x'
+          go-version: 'stable'
 
       - name: Run coverage
         run: go test -coverprofile=coverage.out -covermode=atomic $(go list ./... | grep -v internal/th | grep -v mockapi)

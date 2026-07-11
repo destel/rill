@@ -21,10 +21,6 @@ func nonConcurrentReduce[A any](in <-chan A, f func(A, A) A) (A, bool) {
 // Reduce reduces the input channel into a single value using the provided function,
 // using n goroutines for concurrency
 func Reduce[A any](in <-chan A, n int, f func(A, A) A) (A, bool) {
-	if in == nil {
-		<-in
-	}
-
 	// Phase 0: Optimized non-concurrent case
 	if n == 1 {
 		return nonConcurrentReduce(in, f)
@@ -70,6 +66,14 @@ type keyValue[K, V any] struct {
 	Value V
 }
 
+// smallerFirst returns the two maps ordered so that the smaller one comes first.
+func smallerFirst[K comparable, V any](m1, m2 map[K]V) (small, big map[K]V) {
+	if len(m1) < len(m2) {
+		return m1, m2
+	}
+	return m2, m1
+}
+
 // reduceIntoMap is a helper function that adds a new key-value pair to the map or reduces the value of an existing key.
 func reduceIntoMap[K comparable, V any](m map[K]V, k K, v V, f func(V, V) V) {
 	if oldV, ok := m[k]; ok {
@@ -84,10 +88,6 @@ func reduceIntoMap[K comparable, V any](m map[K]V, k K, v V, f func(V, V) V) {
 // If there are multiple values for the same key, they are reduced into a single value using the reducer function and nr goroutines.
 // The result is a map where each key is associated with a single value.
 func MapReduce[A any, K comparable, V any](in <-chan A, nm int, mapper func(A) (K, V), nr int, reducer func(V, V) V) map[K]V {
-	if in == nil {
-		<-in
-	}
-
 	// Phase 1: Map
 	mapped := FilterMap(in, nm, func(a A) (keyValue[K, V], bool) {
 		k, v := mapper(a)
@@ -124,15 +124,11 @@ func MapReduce[A any, K comparable, V any](in <-chan A, nm int, mapper func(A) (
 
 	// Phase 3: Merge all partial maps into a single one
 	res, _ := Reduce(partialResults, nr/2, func(m1, m2 map[K]V) map[K]V {
-		// Always merge smaller map into a bigger one
-		if len(m2) > len(m1) {
-			m1, m2 = m2, m1
+		small, big := smallerFirst(m1, m2)
+		for k, v := range small {
+			reduceIntoMap(big, k, v, reducer)
 		}
-
-		for k, v := range m2 {
-			reduceIntoMap(m1, k, v, reducer)
-		}
-		return m1
+		return big
 	})
 
 	return res

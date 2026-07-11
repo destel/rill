@@ -85,8 +85,7 @@ func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 }
 
 // FromChan converts a regular channel into a stream.
-// Additionally, this function can take an error, that will be added to the output stream alongside the values.
-// Either argument can be nil, in which case it is ignored. If both arguments are nil, the function returns nil.
+// Additionally, a non-nil error is added to the output stream alongside the values.
 //
 // Such function signature allows concise wrapping of functions that return a channel and an error:
 //

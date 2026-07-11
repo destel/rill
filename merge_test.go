@@ -3,13 +3,19 @@ package rill
 import (
 	"fmt"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/destel/rill/internal/th"
 )
 
+// Full behavior of Merge is tested in the internal/core package.
+// This test only pins the wrapper wiring.
 func TestMerge(t *testing.T) {
-	// real tests are in another package
-	Merge[int](nil)
+	synctest.Test(t, func(t *testing.T) {
+		out := Merge(th.FromRange(0, 5), th.FromRange(5, 10))
+		th.ExpectElementsMatch(t, th.ToSlice(out), []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+	})
 }
 
 func universalSplit2[A any](ord bool, in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
@@ -21,109 +27,100 @@ func universalSplit2[A any](ord bool, in <-chan Try[A], n int, f func(A) (bool, 
 
 func TestSplit2(t *testing.T) {
 	th.TestBothOrderings(t, func(t *testing.T, ord bool) {
-		for _, n := range []int{1, 5} {
-			t.Run(th.Name("nil", n), func(t *testing.T) {
+		th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
+
+			t.Run("nil", func(t *testing.T) {
 				outTrue, outFalse := universalSplit2(ord, nil, n, func(string) (bool, error) { return true, nil })
 				th.ExpectValue(t, outTrue, nil)
 				th.ExpectValue(t, outFalse, nil)
 			})
 
-			t.Run(th.Name("correctness", n), func(t *testing.T) {
-				// idea: split input into 4 groups
-				// - first 2 groups are sent into corresponding outputs
-				// - 3rd would cause error during splitting
-				// - 4th would be errors even before splitting
-
-				in := FromChan(th.FromRange(0, 20*4), nil)
-				in = OrderedMap(in, 1, func(x int) (int, error) {
-					if x%4 == 3 {
-						return 0, fmt.Errorf("err%03d", x)
-					}
-					return x, nil
-				})
+			th.RunSynctest(t, "correctness", func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 20), nil)
+				in = replaceWithError(in, 15, fmt.Errorf("err015")) // error before splitting
 
 				outTrue, outFalse := universalSplit2(ord, in, n, func(x int) (bool, error) {
-					switch x % 4 {
-					case 0:
-						return true, nil
-					case 1:
-						return false, nil
-					case 2:
-						return true, fmt.Errorf("err%03d", x)
-					default:
-						return true, nil // this should not be called
+					th.SimulateWork(1*time.Second, 2*time.Second)
+					if x == 5 || x == 6 {
+						return x == 5, fmt.Errorf("err%03d", x) // error during splitting; bool must be ignored
 					}
+					return x%2 == 0, nil
 				})
 
-				var outSliceTrue, outSliceFalse []int
-				var errSliceTrue, errSliceFalse []string
-
+				var outSliceTrue, outSliceFalse []Item[int]
 				th.DoConcurrently(
-					func() { outSliceTrue, errSliceTrue = toSliceAndErrors(outTrue) },
-					func() { outSliceFalse, errSliceFalse = toSliceAndErrors(outFalse) },
+					func() { outSliceTrue = toItemSlice(outTrue) },
+					func() { outSliceFalse = toItemSlice(outFalse) },
 				)
 
-				var expectedOutSliceTrue, expectedOutSliceFalse []int
-				var expectedErrSlice []string
-
-				for i := range 20 * 4 {
-					switch i % 4 {
-					case 0:
-						expectedOutSliceTrue = append(expectedOutSliceTrue, i)
-					case 1:
-						expectedOutSliceFalse = append(expectedOutSliceFalse, i)
+				var expectedTrue, expectedFalse []Item[int]
+				for i := range 20 {
+					switch {
+					case i == 5 || i == 6 || i == 15:
+						// errors are broadcast to BOTH outputs
+						expectedTrue = appendErr(expectedTrue, fmt.Errorf("err%03d", i))
+						expectedFalse = appendErr(expectedFalse, fmt.Errorf("err%03d", i))
+					case i%2 == 0:
+						expectedTrue = appendVal(expectedTrue, i)
 					default:
-						expectedErrSlice = append(expectedErrSlice, fmt.Sprintf("err%03d", i))
+						expectedFalse = appendVal(expectedFalse, i)
 					}
 				}
 
-				th.Sort(outSliceTrue)
-				th.Sort(outSliceFalse)
-				th.Sort(errSliceTrue)
-				th.Sort(errSliceFalse)
-
-				th.ExpectSlice(t, outSliceTrue, expectedOutSliceTrue)
-				th.ExpectSlice(t, outSliceFalse, expectedOutSliceFalse)
-				th.ExpectSlice(t, errSliceTrue, expectedErrSlice)
-				th.ExpectSlice(t, errSliceFalse, expectedErrSlice)
+				th.ExpectElementsMatch(t, outSliceTrue, expectedTrue)
+				th.ExpectElementsMatch(t, outSliceFalse, expectedFalse)
 			})
 
-			t.Run(th.Name("ordering", n), func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 10000*4), nil)
+			t.Run("non concurrent reads", func(t *testing.T) {
+				th.ExpectBlock(t, func(t *testing.T) {
+					in := FromChan(th.FromRange(0, 20), nil)
+					out1, out2 := universalSplit2(ord, in, n, func(x int) (bool, error) {
+						return x%2 == 0, nil
+					})
+
+					// Reading out1 blocks forever: the producer gets stuck sending to the unread out2,
+					// so it stops feeding out1 too. The second call is never reached.
+					toItemSlice(out1)
+					toItemSlice(out2)
+				})
+			})
+
+			th.RunSynctest(t, "ordering", func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 100), nil)
 
 				outTrue, outFalse := universalSplit2(ord, in, n, func(x int) (bool, error) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
+					if x%7 == 0 {
+						time.Sleep(10 * time.Second) // force out-of-order completion
+					}
+
 					switch x % 3 {
 					case 0:
 						return true, nil
 					case 1:
 						return false, nil
 					default:
-						return true, fmt.Errorf("err%06d", x)
+						return true, fmt.Errorf("%03d-err", x)
 					}
 				})
 
-				var outSliceTrue, outSliceFalse []int
-				var errSliceTrue, errSliceFalse []string
+				var outSliceTrue, outSliceFalse []string
 
 				th.DoConcurrently(
-					func() { outSliceTrue, errSliceTrue = toSliceAndErrors(outTrue) },
-					func() { outSliceFalse, errSliceFalse = toSliceAndErrors(outFalse) },
+					func() { outSliceTrue = toUnifiedStringSlice(outTrue, "%03d") },
+					func() { outSliceFalse = toUnifiedStringSlice(outFalse, "%03d") },
 				)
 
 				if ord || n == 1 {
 					th.ExpectSorted(t, outSliceTrue)
 					th.ExpectSorted(t, outSliceFalse)
-					th.ExpectSorted(t, errSliceTrue)
-					th.ExpectSorted(t, errSliceFalse)
 				} else {
 					th.ExpectUnsorted(t, outSliceTrue)
 					th.ExpectUnsorted(t, outSliceFalse)
-					th.ExpectUnsorted(t, errSliceTrue)
-					th.ExpectUnsorted(t, errSliceFalse)
 				}
 			})
 
-		}
+		})
 	})
 }
 
@@ -134,7 +131,7 @@ func TestTee(t *testing.T) {
 		th.ExpectValue(t, out2, nil)
 	})
 
-	t.Run("correctness", func(t *testing.T) {
+	th.RunSynctest(t, "correctness", func(t *testing.T) {
 		// Create input with mixed values and errors
 		in := FromChan(th.FromRange(0, 10), nil)
 		in = replaceWithError(in, 2, fmt.Errorf("err2"))
@@ -142,21 +139,34 @@ func TestTee(t *testing.T) {
 
 		out1, out2 := Tee(in)
 
-		var out1Slice, out2Slice []int
-		var out1Err, out2Err []string
+		var outSlice1, outSlice2 []Item[int]
 
 		th.DoConcurrently(
-			func() { out1Slice, out1Err = toSliceAndErrors(out1) },
-			func() { out2Slice, out2Err = toSliceAndErrors(out2) },
+			func() { outSlice1 = toItemSlice(out1) },
+			func() { outSlice2 = toItemSlice(out2) },
 		)
 
-		expected := []int{0, 1, 3, 4, 5, 6, 8, 9}
-		expectedErr := []string{"err2", "err7"}
+		var expected []Item[int]
+		expected = appendVal(expected, 0, 1)
+		expected = appendErr(expected, fmt.Errorf("err2"))
+		expected = appendVal(expected, 3, 4, 5, 6)
+		expected = appendErr(expected, fmt.Errorf("err7"))
+		expected = appendVal(expected, 8, 9)
 
 		// Both outputs should be identical
-		th.ExpectSlice(t, out1Slice, expected)
-		th.ExpectSlice(t, out2Slice, expected)
-		th.ExpectSlice(t, out1Err, expectedErr)
-		th.ExpectSlice(t, out2Err, expectedErr)
+		th.ExpectSlice(t, outSlice1, expected)
+		th.ExpectSlice(t, outSlice2, expected)
+	})
+
+	t.Run("non concurrent reads", func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 10), nil)
+			out1, out2 := Tee(in)
+
+			// Reading out1 blocks forever: the producer gets stuck sending to the unread out2,
+			// so it stops feeding out1 too. The second call is never reached.
+			toItemSlice(out1)
+			toItemSlice(out2)
+		})
 	})
 }

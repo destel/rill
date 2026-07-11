@@ -478,10 +478,14 @@ func main() {
 
 
 ## Testing Strategy
-Rill has a test coverage of over 95%, with testing focused on:
-- **Correctness**: ensuring that functions produce accurate results at different levels of concurrency
-- **Concurrency**: confirming that correct number of goroutines is spawned and utilized
-- **Ordering**: ensuring that ordered versions of functions preserve the order, while basic versions do not
+Rill's concurrency-sensitive tests use Go's [testing/synctest](https://pkg.go.dev/testing/synctest): virtual time makes timing assertions exact,
+while goroutine scheduling stays nondeterministic, so repeated runs exercise different valid interleavings and assertions must hold for all of them.
+With coverage above 95%, testing focuses on:
+- **Correctness**: functions produce accurate results at different levels of concurrency
+- **Concurrency**: operations reach the requested callback concurrency under load
+- **Ordering**: ordered versions preserve the input order, while basic versions do not
+- **Leaks**: synctest-wrapped cases detect unexpected durably blocked goroutines, with explicit assertions for intentionally blocking behavior
+- **Early exit**: after an error or short-circuit, blocking functions return immediately; finite upstreams drain in the background, and tests bound extra callback work
 
 
 ## Blog Posts
