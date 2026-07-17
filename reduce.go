@@ -245,6 +245,26 @@ func mapReduceStage[A any, K comparable, V any](in Stream[A], nm int, mapper fun
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error)) (map[K]V, error) {
+	if nm == 1 && nr == 1 {
+		m := make(map[K]V)
+		err := ForEach(in, 1, func(a A) error {
+			k, v, err := mapper(a)
+			if err != nil {
+				return err
+			}
+			err = mergeIntoMap(m, k, v, reducer)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+
+		if err != nil {
+			return nil, err
+		}
+		return m, nil
+	}
+
 	var stopped atomic.Bool
 	defer stopped.Store(true)
 
