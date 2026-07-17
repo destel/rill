@@ -58,7 +58,8 @@ func Err[A any](in <-chan Try[A]) error {
 }
 
 // First returns the first item or error encountered in the input stream, whichever comes first.
-// The found return flag is set to false if the stream was empty, otherwise it is set to true.
+// The found return flag reports whether a value was found: it is set to false
+// if the stream was empty or if an error was encountered first.
 //
 // This is a blocking ordered function that processes items sequentially.
 // See the package documentation for more information on blocking ordered functions and error handling.
@@ -66,11 +67,11 @@ func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
 	defer Discard(in)
 
 	for a := range in {
-		return a.Value, true, a.Error
+		return a.Value, a.Error == nil, a.Error
 	}
 
-	found = false
-	return
+	var zero A
+	return zero, false, nil
 }
 
 // Any checks if there is an item in the input stream that satisfies the condition f.

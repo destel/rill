@@ -91,12 +91,13 @@ func TestFirst(t *testing.T) {
 	th.RunSynctest(t, "error is first", func(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 0, fmt.Errorf("err000"))
-		_, _, err := First(in)
+		_, ok, err := First(in)
 
 		synctest.Wait()
 		th.ExpectDrainedChan(t, in)
 
 		th.ExpectError(t, err, "err000")
+		th.ExpectValue(t, ok, false)
 	})
 
 	t.Run("unclosed", func(t *testing.T) {
