@@ -1,7 +1,8 @@
 package rill
 
 import (
-	"github.com/destel/rill/internal/core"
+	"errors"
+	"sync/atomic"
 )
 
 // ForEach applies a function f to each item in an input stream.
@@ -11,34 +12,38 @@ import (
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
-	var retErr error
-	var once core.OnceWithWait
-	setReturns := func(err error) {
-		once.Do(func() {
-			retErr = err
-		})
-	}
+	// The n = 1 path is an internal contract, not just an optimization.
+	// Other sinks (Any, Reduce) build their n = 1 behavior on it and rely on:
+	//   - items processed sequentially, in stream order
+	//   - f executed in the calling goroutine
+	//   - return only after the loop exits, so state captured by f is safe
+	//     to use after ForEach returns
+	if n == 1 {
+		defer Discard(in)
 
-	go func() {
-		core.ForEach(in, n, func(a Try[A]) {
-			if once.WasCalled() {
-				return // drain
-			}
-
+		for a := range in {
 			err := a.Error
 			if err == nil {
 				err = f(a.Value)
 			}
 			if err != nil {
-				setReturns(err)
+				return err
 			}
-		})
+		}
+		return nil
+	}
 
-		setReturns(nil)
-	}()
+	var suppressCallbacks atomic.Bool
+	defer suppressCallbacks.Store(true)
 
-	once.Wait()
-	return retErr
+	out := FilterMap(in, n, func(a A) (struct{}, bool, error) {
+		if suppressCallbacks.Load() {
+			return struct{}{}, false, nil
+		}
+		return struct{}{}, false, f(a)
+	})
+
+	return Err(out)
 }
 
 // Err returns the first error encountered in the input stream or nil if there were no errors.
@@ -74,6 +79,9 @@ func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
 	return zero, false, nil
 }
 
+// errFound is a control-flow sentinel, compared by identity - the fs.SkipDir pattern.
+var errFound = errors.New("found")
+
 // Any checks if there is an item in the input stream that satisfies the condition f.
 // This function returns true as soon as it finds such an item. Otherwise, it returns false.
 //
@@ -82,43 +90,21 @@ func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
-	var retFound bool
-	var retErr error
-	var once core.OnceWithWait
-	setReturns := func(found bool, err error) {
-		once.Do(func() {
-			retFound = found
-			retErr = err
-		})
+	err := ForEach(in, n, func(a A) error {
+		ok, err := f(a)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return errFound
+		}
+		return nil
+	})
+
+	if err == errFound { //nolint:errorlint
+		return true, nil
 	}
-
-	go func() {
-		core.ForEach(in, n, func(a Try[A]) {
-			if once.WasCalled() {
-				return // drain
-			}
-
-			if err := a.Error; err != nil {
-				setReturns(false, err)
-				return
-			}
-
-			ok, err := f(a.Value)
-			if err != nil {
-				setReturns(false, err)
-				return
-			}
-			if ok {
-				setReturns(true, nil)
-				return
-			}
-		})
-
-		setReturns(false, nil)
-	}()
-
-	once.Wait()
-	return retFound, retErr
+	return false, err
 }
 
 // All checks if all items in the input stream satisfy the condition f.
