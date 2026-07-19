@@ -64,6 +64,15 @@ func ExpectElementsMatch[A comparable](t *testing.T, actual, expected []A) {
 
 func ExpectMap[K, V comparable](t *testing.T, actual map[K]V, expected map[K]V) {
 	t.Helper()
+
+	if expected == nil && actual != nil {
+		t.Errorf("expected nil, got %v", actual)
+		return
+	}
+	if expected != nil && actual == nil {
+		t.Errorf("expected %v, got nil", expected)
+		return
+	}
 	if len(expected) != len(actual) {
 		t.Errorf("expected %v, got %v", expected, actual)
 		return

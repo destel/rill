@@ -215,9 +215,6 @@ func TestMapReduce(t *testing.T) {
 
 				th.ExpectNoError(t, err)
 				th.ExpectMap(t, out, map[string]int{})
-				if out == nil {
-					t.Errorf("expected empty non-nil map for empty input, got nil")
-				}
 			})
 
 			th.RunSynctest(t, "single value keys", func(t *testing.T) {
@@ -297,9 +294,7 @@ func TestMapReduce(t *testing.T) {
 				extraReduceCalls.Store(0)
 
 				th.ExpectError(t, err, "err200")
-				if out != nil {
-					t.Errorf("expected nil map on error, got %v", out)
-				}
+				th.ExpectMap(t, out, nil)
 
 				_, inStillOpen := <-in
 				th.ExpectValue(t, inStillOpen, true)
@@ -341,9 +336,7 @@ func TestMapReduce(t *testing.T) {
 				extraReduceCalls.Store(0)
 
 				th.ExpectError(t, err, "err200")
-				if out != nil {
-					t.Errorf("expected nil map on error, got %v", out)
-				}
+				th.ExpectMap(t, out, nil)
 
 				_, inStillOpen := <-in
 				th.ExpectValue(t, inStillOpen, true)
@@ -385,9 +378,7 @@ func TestMapReduce(t *testing.T) {
 				extraReduceCalls.Store(0)
 
 				th.ExpectError(t, err, "err200")
-				if out != nil {
-					t.Errorf("expected nil map on error, got %v", out)
-				}
+				th.ExpectMap(t, out, nil)
 
 				_, inStillOpen := <-in
 				th.ExpectValue(t, inStillOpen, true)
@@ -420,9 +411,7 @@ func TestMapReduce(t *testing.T) {
 					)
 
 					th.ExpectError(t, err, "err200")
-					if out != nil {
-						t.Errorf("expected nil map on error, got %v", out)
-					}
+					th.ExpectMap(t, out, nil)
 				})
 			})
 
