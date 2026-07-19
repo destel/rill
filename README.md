@@ -192,7 +192,10 @@ func UpdateUserTimestamp(userID int) {
 }
 
 // This is a background worker that sends queued updates to the database in batches.
-// For simplicity, there are no retries, error handling and synchronization
+// For simplicity, there are no retries, error handling and synchronization.
+// Note: with a real database call, error handling would be required: as written,
+// a single failed batch would stop the worker for good, while the queue would
+// keep draining silently.
 func updateUserTimestampWorker() {
 
 	ids := rill.FromChan(userIDsToUpdate, nil)
