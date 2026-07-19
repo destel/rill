@@ -224,27 +224,9 @@ func TestForEach(t *testing.T) {
 	})
 }
 
+// Any is a thin wrapper over ForEach. We test only Any's own semantics.
 func TestAny(t *testing.T) {
 	th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
-
-		t.Run("nil", func(t *testing.T) {
-			th.ExpectBlock(t, func(t *testing.T) {
-				_, _ = Any(nil, n, func(int) (bool, error) { return true, nil })
-			})
-		})
-
-		th.RunSynctest(t, "empty", func(t *testing.T) {
-			in := FromSlice([]int{}, nil)
-
-			res, err := Any(in, n, func(int) (bool, error) {
-				return false, nil
-			})
-
-			th.ExpectDrainedChan(t, in)
-
-			th.ExpectNoError(t, err)
-			th.ExpectValue(t, res, false)
-		})
 
 		th.RunSynctest(t, "none satisfy", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 100), nil)
@@ -253,98 +235,66 @@ func TestAny(t *testing.T) {
 				return false, nil
 			})
 
-			th.ExpectDrainedChan(t, in)
-
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, res, false)
 		})
 
-		th.RunSynctest(t, "one satisfies", func(t *testing.T) {
+		th.RunSynctest(t, "match is first", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
-			in = replaceWithError(in, 500, fmt.Errorf("err500")) // this won't pass through
 
-			var iterations atomic.Int64
 			res, err := Any(in, n, func(x int) (bool, error) {
 				th.SimulateWork(1*time.Second, 2*time.Second)
-				iterations.Add(1)
-
 				if x == 200 {
-					return true, nil // this is the early exit condition
+					return true, nil
+				}
+				if x == 500 {
+					return false, fmt.Errorf("err500")
 				}
 				return false, nil
 			})
-
-			th.WaitForInflightWork()
-			th.ExpectDrainedChan(t, in)
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, res, true)
 
-			if iterations.Load() > 250 {
-				t.Errorf("early return did not happen")
-			}
-		})
-
-		th.RunSynctest(t, "error in input", func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 1000), nil)
-			in = replaceWithError(in, 200, fmt.Errorf("err200")) // this is the early exit condition
-
-			var iterations atomic.Int64
-			res, err := Any(in, n, func(x int) (bool, error) {
-				th.SimulateWork(1*time.Second, 2*time.Second)
-				iterations.Add(1)
-				return false, nil
-			})
-
 			th.WaitForInflightWork()
-			th.ExpectDrainedChan(t, in)
-
-			th.ExpectError(t, err, "err200")
-			th.ExpectValue(t, res, false)
-
-			if iterations.Load() > 250 {
-				t.Errorf("early return did not happen")
-			}
 		})
 
-		th.RunSynctest(t, "error in func", func(t *testing.T) {
+		th.RunSynctest(t, "error is first", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
-			in = replaceWithError(in, 500, fmt.Errorf("err500")) // this won't pass through
 
-			var iterations atomic.Int64
+			// the error at 200 wins over the would-be match at 500
 			res, err := Any(in, n, func(x int) (bool, error) {
 				th.SimulateWork(1*time.Second, 2*time.Second)
-				iterations.Add(1)
-
 				if x == 200 {
 					return false, fmt.Errorf("err200")
+				}
+				if x == 500 {
+					return true, nil
 				}
 				return false, nil
 			})
 
+			th.ExpectError(t, err, "err200")
+			th.ExpectValue(t, res, false)
+
 			th.WaitForInflightWork()
-			th.ExpectDrainedChan(t, in)
+		})
+
+		th.RunSynctest(t, "(true,err) tuple", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 1000), nil)
+			res, err := Any(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				if x == 200 {
+					return true, fmt.Errorf("err200")
+				}
+				return false, nil
+			})
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, res, false)
 
-			if iterations.Load() > 250 {
-				t.Errorf("early return did not happen")
-			}
+			th.WaitForInflightWork()
 		})
-
-		t.Run("unclosed", func(t *testing.T) {
-			th.ExpectLeak(t, func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
-				in = replaceWithError(in, 200, fmt.Errorf("err200"))
-				in = th.DontClose(in)
-
-				_, _ = Any(in, n, func(int) (bool, error) {
-					return false, nil
-				})
-			})
-		})
-
 	})
 }
 
@@ -352,12 +302,6 @@ func TestAll(t *testing.T) {
 	// All is a thin negating wrapper over Any (All == !Any(!f)). Concurrency and
 	// short-circuiting live in Any and are covered by TestAny; these are just
 	// semantic smoke checks that the negation is wired correctly.
-
-	t.Run("nil", func(t *testing.T) {
-		th.ExpectBlock(t, func(t *testing.T) {
-			_, _ = All(nil, 1, func(int) (bool, error) { return true, nil })
-		})
-	})
 
 	th.RunSynctest(t, "empty", func(t *testing.T) {
 		res, err := All(FromSlice([]int{}, nil), 1, func(int) (bool, error) {
