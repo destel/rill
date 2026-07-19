@@ -146,6 +146,26 @@ func TestReduce(t *testing.T) {
 			}
 		})
 
+		th.RunSynctest(t, "error in func (last)", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 1000), nil)
+
+			var i atomic.Int64
+			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+
+				if i.Add(1) == 999 {
+					return 0, fmt.Errorf("err999")
+				}
+				return x + y, nil
+			})
+
+			th.ExpectError(t, err, "err999")
+			th.ExpectValue(t, out, 0)
+			th.ExpectValue(t, ok, false)
+
+			th.ExpectDrainedChan(t, in)
+		})
+
 		t.Run("unclosed", func(t *testing.T) {
 			th.ExpectLeak(t, func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
@@ -395,7 +415,7 @@ func TestMapReduce(t *testing.T) {
 				}
 			})
 
-			th.RunSynctest(t, "error in reducer merge phase", func(t *testing.T) {
+			th.RunSynctest(t, "error in reducer (last)", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 
 				var i atomic.Int64
@@ -406,20 +426,13 @@ func TestMapReduce(t *testing.T) {
 					},
 					nr, func(x, y int) (int, error) {
 						th.SimulateWork(10*time.Second, 20*time.Second)
-						// 1000 values and 3 keys mean exactly 997 reductions:
-						// each call reduces the value count by one. The last
-						// calls combine partial maps, so for nr > 1 the error
-						// is born in the merge phase, during wind-down. The
-						// stream is fully consumed by then - no early-exit
-						// assertions here.
-						if i.Add(1) == 997 {
+						if i.Add(1) == 9+89+899 {
 							return 0, fmt.Errorf("err997")
 						}
 						return x + y, nil
 					},
 				)
 
-				th.WaitForInflightWork()
 				th.ExpectDrainedChan(t, in)
 
 				th.ExpectError(t, err, "err997")
