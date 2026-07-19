@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/destel/rill/internal/th"
@@ -39,12 +38,17 @@ func TestErr(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
 		in = replaceWithError(in, 15, fmt.Errorf("err015"))
+		in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
+
 		err := Err(in)
 
-		synctest.Wait()
-		th.ExpectDrainedChan(t, in)
-
 		th.ExpectError(t, err, "err010")
+
+		_, inStillOpen := <-in
+		th.ExpectValue(t, inStillOpen, true)
+
+		th.WaitForInflightWork()
+		th.ExpectDrainedChan(t, in)
 	})
 
 	t.Run("unclosed", func(t *testing.T) {
@@ -53,7 +57,9 @@ func TestErr(t *testing.T) {
 			in = replaceWithError(in, 10, fmt.Errorf("err010"))
 			in = th.DontClose(in)
 
-			_ = Err(in)
+			err := Err(in)
+
+			th.ExpectError(t, err, "err010")
 		})
 	})
 }
@@ -78,33 +84,48 @@ func TestFirst(t *testing.T) {
 	th.RunSynctest(t, "value is first", func(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
-		x, ok, err := First(in)
+		in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
 
-		synctest.Wait()
-		th.ExpectDrainedChan(t, in)
+		x, ok, err := First(in)
 
 		th.ExpectNoError(t, err)
 		th.ExpectValue(t, ok, true)
 		th.ExpectValue(t, x, 0)
+
+		_, inStillOpen := <-in
+		th.ExpectValue(t, inStillOpen, true)
+
+		th.WaitForInflightWork()
+		th.ExpectDrainedChan(t, in)
 	})
 
 	th.RunSynctest(t, "error is first", func(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 0, fmt.Errorf("err000"))
-		_, ok, err := First(in)
+		in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
 
-		synctest.Wait()
-		th.ExpectDrainedChan(t, in)
+		x, ok, err := First(in)
 
 		th.ExpectError(t, err, "err000")
+		th.ExpectValue(t, x, 0)
 		th.ExpectValue(t, ok, false)
+
+		_, inStillOpen := <-in
+		th.ExpectValue(t, inStillOpen, true)
+
+		th.WaitForInflightWork()
+		th.ExpectDrainedChan(t, in)
 	})
 
 	t.Run("unclosed", func(t *testing.T) {
 		th.ExpectLeak(t, func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 20), nil)
 			in = th.DontClose(in)
-			_, _, _ = First(in)
+			x, ok, err := First(in)
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, ok, true)
+			th.ExpectValue(t, x, 0)
 		})
 	})
 }
@@ -227,6 +248,16 @@ func TestForEach(t *testing.T) {
 // Any is a thin wrapper over ForEach. We test only Any's own semantics.
 func TestAny(t *testing.T) {
 	th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
+
+		th.RunSynctest(t, "empty", func(t *testing.T) {
+			in := FromSlice([]int{}, nil)
+			res, err := Any(in, n, func(x int) (bool, error) {
+				return false, nil
+			})
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, res, false)
+		})
 
 		th.RunSynctest(t, "none satisfy", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 100), nil)
