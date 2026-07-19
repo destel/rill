@@ -298,59 +298,87 @@ func TestAny(t *testing.T) {
 	})
 }
 
+// All is a thin wrapper over ForEach. We test only All's own semantics.
 func TestAll(t *testing.T) {
-	// All is a thin negating wrapper over Any (All == !Any(!f)). Concurrency and
-	// short-circuiting live in Any and are covered by TestAny; these are just
-	// semantic smoke checks that the negation is wired correctly.
+	th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
 
-	th.RunSynctest(t, "empty", func(t *testing.T) {
-		res, err := All(FromSlice([]int{}, nil), 1, func(int) (bool, error) {
-			return false, nil
-		})
-		th.ExpectNoError(t, err)
-		th.ExpectValue(t, res, true)
-	})
-
-	th.RunSynctest(t, "all satisfy", func(t *testing.T) {
-		res, err := All(FromSlice([]int{2, 4, 6}, nil), 1, func(x int) (bool, error) {
-			return x%2 == 0, nil
-		})
-		th.ExpectNoError(t, err)
-		th.ExpectValue(t, res, true)
-	})
-
-	th.RunSynctest(t, "one does not satisfy", func(t *testing.T) {
-		res, err := All(FromSlice([]int{2, 3, 4}, nil), 1, func(x int) (bool, error) {
-			return x%2 == 0, nil
-		})
-		th.ExpectNoError(t, err)
-		th.ExpectValue(t, res, false)
-	})
-}
-
-func TestAnyAllAlwaysFalseOnError(t *testing.T) {
-	// Test that both Any and All always return false when the predicate returns an error.
-
-	testCases := []struct {
-		name     string
-		function func(in <-chan Try[int], n int, f func(int) (bool, error)) (bool, error)
-		ret      bool
-	}{
-		{"All-false", All[int], false},
-		{"All-true", All[int], true},
-		{"Any-false", Any[int], false},
-		{"Any-true", Any[int], true},
-	}
-
-	for _, testCase := range testCases {
-		th.RunSynctest(t, testCase.name, func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 100), nil)
-			res, err := testCase.function(in, 1, func(int) (bool, error) {
-				return testCase.ret, fmt.Errorf("some error")
+		th.RunSynctest(t, "empty", func(t *testing.T) {
+			// vacuous truth: an empty stream satisfies All
+			res, err := All(FromSlice([]int{}, nil), n, func(int) (bool, error) {
+				return false, nil
 			})
 
-			th.ExpectError(t, err, "some error")
-			th.ExpectValue(t, res, false)
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, res, true)
 		})
-	}
+
+		th.RunSynctest(t, "all satisfy", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 100), nil)
+			res, err := All(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				return true, nil
+			})
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, res, true)
+		})
+
+		th.RunSynctest(t, "counterexample is first", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 1000), nil)
+
+			// the counterexample at 200 wins over the error at 500
+			res, err := All(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				if x == 200 {
+					return false, nil
+				}
+				if x == 500 {
+					return false, fmt.Errorf("err500")
+				}
+				return true, nil
+			})
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, res, false)
+
+			th.WaitForInflightWork()
+		})
+
+		th.RunSynctest(t, "error is first", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 1000), nil)
+
+			// the error at 200 wins over the counterexample at 500
+			res, err := All(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				if x == 200 {
+					return false, fmt.Errorf("err200")
+				}
+				if x == 500 {
+					return false, nil
+				}
+				return true, nil
+			})
+
+			th.ExpectError(t, err, "err200")
+			th.ExpectValue(t, res, false)
+
+			th.WaitForInflightWork()
+		})
+
+		th.RunSynctest(t, "(true,err) tupple", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 1000), nil)
+			res, err := All(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				if x == 200 {
+					return true, fmt.Errorf("err200")
+				}
+				return true, nil
+			})
+
+			th.ExpectError(t, err, "err200")
+			th.ExpectValue(t, res, false)
+
+			th.WaitForInflightWork()
+		})
+	})
 }
