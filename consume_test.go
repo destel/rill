@@ -138,46 +138,58 @@ func TestForEach(t *testing.T) {
 		th.RunSynctest(t, "error in input", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = replaceWithError(in, 200, fmt.Errorf("err200"))
+			in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
 
-			var iterations atomic.Int64
+			var extraCalls atomic.Int64
 			err := ForEach(in, n, func(x int) error {
+				extraCalls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
-
-				iterations.Add(1)
 				return nil
 			})
+			extraCalls.Store(0)
+
+			th.ExpectError(t, err, "err200")
+
+			_, inStillOpen := <-in
+			th.ExpectValue(t, inStillOpen, true)
 
 			th.WaitForInflightWork()
 			th.ExpectDrainedChan(t, in)
 
-			th.ExpectError(t, err, "err200")
-
-			if iterations.Load() > 250 {
-				t.Errorf("early return did not happen")
+			if n == 1 {
+				th.ExpectValue(t, extraCalls.Load(), 0)
+			} else {
+				th.ExpectBetween(t, extraCalls.Load(), 0, 50)
 			}
 		})
 
 		th.RunSynctest(t, "error in func", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
 
-			var iterations atomic.Int64
+			var extraCalls atomic.Int64
 			err := ForEach(in, n, func(x int) error {
+				extraCalls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
-
 				if x == 200 {
 					return fmt.Errorf("err200")
 				}
-				iterations.Add(1)
 				return nil
 			})
+			extraCalls.Store(0)
+
+			th.ExpectError(t, err, "err200")
+
+			_, inStillOpen := <-in
+			th.ExpectValue(t, inStillOpen, true)
 
 			th.WaitForInflightWork()
 			th.ExpectDrainedChan(t, in)
 
-			th.ExpectError(t, err, "err200")
-
-			if iterations.Load() > 250 {
-				t.Errorf("early return did not happen")
+			if n == 1 {
+				th.ExpectValue(t, extraCalls.Load(), 0)
+			} else {
+				th.ExpectBetween(t, extraCalls.Load(), 0, 50)
 			}
 		})
 
@@ -187,12 +199,28 @@ func TestForEach(t *testing.T) {
 				in = replaceWithError(in, 200, fmt.Errorf("err200"))
 				in = th.DontClose(in)
 
-				_ = ForEach(in, n, func(int) error {
+				err := ForEach(in, n, func(int) error {
 					return nil
 				})
+
+				th.ExpectError(t, err, "err200")
 			})
 		})
 
+	})
+
+	th.RunSynctest(t, "n=1 determinism", func(t *testing.T) {
+		in := FromSlice([]int{1, 2, 3, 4, 5}, nil)
+
+		// race detector must not complain about seen being accessed w/o synchronization
+		var seen []int
+		err := ForEach(in, 1, func(x int) error {
+			seen = append(seen, x)
+			return nil
+		})
+
+		th.ExpectNoError(t, err)
+		th.ExpectSlice(t, seen, []int{1, 2, 3, 4, 5})
 	})
 }
 
