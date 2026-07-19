@@ -79,7 +79,10 @@ func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
 	return zero, false, nil
 }
 
-// errFound is a control-flow sentinel, compared by identity - the fs.SkipDir pattern.
+// errFound is a control-flow sentinel, compared by identity - the fs.SkipDir
+// pattern. Shared by Any and All: both short-circuit when the search finds its
+// target (a match, or a counterexample). It never escapes a sink, so the
+// sharing cannot contaminate across calls.
 var errFound = errors.New("found")
 
 // Any checks if there is an item in the input stream that satisfies the condition f.
@@ -116,15 +119,22 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func All[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
-	// Idea: x && y && z is the same as !(!x || !y || !z)
-	// So we can use Any with a negated condition to implement All
-	res, err := Any(in, n, func(a A) (bool, error) {
+	err := ForEach(in, n, func(a A) error {
 		ok, err := f(a)
-		return !ok, err // negate
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errFound
+		}
+		return nil
 	})
 
+	if err == errFound { //nolint:errorlint
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
-	return !res, nil // negate
+	return true, nil
 }
