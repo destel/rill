@@ -83,6 +83,22 @@ func TestReduce(t *testing.T) {
 			th.ExpectValue(t, ok, true)
 		})
 
+		th.RunSynctest(t, "concurrency", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 100), nil)
+
+			var gauge th.InFlightGauge
+
+			_, _, _ = Reduce(in, n, func(x, y int) (int, error) {
+				gauge.Enter()
+				defer gauge.Exit()
+				th.SimulateWork(1*time.Second, 2*time.Second)
+
+				return x + y, nil
+			})
+
+			th.ExpectValue(t, gauge.Max(), n)
+		})
+
 		th.RunSynctest(t, "error in input", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = replaceWithError(in, 200, fmt.Errorf("err200"))
@@ -290,6 +306,36 @@ func TestMapReduce(t *testing.T) {
 					"2-digit": (10 + 99) * 90 / 2,
 					"3-digit": (100 + 199) * 100 / 2,
 				})
+			})
+
+			th.RunSynctest(t, "concurrency", func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 100), nil)
+
+				// To reach max concurrency in the reduce phase, the map phase must outpace it
+				// rather than become the bottleneck. Under synctest we get that by giving
+				// mappers a much smaller work than reducers.
+				var mapGauge th.InFlightGauge
+				var reduceGauge th.InFlightGauge
+
+				_, _ = MapReduce(in,
+					nm, func(x int) (string, int, error) {
+						mapGauge.Enter()
+						defer mapGauge.Exit()
+						th.SimulateWork(1*time.Second, 2*time.Second)
+
+						return fmt.Sprintf("%d mod 3", x%3), 1, nil
+					},
+					nr, func(x, y int) (int, error) {
+						reduceGauge.Enter()
+						defer reduceGauge.Exit()
+						th.SimulateWork(10*time.Second, 20*time.Second)
+
+						return x + y, nil
+					},
+				)
+
+				th.ExpectValue(t, mapGauge.Max(), nm)
+				th.ExpectValue(t, reduceGauge.Max(), nr)
 			})
 
 			th.RunSynctest(t, "error in input", func(t *testing.T) {
