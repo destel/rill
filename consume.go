@@ -5,10 +5,13 @@ import (
 	"sync/atomic"
 )
 
-// ForEach applies a function f to each item in an input stream.
+// ForEach applies a function f to each item in an input stream and returns the first error encountered.
 //
 // This is a blocking unordered function that processes items concurrently using n goroutines.
-// When n = 1, processing becomes sequential, making the function ordered and similar to a regular for-range loop.
+//
+// When n = 1, ForEach processes items sequentially in stream order, similar to a regular
+// for-range loop: f can safely read and modify shared state without synchronization,
+// and all its effects are visible to the caller after ForEach returns.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
@@ -63,8 +66,8 @@ func Err[A any](in <-chan Try[A]) error {
 }
 
 // First returns the first item or error encountered in the input stream, whichever comes first.
-// The found return flag reports whether a value was found: it is set to false
-// if the stream was empty or if an error was encountered first.
+// The found return flag is set to false if the stream was empty or if the first item was an error,
+// otherwise it is set to true.
 //
 // This is a blocking ordered function that processes items sequentially.
 // See the package documentation for more information on blocking ordered functions and error handling.
@@ -85,11 +88,11 @@ func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
 // sharing cannot contaminate across calls.
 var errFound = errors.New("found")
 
-// Any checks if there is an item in the input stream that satisfies the condition f.
+// Any reports whether the input stream contains an item that satisfies the condition f.
 // This function returns true as soon as it finds such an item. Otherwise, it returns false.
 //
 // Any is a blocking unordered function that processes items concurrently using n goroutines.
-// When n = 1, processing becomes sequential, making the function ordered.
+// When n = 1, items are processed sequentially in stream order.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
@@ -110,12 +113,12 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 	return false, err
 }
 
-// All checks if all items in the input stream satisfy the condition f.
-// This function returns false as soon as it finds an item that does not satisfy the condition. Otherwise, it returns true,
-// including the case when the stream was empty.
+// All reports whether all items in the input stream satisfy the condition f.
+// This function returns false as soon as it finds an item that does not satisfy the condition or encounters an error.
+// Otherwise, it returns true.
 //
-// This is a blocking unordered function that processes items concurrently using n goroutines.
-// When n = 1, processing becomes sequential, making the function ordered.
+// All is a blocking unordered function that processes items concurrently using n goroutines.
+// When n = 1, items are processed sequentially in stream order.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func All[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
