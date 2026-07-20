@@ -10,7 +10,7 @@ import (
 )
 
 func TestReduce(t *testing.T) {
-	th.TestLevels(t, []int{1, 4}, func(t *testing.T, n int) {
+	th.TestLevels(t, []int{1, 4, 7}, func(t *testing.T, n int) {
 
 		t.Run("nil", func(t *testing.T) {
 			th.ExpectBlock(t, func(t *testing.T) {
@@ -204,7 +204,7 @@ func TestReduce(t *testing.T) {
 
 func TestMapReduce(t *testing.T) {
 	th.TestVariants(t, "nm", []int{1, 4}, func(t *testing.T, nm int) {
-		th.TestVariants(t, "nr", []int{1, 4}, func(t *testing.T, nr int) {
+		th.TestVariants(t, "nr", []int{1, 4, 7}, func(t *testing.T, nr int) {
 
 			t.Run("nil", func(t *testing.T) {
 				th.ExpectBlock(t, func(t *testing.T) {
