@@ -153,28 +153,66 @@ func TestFromChans(t *testing.T) {
 		th.ExpectValue(t, out, nil)
 	})
 
-	th.RunSynctest(t, "nil values", func(t *testing.T) {
-		out := FromChans[int](nil, th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")}))
-		outSlice, errs := toSliceAndErrors(out)
+	// A nil input is an input that's never closed, so the output stays open forever.
+	t.Run("nil values", func(t *testing.T) {
+		var errs []string
 
-		th.ExpectSlice(t, outSlice, nil)
+		th.ExpectBlock(t, func(t *testing.T) {
+			out := FromChans[int](nil, th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")}))
+			for x := range out {
+				if x.Error != nil {
+					errs = append(errs, x.Error.Error())
+				}
+			}
+		})
+
 		th.ExpectSlice(t, errs, []string{"err001", "err002"})
 	})
 
-	th.RunSynctest(t, "nil errors", func(t *testing.T) {
-		out := FromChans(th.FromSlice([]int{0, 1, 2, 3, 4}), nil)
-		outSlice, errs := toSliceAndErrors(out)
+	t.Run("nil errors", func(t *testing.T) {
+		var outSlice []int
+
+		th.ExpectBlock(t, func(t *testing.T) {
+			out := FromChans(th.FromSlice([]int{0, 1, 2, 3, 4}), nil)
+			for x := range out {
+				outSlice = append(outSlice, x.Value)
+			}
+		})
 
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
-		th.ExpectSlice(t, errs, nil)
 	})
 
 	th.RunSynctest(t, "not nil", func(t *testing.T) {
-		out := FromChans(th.FromSlice([]int{0, 1, 2, 3, 4}), th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")}))
+		out := FromChans(
+			th.FromSlice([]int{0, 1, 2, 3, 4}),
+			th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")}),
+		)
 		outSlice, errs := toSliceAndErrors(out)
 
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
 		th.ExpectSlice(t, errs, []string{"err001", "err002"})
+	})
+
+	t.Run("unclosed values", func(t *testing.T) {
+		th.ExpectLeak(t, func(t *testing.T) {
+			out := FromChans(
+				th.DontClose(th.FromSlice([]int{0, 1, 2, 3, 4})),
+				th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")}),
+			)
+
+			Discard(out)
+		})
+	})
+
+	t.Run("unclosed errors", func(t *testing.T) {
+		th.ExpectLeak(t, func(t *testing.T) {
+			out := FromChans(
+				th.FromSlice([]int{0, 1, 2, 3, 4}),
+				th.DontClose(th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")})),
+			)
+
+			Discard(out)
+		})
 	})
 }
 
@@ -207,6 +245,17 @@ func TestToChans(t *testing.T) {
 
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 4, 5, 6, 8, 9})
 		th.ExpectSlice(t, errSlice, []string{"err003", "err007"})
+	})
+
+	t.Run("unclosed", func(t *testing.T) {
+		th.ExpectLeak(t, func(t *testing.T) {
+			in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+			in = th.DontClose(in)
+
+			out, errs := ToChans(in)
+			Discard(out)
+			Discard(errs)
+		})
 	})
 }
 

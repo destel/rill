@@ -88,12 +88,9 @@ func TestToSeq2(t *testing.T) {
 	})
 }
 
+// A nil iterator is not tested: like everywhere in Go, consuming it panics,
+// and a panic in the adapter's background goroutine can't be observed in-process.
 func TestFromSeq(t *testing.T) {
-	t.Run("nils", func(t *testing.T) {
-		in := FromSeq[int](nil, nil)
-		th.ExpectValue(t, in, nil)
-	})
-
 	th.RunSynctest(t, "no error", func(t *testing.T) {
 		in := slices.Values([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
 		out := FromSeq(in, nil)
@@ -120,11 +117,6 @@ func TestFromSeq(t *testing.T) {
 }
 
 func TestFromSeq2(t *testing.T) {
-	t.Run("nils", func(t *testing.T) {
-		in := FromSeq2[int](nil)
-		th.ExpectValue(t, in, nil)
-	})
-
 	th.RunSynctest(t, "normal", func(t *testing.T) {
 		// generate from 0 to 9, and when the value is  5, yield error
 		gen := func(yield func(x int, err error) bool) {

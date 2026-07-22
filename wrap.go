@@ -115,10 +115,9 @@ func FromChan[A any](values <-chan A, err error) <-chan Try[A] {
 	return out
 }
 
-// FromChans converts a regular channel into a stream.
-// Additionally, this function can take a channel of errors, which will be added to
-// the output stream alongside the values.
-// Either argument can be nil, in which case it is ignored. If both arguments are nil, the function returns nil.
+// FromChans creates a stream from two channels: one for values and one for errors.
+// Items from both are added to the output stream as they arrive; nil errors are skipped.
+// The output stream is closed when both input channels are exhausted.
 //
 // Such function signature allows concise wrapping of functions that return two channels:
 //
@@ -132,29 +131,27 @@ func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 
 	go func() {
 		defer close(out)
-		for {
+
+		cntClosed := 0
+		for cntClosed < 2 {
 			select {
 			case err, ok := <-errs:
-				if ok {
-					if err != nil {
-						out <- Try[A]{Error: err}
-					}
-				} else {
+				if !ok {
+					cntClosed++
 					errs = nil
-					if values == nil && errs == nil {
-						return
-					}
+					continue
+				}
+				if err != nil {
+					out <- Try[A]{Error: err}
 				}
 
 			case v, ok := <-values:
-				if ok {
-					out <- Try[A]{Value: v}
-				} else {
+				if !ok {
+					cntClosed++
 					values = nil
-					if values == nil && errs == nil {
-						return
-					}
+					continue
 				}
+				out <- Try[A]{Value: v}
 			}
 		}
 	}()
@@ -163,7 +160,8 @@ func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 }
 
 // ToChans splits an input stream into two channels: one for values and one for errors.
-// It's an inverse of [FromChans]. Returns two nil channels if the input is nil.
+// Both output channels are closed when the input stream is exhausted.
+// They must be consumed independently to avoid deadlocks.
 func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 	if in == nil {
 		return nil, nil
