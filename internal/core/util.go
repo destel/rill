@@ -10,6 +10,10 @@ func Discard[A any](in <-chan A) {
 }
 
 func Buffer[A any](in <-chan A, size int) <-chan A {
+	if in == nil {
+		return nil
+	}
+
 	// we use size-1 since 1 additional item is held on the stack (x variable)
 	out := make(chan A, size-1)
 
