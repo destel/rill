@@ -396,7 +396,7 @@ func TestAll(t *testing.T) {
 			th.WaitForInflightWork()
 		})
 
-		th.RunSynctest(t, "(true,err) tupple", func(t *testing.T) {
+		th.RunSynctest(t, "(true,err) tuple", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			res, err := All(in, n, func(x int) (bool, error) {
 				th.SimulateWork(1*time.Second, 2*time.Second)

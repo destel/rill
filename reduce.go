@@ -185,7 +185,7 @@ var errSkip = errors.New("skip")
 // mapReduceStage transforms a stream of values into a stream with a single map.
 //
 // Semantically it's equivalent to transforming each value into a single-key map using mapper
-// and then reducing those maps per key using reducer. The only difference is that empty input produces an empty map,
+// and then reducing those maps per key using reducer. The only difference is that empty input produces an empty map.
 //
 // nm and nr control the maximum number of concurrent mapper and reducer calls respectively.
 func mapReduceStage[A any, K comparable, V any](in Stream[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error)) Stream[map[K]V] {
