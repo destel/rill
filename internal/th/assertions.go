@@ -18,6 +18,13 @@ func ExpectValue[A comparable](t *testing.T, actual A, expected A) {
 	}
 }
 
+func ExpectBetween[A cmp.Ordered](t *testing.T, actual A, min A, max A) {
+	t.Helper()
+	if actual < min || actual > max {
+		t.Errorf("expected %v to be between %v and %v", actual, min, max)
+	}
+}
+
 func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 	t.Helper()
 	if len(expected) != len(actual) {
@@ -57,6 +64,15 @@ func ExpectElementsMatch[A comparable](t *testing.T, actual, expected []A) {
 
 func ExpectMap[K, V comparable](t *testing.T, actual map[K]V, expected map[K]V) {
 	t.Helper()
+
+	if expected == nil && actual != nil {
+		t.Errorf("expected nil, got %v", actual)
+		return
+	}
+	if expected != nil && actual == nil {
+		t.Errorf("expected %v, got nil", expected)
+		return
+	}
 	if len(expected) != len(actual) {
 		t.Errorf("expected %v, got %v", expected, actual)
 		return
