@@ -8,9 +8,9 @@ import (
 )
 
 func TestMerge(t *testing.T) {
-	t.Run("empty", func(t *testing.T) {
+	th.RunSynctest(t, "empty", func(t *testing.T) {
 		out := Merge[string]()
-		th.ExpectValue(t, out, nil)
+		th.ExpectDrainedChan(t, out)
 	})
 
 	th.TestVariants(t, "num_chans", []int{1, 3, 5, 10}, func(t *testing.T, numChans int) {
