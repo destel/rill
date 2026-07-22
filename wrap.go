@@ -33,7 +33,7 @@ func Wrap[A any](value A, err error) Try[A] {
 }
 
 // FromSlice converts a slice into a stream.
-// If err is not nil function returns a stream with a single error.
+// A non-nil error is added to the stream after all the values.
 //
 // Such function signature allows concise wrapping of functions that return a slice and an error:
 //
@@ -41,32 +41,35 @@ func Wrap[A any](value A, err error) Try[A] {
 func FromSlice[A any](slice []A, err error) <-chan Try[A] {
 	const maxBufferSize = 512
 
-	if err != nil {
-		out := make(chan Try[A], 1)
-		out <- Try[A]{Error: err}
-		close(out)
-		return out
-	}
-
-	sendAll := func(in []A, out chan Try[A]) {
-		for _, a := range in {
+	sendAll := func(out chan Try[A]) {
+		for _, a := range slice {
 			out <- Try[A]{Value: a}
+		}
+		if err != nil {
+			out <- Try[A]{Error: err}
 		}
 		close(out)
 	}
 
-	if len(slice) <= maxBufferSize {
-		out := make(chan Try[A], len(slice))
-		sendAll(slice, out)
+	size := len(slice)
+	if err != nil {
+		size++
+	}
+
+	if size <= maxBufferSize {
+		out := make(chan Try[A], size)
+		sendAll(out)
 		return out
 	}
 
 	out := make(chan Try[A], maxBufferSize)
-	go sendAll(slice, out)
+	go sendAll(out)
 	return out
 }
 
 // ToSlice converts an input stream into a slice.
+// If the stream contains errors, ToSlice returns the values that precede
+// the first error, along with that error.
 //
 // This is a blocking ordered function that processes items sequentially.
 // See the package documentation for more information on blocking ordered functions and error handling.
@@ -85,7 +88,7 @@ func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 }
 
 // FromChan converts a regular channel into a stream.
-// Additionally, a non-nil error is added to the output stream alongside the values.
+// Additionally, a non-nil error is added to the output stream before any of the values.
 //
 // Such function signature allows concise wrapping of functions that return a channel and an error:
 //

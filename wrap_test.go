@@ -15,17 +15,6 @@ func TestWrap(t *testing.T) {
 }
 
 func TestFromSlice(t *testing.T) {
-	th.RunSynctest(t, "error", func(t *testing.T) {
-		out := FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9}, fmt.Errorf("some error"))
-
-		outSlice := toItemSlice(out)
-
-		var expectedSlice []Item[int]
-		expectedSlice = appendErr(expectedSlice, fmt.Errorf("some error"))
-
-		th.ExpectSlice(t, outSlice, expectedSlice)
-	})
-
 	th.TestVariants(t, "input_size", []int{0, 20, 4000}, func(t *testing.T, inputSize int) {
 		th.RunSynctest(t, "no error", func(t *testing.T) {
 			var inSlice []int
@@ -37,6 +26,24 @@ func TestFromSlice(t *testing.T) {
 			}
 
 			out := FromSlice(inSlice, nil)
+			outSlice := toItemSlice(out)
+
+			th.ExpectSlice(t, outSlice, expectedSlice)
+		})
+
+		th.RunSynctest(t, "error", func(t *testing.T) {
+			var inSlice []int
+			var expectedSlice []Item[int]
+
+			err := fmt.Errorf("some error")
+
+			for i := range inputSize {
+				inSlice = append(inSlice, i)
+				expectedSlice = appendVal(expectedSlice, i)
+			}
+			expectedSlice = appendErr(expectedSlice, err)
+
+			out := FromSlice(inSlice, err)
 			outSlice := toItemSlice(out)
 
 			th.ExpectSlice(t, outSlice, expectedSlice)
