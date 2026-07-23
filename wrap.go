@@ -117,12 +117,10 @@ func FromChan[A any](values <-chan A, err error) <-chan Try[A] {
 }
 
 // FromChans creates a stream from two channels: one for values and one for errors.
-// Items from both are added to the output stream as they arrive; nil errors are skipped.
-// The output stream is closed when both input channels are exhausted.
-//
-// Such function signature allows concise wrapping of functions that return two channels:
-//
-//	stream := rill.FromChans(someFunc())
+// It's an inverse of [ToChans]. Items from both inputs are added to the output stream
+// as they arrive; nil error values are skipped.
+// The output stream is closed only when both input channels are exhausted.
+// In particular, a nil input channel is never exhausted, so the output stream never closes.
 func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 	if values == nil && errs == nil {
 		return nil
