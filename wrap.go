@@ -88,25 +88,26 @@ func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 }
 
 // FromChan converts a regular channel into a stream.
-// Additionally, a non-nil error is added to the output stream before any of the values.
+// If err is not nil, the function returns a stream with a single error,
+// and the channel is not consumed.
 //
 // Such function signature allows concise wrapping of functions that return a channel and an error:
 //
 //	stream := rill.FromChan(someFunc())
 func FromChan[A any](values <-chan A, err error) <-chan Try[A] {
-	if values == nil && err == nil {
+	if err != nil {
+		out := make(chan Try[A], 1)
+		out <- Try[A]{Error: err}
+		close(out)
+		return out
+	}
+	if values == nil {
 		return nil
 	}
 
 	out := make(chan Try[A])
 	go func() {
 		defer close(out)
-
-		// error goes first
-		if err != nil {
-			out <- Try[A]{Error: err}
-		}
-
 		for x := range values {
 			out <- Try[A]{Value: x}
 		}

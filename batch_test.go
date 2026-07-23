@@ -11,7 +11,12 @@ func TestBatch(t *testing.T) {
 	// most logic is covered by the chans pkg tests
 
 	th.RunSynctest(t, "correctness", func(t *testing.T) {
-		in := FromChan(th.FromRange(0, 10), fmt.Errorf("err0"))
+		in := Generate(func(send func(int), sendErr func(error)) {
+			sendErr(fmt.Errorf("err0"))
+			for i := range 10 {
+				send(i)
+			}
+		})
 		in = replaceWithError(in, 5, fmt.Errorf("err5"))
 		in = replaceWithError(in, 7, fmt.Errorf("err7"))
 

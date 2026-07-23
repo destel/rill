@@ -104,15 +104,9 @@ func TestFromChan(t *testing.T) {
 
 	})
 
-	t.Run("nil with error", func(t *testing.T) {
-		var outSlice []Item[int]
-
-		th.ExpectBlock(t, func(t *testing.T) {
-			out := FromChan[int](nil, fmt.Errorf("err"))
-			for item := range out {
-				outSlice = appendTry(outSlice, item)
-			}
-		})
+	th.RunSynctest(t, "nil with error", func(t *testing.T) {
+		out := FromChan[int](nil, fmt.Errorf("err"))
+		outSlice := toItemSlice(out)
 
 		var expectedSlice []Item[int]
 		expectedSlice = appendErr(expectedSlice, fmt.Errorf("err"))
@@ -133,17 +127,19 @@ func TestFromChan(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "error", func(t *testing.T) {
-		inSlice := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		in := th.FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
 
-		out := FromChan(th.FromSlice(inSlice), fmt.Errorf("some error"))
+		out := FromChan(in, fmt.Errorf("some error"))
 
 		outSlice := toItemSlice(out)
 
 		var expectedSlice []Item[int]
 		expectedSlice = appendErr(expectedSlice, fmt.Errorf("some error"))
-		expectedSlice = appendVal(expectedSlice, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 
 		th.ExpectSlice(t, outSlice, expectedSlice)
+
+		// the channel is not consumed
+		th.ExpectValue(t, <-in, 0)
 	})
 }
 
