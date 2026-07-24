@@ -5,8 +5,7 @@ import (
 )
 
 // FromSeq converts an iterator into a stream.
-// If err is not nil, the function returns a stream with a single error,
-// and the iterator is not consumed.
+// If err is not nil, the function ignores the passed seq and returns a stream with a single error.
 //
 // Such function signature allows concise wrapping of functions that return an
 // iterator and an error:
@@ -45,12 +44,8 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 
 // ToSeq2 converts an input stream into an iterator of value-error pairs.
 //
-// This is a blocking ordered function that processes items sequentially.
-// It does not return on the first encountered error. Instead, it iterates over all value-error
-// pairs, either until the input stream is fully consumed or the loop is broken by the caller.
-// So all error handling, if needed, should be done inside the iterator (for-range loop body).
-//
-// See the package documentation for more information on blocking ordered functions.
+// If iteration is stopped by the caller using break or return, ToSeq2 drains
+// the input stream in the background to ensure there's no goroutine leaks.
 func ToSeq2[A any](in <-chan Try[A]) iter.Seq2[A, error] {
 	return func(yield func(A, error) bool) {
 		defer Discard(in)

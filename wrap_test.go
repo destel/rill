@@ -49,6 +49,16 @@ func TestFromSlice(t *testing.T) {
 			th.ExpectSlice(t, outSlice, expectedSlice)
 		})
 	})
+
+	t.Run("round trip", func(t *testing.T) {
+		expectedValues := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		expectedErr := fmt.Errorf("partial result")
+
+		values, err := ToSlice(FromSlice(expectedValues, expectedErr))
+
+		th.ExpectSlice(t, values, expectedValues)
+		th.ExpectError(t, err, "partial result")
+	})
 }
 
 func TestToSlice(t *testing.T) {
@@ -114,6 +124,21 @@ func TestFromChan(t *testing.T) {
 		th.ExpectSlice(t, outSlice, expectedSlice)
 	})
 
+	th.RunSynctest(t, "non-nil with error", func(t *testing.T) {
+		in := th.FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+
+		out := FromChan(in, fmt.Errorf("some error"))
+		outSlice := toItemSlice(out)
+
+		var expectedSlice []Item[int]
+		expectedSlice = appendErr(expectedSlice, fmt.Errorf("some error"))
+
+		th.ExpectSlice(t, outSlice, expectedSlice)
+
+		// the channel is not consumed
+		th.ExpectValue(t, <-in, 0)
+	})
+
 	th.RunSynctest(t, "no error", func(t *testing.T) {
 		inSlice := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 
@@ -124,22 +149,6 @@ func TestFromChan(t *testing.T) {
 		expectedSlice = appendVal(expectedSlice, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 
 		th.ExpectSlice(t, outSlice, expectedSlice)
-	})
-
-	th.RunSynctest(t, "error", func(t *testing.T) {
-		in := th.FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
-
-		out := FromChan(in, fmt.Errorf("some error"))
-
-		outSlice := toItemSlice(out)
-
-		var expectedSlice []Item[int]
-		expectedSlice = appendErr(expectedSlice, fmt.Errorf("some error"))
-
-		th.ExpectSlice(t, outSlice, expectedSlice)
-
-		// the channel is not consumed
-		th.ExpectValue(t, <-in, 0)
 	})
 }
 
@@ -251,6 +260,16 @@ func TestToChans(t *testing.T) {
 			out, errs := ToChans(in)
 			Discard(out)
 			Discard(errs)
+		})
+	})
+
+	t.Run("non-concurrent consumption", func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
+			in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, fmt.Errorf("err"))
+
+			out, errs := ToChans(in)
+			Drain(out)
+			Drain(errs)
 		})
 	})
 }

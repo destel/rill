@@ -33,7 +33,7 @@ func Wrap[A any](value A, err error) Try[A] {
 }
 
 // FromSlice converts a slice into a stream.
-// A non-nil error is added to the stream after all the values.
+// If err is not nil, it is added to the end of the stream.
 //
 // Such function signature allows concise wrapping of functions that return a slice and an error:
 //
@@ -88,8 +88,7 @@ func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 }
 
 // FromChan converts a regular channel into a stream.
-// If err is not nil, the function returns a stream with a single error,
-// and the channel is not consumed.
+// If err is not nil, the function ignores the passed values and returns a stream with a single error.
 //
 // Such function signature allows concise wrapping of functions that return a channel and an error:
 //
@@ -116,11 +115,11 @@ func FromChan[A any](values <-chan A, err error) <-chan Try[A] {
 	return out
 }
 
-// FromChans creates a stream from two channels: one for values and one for errors.
-// It's an inverse of [ToChans]. Items from both inputs are added to the output stream
-// as they arrive; nil error values are skipped.
+// FromChans creates a stream from independent value and error channels.
+// Items from both inputs are added to the output stream as they arrive, and nil
+// errors are skipped.
 // The output stream is closed only when both input channels are exhausted.
-// In particular, a nil input channel is never exhausted, so the output stream never closes.
+// In particular, if at least one input is nil, the output stream never closes.
 func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 	if values == nil && errs == nil {
 		return nil
@@ -160,7 +159,7 @@ func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 
 // ToChans splits an input stream into two channels: one for values and one for errors.
 // Both output channels are closed when the input stream is exhausted.
-// They must be consumed independently to avoid deadlocks.
+// They must be consumed concurrently to avoid deadlocks.
 func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 	if in == nil {
 		return nil, nil
