@@ -44,8 +44,8 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 
 // ToSeq2 converts an input stream into an iterator of value-error pairs.
 //
-// If iteration is stopped by the caller using break or return, ToSeq2 drains
-// the input stream in the background to ensure there's no goroutine leaks.
+// If the caller stops iteration early using break or return, ToSeq2 drains the
+// remaining input in the background, like blocking functions such as [ForEach].
 func ToSeq2[A any](in <-chan Try[A]) iter.Seq2[A, error] {
 	return func(yield func(A, error) bool) {
 		defer Discard(in)
