@@ -62,4 +62,11 @@ func TestBuffer(t *testing.T) {
 		// Expecting 11 items, since one more item was buffered on the goroutine stack
 		th.ExpectSlice(t, inBufSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 	})
+
+	// Zero is a valid capacity: the result is an unbuffered passthrough.
+	th.RunSynctest(t, "zero size", func(t *testing.T) {
+		in := th.FromRange(0, 10)
+		out := Buffer(in, 0)
+		th.ExpectSlice(t, th.ToSlice(out), []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+	})
 }
