@@ -59,7 +59,7 @@ func TestBuffer(t *testing.T) {
 		// consume all
 		outSlice := th.ToSlice(out)
 
-		// Expecting 11 items, since one more item was buffered on the goroutine stack
+		// Expecting 11 items, since one more item is held by the forwarding goroutine
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 	})
 
