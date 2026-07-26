@@ -88,8 +88,6 @@ func TestToSeq2(t *testing.T) {
 	})
 }
 
-// A nil iterator is not tested: like everywhere in Go, consuming it panics,
-// and a panic in the adapter's background goroutine can't be observed in-process.
 func TestFromSeq(t *testing.T) {
 	th.RunSynctest(t, "no error", func(t *testing.T) {
 		in := slices.Values([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
