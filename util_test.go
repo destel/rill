@@ -44,3 +44,39 @@ func TestBuffer(t *testing.T) {
 		Drain(out)
 	})
 }
+
+func TestValidations(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		validateN(1)
+		validateMinSize(5, 5)
+		validateNilFunc(false)
+	})
+
+	t.Run("n too small", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+
+		validateN(0)
+	})
+
+	t.Run("size too small", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		validateMinSize(5, 6)
+	})
+
+	t.Run("function is nil", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		validateNilFunc(true)
+	})
+}

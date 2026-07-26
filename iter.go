@@ -19,6 +19,8 @@ func FromSeq[A any](seq iter.Seq[A], err error) <-chan Try[A] {
 		return out
 	}
 
+	validateNilFunc(seq == nil)
+
 	out := make(chan Try[A])
 	go func() {
 		for val := range seq {
@@ -31,6 +33,8 @@ func FromSeq[A any](seq iter.Seq[A], err error) <-chan Try[A] {
 
 // FromSeq2 converts an iterator of value-error pairs into a stream.
 func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
+	validateNilFunc(seq == nil)
+
 	out := make(chan Try[A])
 	go func() {
 		for val, err := range seq {
