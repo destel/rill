@@ -7,7 +7,7 @@ import (
 // Merge performs a fan-in operation on the list of input channels, returning a single output channel.
 // The resulting channel will contain all items from all inputs,
 // and will be closed when all inputs are exhausted.
-// In particular, merging zero channels returns an already closed channel.
+// In particular, Merge with no arguments returns an already closed channel.
 //
 // This is a non-blocking function that processes items from each input sequentially.
 //
