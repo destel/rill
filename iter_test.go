@@ -112,6 +112,17 @@ func TestFromSeq(t *testing.T) {
 
 		th.ExpectSlice(t, outSlice, expectedSlice)
 	})
+
+	t.Run("error with nil iterator", func(t *testing.T) {
+		out := FromSeq[int](nil, errors.New("some error"))
+
+		outSlice := toItemSlice(out)
+
+		var expectedSlice []Item[int]
+		expectedSlice = appendErr(expectedSlice, errors.New("some error"))
+
+		th.ExpectSlice(t, outSlice, expectedSlice)
+	})
 }
 
 func TestFromSeq2(t *testing.T) {
