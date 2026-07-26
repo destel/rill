@@ -46,7 +46,7 @@ func TestBuffer(t *testing.T) {
 		}
 
 		in := make(chan int)
-		inBuf := Buffer(in, 10)
+		out := Buffer(in, 10)
 
 		// try to write as much as possible w/o any consumer attached
 		for i := range 1000 {
@@ -57,10 +57,10 @@ func TestBuffer(t *testing.T) {
 		close(in)
 
 		// consume all
-		inBufSlice := th.ToSlice(inBuf)
+		outSlice := th.ToSlice(out)
 
 		// Expecting 11 items, since one more item was buffered on the goroutine stack
-		th.ExpectSlice(t, inBufSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 	})
 
 	// Zero is a valid capacity: the result is an unbuffered passthrough.
