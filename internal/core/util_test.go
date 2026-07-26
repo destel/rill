@@ -28,6 +28,10 @@ func TestDiscard(t *testing.T) {
 }
 
 func TestBuffer(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		th.ExpectValue(t, Buffer[string](nil, 2), nil)
+	})
+
 	synctest.Test(t, func(t *testing.T) {
 		trySend := func(ch chan<- int, x int) bool {
 			// Wait for the bubble to settle. It makes the non-blocking send deterministic:

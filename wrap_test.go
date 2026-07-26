@@ -15,17 +15,6 @@ func TestWrap(t *testing.T) {
 }
 
 func TestFromSlice(t *testing.T) {
-	th.RunSynctest(t, "error", func(t *testing.T) {
-		out := FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9}, fmt.Errorf("some error"))
-
-		outSlice := toItemSlice(out)
-
-		var expectedSlice []Item[int]
-		expectedSlice = appendErr(expectedSlice, fmt.Errorf("some error"))
-
-		th.ExpectSlice(t, outSlice, expectedSlice)
-	})
-
 	th.TestVariants(t, "input_size", []int{0, 20, 4000}, func(t *testing.T, inputSize int) {
 		th.RunSynctest(t, "no error", func(t *testing.T) {
 			var inSlice []int
@@ -41,6 +30,34 @@ func TestFromSlice(t *testing.T) {
 
 			th.ExpectSlice(t, outSlice, expectedSlice)
 		})
+
+		th.RunSynctest(t, "error", func(t *testing.T) {
+			var inSlice []int
+			var expectedSlice []Item[int]
+
+			err := fmt.Errorf("some error")
+
+			for i := range inputSize {
+				inSlice = append(inSlice, i)
+				expectedSlice = appendVal(expectedSlice, i)
+			}
+			expectedSlice = appendErr(expectedSlice, err)
+
+			out := FromSlice(inSlice, err)
+			outSlice := toItemSlice(out)
+
+			th.ExpectSlice(t, outSlice, expectedSlice)
+		})
+	})
+
+	t.Run("round trip", func(t *testing.T) {
+		expectedValues := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		expectedErr := fmt.Errorf("partial result")
+
+		values, err := ToSlice(FromSlice(expectedValues, expectedErr))
+
+		th.ExpectSlice(t, values, expectedValues)
+		th.ExpectError(t, err, "partial result")
 	})
 }
 
@@ -97,20 +114,29 @@ func TestFromChan(t *testing.T) {
 
 	})
 
-	t.Run("nil with error", func(t *testing.T) {
-		var outSlice []Item[int]
-
-		th.ExpectBlock(t, func(t *testing.T) {
-			out := FromChan[int](nil, fmt.Errorf("err"))
-			for item := range out {
-				outSlice = appendTry(outSlice, item)
-			}
-		})
+	th.RunSynctest(t, "nil with error", func(t *testing.T) {
+		out := FromChan[int](nil, fmt.Errorf("err"))
+		outSlice := toItemSlice(out)
 
 		var expectedSlice []Item[int]
 		expectedSlice = appendErr(expectedSlice, fmt.Errorf("err"))
 
 		th.ExpectSlice(t, outSlice, expectedSlice)
+	})
+
+	th.RunSynctest(t, "non-nil with error", func(t *testing.T) {
+		in := th.FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+
+		out := FromChan(in, fmt.Errorf("some error"))
+		outSlice := toItemSlice(out)
+
+		var expectedSlice []Item[int]
+		expectedSlice = appendErr(expectedSlice, fmt.Errorf("some error"))
+
+		th.ExpectSlice(t, outSlice, expectedSlice)
+
+		// the channel is not consumed
+		th.ExpectValue(t, <-in, 0)
 	})
 
 	th.RunSynctest(t, "no error", func(t *testing.T) {
@@ -124,20 +150,6 @@ func TestFromChan(t *testing.T) {
 
 		th.ExpectSlice(t, outSlice, expectedSlice)
 	})
-
-	th.RunSynctest(t, "error", func(t *testing.T) {
-		inSlice := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-
-		out := FromChan(th.FromSlice(inSlice), fmt.Errorf("some error"))
-
-		outSlice := toItemSlice(out)
-
-		var expectedSlice []Item[int]
-		expectedSlice = appendErr(expectedSlice, fmt.Errorf("some error"))
-		expectedSlice = appendVal(expectedSlice, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-
-		th.ExpectSlice(t, outSlice, expectedSlice)
-	})
 }
 
 func TestFromChans(t *testing.T) {
@@ -146,28 +158,66 @@ func TestFromChans(t *testing.T) {
 		th.ExpectValue(t, out, nil)
 	})
 
-	th.RunSynctest(t, "nil values", func(t *testing.T) {
-		out := FromChans[int](nil, th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")}))
-		outSlice, errs := toSliceAndErrors(out)
+	// A nil input is an input that's never closed, so the output stays open forever.
+	t.Run("nil values", func(t *testing.T) {
+		var errs []string
 
-		th.ExpectSlice(t, outSlice, nil)
+		th.ExpectBlock(t, func(t *testing.T) {
+			out := FromChans[int](nil, th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")}))
+			for x := range out {
+				if x.Error != nil {
+					errs = append(errs, x.Error.Error())
+				}
+			}
+		})
+
 		th.ExpectSlice(t, errs, []string{"err001", "err002"})
 	})
 
-	th.RunSynctest(t, "nil errors", func(t *testing.T) {
-		out := FromChans(th.FromSlice([]int{0, 1, 2, 3, 4}), nil)
-		outSlice, errs := toSliceAndErrors(out)
+	t.Run("nil errors", func(t *testing.T) {
+		var outSlice []int
+
+		th.ExpectBlock(t, func(t *testing.T) {
+			out := FromChans(th.FromSlice([]int{0, 1, 2, 3, 4}), nil)
+			for x := range out {
+				outSlice = append(outSlice, x.Value)
+			}
+		})
 
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
-		th.ExpectSlice(t, errs, nil)
 	})
 
 	th.RunSynctest(t, "not nil", func(t *testing.T) {
-		out := FromChans(th.FromSlice([]int{0, 1, 2, 3, 4}), th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")}))
+		out := FromChans(
+			th.FromSlice([]int{0, 1, 2, 3, 4}),
+			th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")}),
+		)
 		outSlice, errs := toSliceAndErrors(out)
 
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
 		th.ExpectSlice(t, errs, []string{"err001", "err002"})
+	})
+
+	t.Run("unclosed values", func(t *testing.T) {
+		th.ExpectLeak(t, func(t *testing.T) {
+			out := FromChans(
+				th.DontClose(th.FromSlice([]int{0, 1, 2, 3, 4})),
+				th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")}),
+			)
+
+			Discard(out)
+		})
+	})
+
+	t.Run("unclosed errors", func(t *testing.T) {
+		th.ExpectLeak(t, func(t *testing.T) {
+			out := FromChans(
+				th.FromSlice([]int{0, 1, 2, 3, 4}),
+				th.DontClose(th.FromSlice([]error{fmt.Errorf("err001"), fmt.Errorf("err002")})),
+			)
+
+			Discard(out)
+		})
 	})
 }
 
@@ -200,6 +250,27 @@ func TestToChans(t *testing.T) {
 
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 4, 5, 6, 8, 9})
 		th.ExpectSlice(t, errSlice, []string{"err003", "err007"})
+	})
+
+	t.Run("unclosed", func(t *testing.T) {
+		th.ExpectLeak(t, func(t *testing.T) {
+			in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+			in = th.DontClose(in)
+
+			out, errs := ToChans(in)
+			Discard(out)
+			Discard(errs)
+		})
+	})
+
+	t.Run("non-concurrent consumption", func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
+			in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, fmt.Errorf("err"))
+
+			out, errs := ToChans(in)
+			Drain(out)
+			Drain(errs)
+		})
 	})
 }
 

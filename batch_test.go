@@ -11,18 +11,20 @@ func TestBatch(t *testing.T) {
 	// most logic is covered by the chans pkg tests
 
 	th.RunSynctest(t, "correctness", func(t *testing.T) {
-		in := FromChan(th.FromRange(0, 10), fmt.Errorf("err0"))
+		in := FromChan(th.FromRange(0, 15), nil)
+		in = replaceWithError(in, 0, fmt.Errorf("err0"))
 		in = replaceWithError(in, 5, fmt.Errorf("err5"))
-		in = replaceWithError(in, 7, fmt.Errorf("err7"))
+		in = replaceWithError(in, 10, fmt.Errorf("err10"))
 
 		batches, errs := toSliceAndErrors(Batch(in, 3, -1))
 
-		th.ExpectValue(t, len(batches), 3)
-		th.ExpectSlice(t, batches[0], []int{0, 1, 2})
-		th.ExpectSlice(t, batches[1], []int{3, 4, 6})
-		th.ExpectSlice(t, batches[2], []int{8, 9})
+		th.ExpectValue(t, len(batches), 4)
+		th.ExpectSlice(t, batches[0], []int{1, 2, 3})
+		th.ExpectSlice(t, batches[1], []int{4, 6, 7})
+		th.ExpectSlice(t, batches[2], []int{8, 9, 11})
+		th.ExpectSlice(t, batches[3], []int{12, 13, 14})
 
-		th.ExpectSlice(t, errs, []string{"err0", "err5", "err7"})
+		th.ExpectSlice(t, errs, []string{"err0", "err5", "err10"})
 	})
 
 }
