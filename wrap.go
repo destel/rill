@@ -209,6 +209,8 @@ func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 //		stream <- rill.Try[int]{Error: someError}
 //	}()
 func Generate[A any](f func(send func(A), sendErr func(error))) <-chan Try[A] {
+	validateNilFunc(f == nil)
+
 	out := make(chan Try[A])
 	go func() {
 		defer close(out)

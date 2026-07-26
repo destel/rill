@@ -122,6 +122,9 @@ func reduceStage[A any](in Stream[A], n int, f func(A, A) (A, error)) Stream[A] 
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, hasResult bool, err error) {
+	validateN(n)
+	validateNilFunc(f == nil)
+
 	var zero A
 
 	if n == 1 {
@@ -247,6 +250,11 @@ func mapReduceStage[A any, K comparable, V any](in Stream[A], nm int, mapper fun
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error)) (map[K]V, error) {
+	validateN(nm)
+	validateNilFunc(mapper == nil)
+	validateN(nr)
+	validateNilFunc(reducer == nil)
+
 	if nm == 1 && nr == 1 {
 		m := make(map[K]V)
 		err := ForEach(in, 1, func(a A) error {

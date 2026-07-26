@@ -1,6 +1,10 @@
 package rill
 
-import "github.com/destel/rill/internal/core"
+import (
+	"fmt"
+
+	"github.com/destel/rill/internal/core"
+)
 
 // Drain consumes and discards all items from an input channel, blocking until the channel is closed.
 func Drain[A any](in <-chan A) {
@@ -31,5 +35,25 @@ func DrainNB[A any](in <-chan A) {
 //	// Now work with the users channel as usual.
 //	// Up to 100 users can be buffered if subsequent stages of the pipeline are slow.
 func Buffer[A any](in <-chan A, size int) <-chan A {
+	validateMinSize(size, 1)
+
 	return core.Buffer(in, size)
+}
+
+func validateN(n int) {
+	if n < 1 {
+		panic(fmt.Sprintf("rill: n must be at least 1, got %d", n))
+	}
+}
+
+func validateMinSize(size int, minSize int) {
+	if size < minSize {
+		panic(fmt.Sprintf("rill: size must be at least %d, got %d", minSize, size))
+	}
+}
+
+func validateNilFunc(fIsNil bool) {
+	if fIsNil {
+		panic("rill: function must not be nil")
+	}
 }

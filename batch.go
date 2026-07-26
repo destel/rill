@@ -20,6 +20,8 @@ import (
 //
 // See the package documentation for more information on non-blocking ordered functions and error handling.
 func Batch[A any](in <-chan Try[A], size int, timeout time.Duration) <-chan Try[[]A] {
+	validateMinSize(size, 1)
+
 	values, errs := ToChans(in)
 	batches := core.Batch(values, size, timeout)
 	return FromChans(batches, errs)

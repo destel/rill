@@ -15,6 +15,9 @@ import (
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
+	validateN(n)
+	validateNilFunc(f == nil)
+
 	// The n = 1 path is an internal contract, not just an optimization.
 	// Other sinks (Any, Reduce) build their n = 1 behavior on it and rely on:
 	//   - items processed sequentially, in stream order
@@ -96,6 +99,9 @@ var errFound = errors.New("found")
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
+	validateN(n)
+	validateNilFunc(f == nil)
+
 	err := ForEach(in, n, func(a A) error {
 		ok, err := f(a)
 		if err != nil {
@@ -122,6 +128,9 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
 func All[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
+	validateN(n)
+	validateNilFunc(f == nil)
+
 	err := ForEach(in, n, func(a A) error {
 		ok, err := f(a)
 		if err != nil {
