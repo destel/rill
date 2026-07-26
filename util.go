@@ -26,7 +26,7 @@ func DrainNB[A any](in <-chan A) {
 // Buffer takes a channel of items and returns a buffered channel of exact same items in the same order.
 // This can be useful for preventing write operations on the input channel from blocking, especially if subsequent stages
 // in the processing pipeline are slow.
-// Buffering allows up to size items to be held in memory before back pressure is applied to the upstream producer.
+// Up to size items can be buffered before back pressure is applied to the upstream producer.
 //
 // Typical usage of Buffer might look like this:
 //

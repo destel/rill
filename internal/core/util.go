@@ -14,8 +14,7 @@ func Buffer[A any](in <-chan A, size int) <-chan A {
 		return nil
 	}
 
-	// we use size-1 since 1 additional item is held on the stack (x variable)
-	out := make(chan A, size-1)
+	out := make(chan A, size)
 
 	go func() {
 		defer close(out)
