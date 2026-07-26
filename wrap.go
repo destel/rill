@@ -121,13 +121,9 @@ func FromChan[A any](values <-chan A, err error) <-chan Try[A] {
 // The output stream is closed only when both input channels are exhausted.
 // In particular, if at least one input is nil, the output stream never closes.
 //
-// FromChans can directly adapt a function returning separate value and error
-// channels:
+// Such function signature allows concise wrapping of functions that return two channels:
 //
 //	stream := rill.FromChans(someFunc())
-//
-// The returned channels are interpreted according to the lifecycle above; in
-// particular, a nil channel is not treated as absent.
 func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 	if values == nil && errs == nil {
 		return nil
