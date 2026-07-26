@@ -17,7 +17,6 @@ func FromSeq[A any](seq iter.Seq[A], err error) <-chan Try[A] {
 		out <- Try[A]{Error: err}
 		close(out)
 		return out
-
 	}
 
 	out := make(chan Try[A])
@@ -43,6 +42,8 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 }
 
 // ToSeq2 converts an input stream into an iterator of value-error pairs.
+// Errors are yielded as ordinary pairs and do not stop the iteration;
+// handle them inside the loop.
 //
 // If the caller stops iteration early using break or return, ToSeq2 drains the
 // remaining input in the background, like blocking functions such as [ForEach].
