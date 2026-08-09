@@ -2,9 +2,11 @@ package rill
 
 import (
 	"errors"
+	"sync"
 	"sync/atomic"
 
 	"github.com/destel/rill/internal/core"
+	"github.com/destel/rill/internal/list"
 )
 
 // lowLevelReduceStage transforms a stream of values into a stream with a
@@ -85,47 +87,23 @@ func lowLevelFoldStage[S any, A any](in Stream[A], seed S, f func(S, A, func(err
 	})
 }
 
-// reduceStage transforms a stream of values into a stream with a single
-// value - the fold of all input values using the associative and commutative
-// function f.
-//
-// It's lowLevelReduceStage with the conventional error handling; on top of
-// its contract:
-//   - f errors are emitted as they occur, exactly one per failed call
-//   - f errors make the result partial: a fold of only some subset of the
-//     values; the exact subset is only specified at n = 1 - the right
-//     operands of all failed f calls are excluded from the fold
-func reduceStage[A any](in Stream[A], n int, f func(A, A) (A, error)) Stream[A] {
-	return lowLevelReduceStage(in, n, func(a1, a2 A, sendErr func(error)) A {
-		res, err := f(a1, a2)
-		if err != nil {
-			sendErr(err)
-			return a1 // the left operand is the carried value; dropping a2 is what the partial-result bullet promises
-		}
-		return res
-	})
-}
-
 // Reduce combines all items from the input stream into a single value using a binary function f.
-// The function f is called for pairs of values, progressively reducing them until only one remains.
 //
-// As an unordered function, Reduce can apply f to any pair of items in any order, which requires f to be:
-//   - Associative: f(a, f(b, c)) == f(f(a, b), c)
-//   - Commutative: f(a, b) == f(b, a)
+// Treating f as a binary operator "*", Reduce computes in[0] * in[1] * ... * in[N-1]:
+// items are combined in stream order, but the parenthesization is unspecified
+// and may vary from run to run. This requires f to be associative -
+// (a * b) * c == a * (b * c) - so that every parenthesization yields the same
+// result. Commutativity is not required.
 //
 // The hasResult return flag is set to true if the stream contained at least one value and no error was encountered,
 // otherwise it is set to false.
 //
-// Reduce is a blocking unordered function that processes items concurrently using n goroutines.
-// When n = 1, items are processed sequentially in stream order,
-// removing the need for the function f to be associative and commutative.
+// Reduce is a blocking function that processes items concurrently using n goroutines.
 //
-// See the package documentation for more information on blocking unordered functions and error handling.
+// See the package documentation for more information on blocking functions and error handling.
 func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, hasResult bool, err error) {
 	validateN(n)
 	validateNilFunc(f == nil)
-
-	var zero A
 
 	if n == 1 {
 		var acc A
@@ -145,20 +123,188 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 			return nil
 		})
 		if err != nil {
+			var zero A
 			return zero, false, err
 		}
 		return acc, seeded, nil
 	}
 
-	var stopped atomic.Bool
-	defer stopped.Store(true)
+	// The high level idea: keep values in stream order in a linked list.
+	// A worker takes two adjacent nodes and merges them into one.
+	// If there's nothing to merge, worker pulls more values and appends them to the list.
+	// If there is nothing left to pull, worker quits.
+	//
+	// This gives us:
+	// - Reduction function can be non-commutative. Associativity is still required.
+	// - Maximized utilization: a worker quits only when no current or future work is available for it.
+	// - Convergence: after all workers quit, the list contains 0 or 1 nodes.
+	// - With n workers, at most 2*n+1 nodes are live at any time.
+	// - The reduction tree is adaptive. It depends on both the scheduler and the observed cost of f.
+	//   If one partial result is expensive to produce, other workers keep merging around it,
+	//   so the emergent tree tends to be near-balanced exactly when it matters.
 
-	out := reduceStage(in, n, func(a1, a2 A) (A, error) {
-		if stopped.Load() {
-			return a1, nil
+	type Item struct {
+		value A
+		owned bool
+	}
+
+	// pool of list nodes to avoid per-item allocations
+	pool := list.New[Item]()
+
+	allocNode := func(v Item) *list.Node[Item] {
+		e := pool.Front()
+		if e == nil {
+			return &list.Node[Item]{Value: v}
 		}
-		return f(a1, a2)
-	})
+		pool.Remove(e)
+		e.Value = v
+		return e
+	}
+
+	freeNode := func(e *list.Node[Item]) {
+		e.Value = Item{}
+		pool.PushBack(e)
+	}
+
+	nodes := list.New[Item]()
+
+	// mu protects the state (list, pool, node values),
+	// inputMu ensures that pulling from the input channel and appending to the list is atomic
+	var mu sync.Mutex
+	var inputMu core.DurableMutex
+
+	// errors and the final result are reported via the out channel
+	var errSeen atomic.Bool
+	out := make(chan Try[A], n)
+
+	reportError := func(err error) {
+		errSeen.Store(true)
+		out <- Try[A]{Error: err}
+	}
+
+	// Pulls at most 2 values from the input channel and appends them to the list.
+	// The first pulled value is marked as owned.
+	pull2 := func() *list.Node[Item] {
+		inputMu.Lock()
+		defer inputMu.Unlock()
+
+		var buf [2]A
+		count := 0
+
+		for a := range in {
+			if errSeen.Load() {
+				return nil
+			}
+			if a.Error != nil {
+				reportError(a.Error)
+				return nil
+			}
+			buf[count] = a.Value
+			count++
+			if count == 2 {
+				break
+			}
+		}
+
+		if count == 0 {
+			return nil
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		first := allocNode(Item{value: buf[0], owned: true})
+		nodes.PushBack(first)
+
+		for i := 1; i < count; i++ {
+			nodes.PushBack(allocNode(Item{value: buf[i], owned: false}))
+		}
+
+		return first
+	}
+
+	// How a worker finds work without scanning the entire list:
+	// Each worker owns some node L and on every iteration it checks if one of its neighbors is free
+	// and absorbs it into L if so. Otherwise it pulls or quits.
+	//
+	// Quitting is optimal: any additional work discoverable by scanning would require
+	// two adjacent free nodes. pull2 and release semantics make that impossible.
+	worker := func() {
+		var current *list.Node[Item]
+
+		for {
+			// As soon as any worker reported an error, all workers quit
+			if errSeen.Load() {
+				return
+			}
+
+			if current == nil {
+				current = pull2()
+				if current == nil {
+					return
+				}
+			}
+
+			mu.Lock()
+
+			// Prefer the right neighbor so a fresh seat immediately
+			// consumes its pair-mate. Either direction preserves operand
+			// order.
+			var x, y A
+			var nodeToAbsorb *list.Node[Item]
+
+			if right := current.Next(); right != nil && !right.Value.owned {
+				x, y = current.Value.value, right.Value.value
+				nodeToAbsorb = right
+			} else if left := current.Prev(); left != nil && !left.Value.owned {
+				x, y = left.Value.value, current.Value.value
+				nodeToAbsorb = left
+			}
+
+			// Neither neighbor is free: release the current node and get back to pulling
+			if nodeToAbsorb == nil {
+				current.Value.owned = false
+				current = nil
+				mu.Unlock()
+				continue
+			}
+
+			nodes.Remove(nodeToAbsorb)
+			freeNode(nodeToAbsorb)
+
+			mu.Unlock()
+
+			// Release the mutex before calling f
+			merged, err := f(x, y)
+			if err != nil {
+				reportError(err)
+				return
+			}
+
+			mu.Lock()
+			current.Value.value = merged
+			mu.Unlock()
+		}
+	}
+
+	// Start the workers
+	var wg sync.WaitGroup
+	for range n {
+		wg.Go(worker)
+	}
+
+	// Wait until all workers quit
+	go func() {
+		wg.Wait()
+
+		// By construction, the list contains 0 or 1 nodes
+		if first := nodes.Front(); !errSeen.Load() && first != nil {
+			out <- Try[A]{Value: first.Value.value}
+		}
+		close(out)
+	}()
+
+	defer Discard(in)
 
 	return First(out)
 }

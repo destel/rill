@@ -137,3 +137,41 @@ func BenchmarkReduce(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkReducePush measures pipeline throughput at zero callback work: ns
+// per value pushed into a running Reduce. The trivial reducer is on purpose -
+// the engine's list and lock overhead is the quantity under test, so f must
+// not mask it.
+func BenchmarkReducePush(b *testing.B) {
+	for _, n := range []int{2, 4, 8} {
+		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			in := make(chan Try[int])
+
+			type result struct {
+				sum int
+				ok  bool
+				err error
+			}
+			resCh := make(chan result, 1)
+
+			go func() {
+				sum, ok, err := Reduce(in, n, func(x, y int) (int, error) { return x + y, nil })
+				resCh <- result{sum, ok, err}
+			}()
+
+			b.ResetTimer()
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					in <- Try[int]{Value: 1}
+				}
+			})
+			b.StopTimer()
+
+			close(in)
+			res := <-resCh
+			if res.err != nil || !res.ok || res.sum != b.N {
+				b.Fatalf("got sum=%d ok=%v err=%v, want sum=%d", res.sum, res.ok, res.err, b.N)
+			}
+		})
+	}
+}
