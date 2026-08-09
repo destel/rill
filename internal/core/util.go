@@ -25,3 +25,12 @@ func Buffer[A any](in <-chan A, size int) <-chan A {
 
 	return out
 }
+
+func SendNB[A any](out chan<- A, x A) bool {
+	select {
+	case out <- x:
+		return true
+	default:
+		return false
+	}
+}

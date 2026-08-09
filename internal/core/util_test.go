@@ -70,3 +70,18 @@ func TestBuffer(t *testing.T) {
 		th.ExpectSlice(t, th.ToSlice(out), []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
 	})
 }
+
+func TestSendNB(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ch := make(chan int, 2)
+
+		th.ExpectValue(t, SendNB(ch, 1), true)
+		th.ExpectValue(t, SendNB(ch, 2), true)
+		th.ExpectValue(t, SendNB(ch, 3), false)
+
+		close(ch)
+
+		th.ExpectSlice(t, th.ToSlice(ch), []int{1, 2})
+
+	})
+}
