@@ -16,7 +16,7 @@ func TestDrain(t *testing.T) {
 }
 
 func TestDiscard(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
+	th.RunSynctest(t, "normal", func(t *testing.T) {
 		in := make(chan int)
 		Discard(in) // doesn't block
 
@@ -24,6 +24,13 @@ func TestDiscard(t *testing.T) {
 		in <- 1
 		in <- 2
 		close(in)
+	})
+
+	th.RunSynctest(t, "closed", func(t *testing.T) {
+		in := make(chan int)
+		close(in)
+		Discard(in)
+		th.ExpectDrainedChan(t, in)
 	})
 }
 
