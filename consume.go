@@ -39,11 +39,12 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 		return nil
 	}
 
-	var suppressCallbacks atomic.Bool
-	defer suppressCallbacks.Store(true)
+	defer Discard(in)
+	var done atomic.Bool
+	defer done.Store(true)
 
 	out := FilterMap(in, n, func(a A) (struct{}, bool, error) {
-		if suppressCallbacks.Load() {
+		if done.Load() {
 			return struct{}{}, false, nil
 		}
 		return struct{}{}, false, f(a)
