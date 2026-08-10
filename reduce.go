@@ -1,91 +1,12 @@
 package rill
 
 import (
-	"errors"
 	"sync"
 	"sync/atomic"
 
 	"github.com/destel/rill/internal/core"
 	"github.com/destel/rill/internal/list"
 )
-
-// lowLevelReduceStage transforms a stream of values into a stream with a
-// single value - the fold of all input values using f.
-//
-// At n = 1 the final value is a single chain over the input in order: f(f(f(f(a1, a2), a3), a4), ...).
-// For n > 1 there are multiple such chains working concurrently so reduction order is undefined, and
-// the supplied callback must be commutative and associative.
-//
-//   - at most n calls to f run concurrently
-//   - all input errors are forwarded as they occur
-//   - the callback can emit any number of additional errors per call
-//   - the result is emitted at the end, after all errors, and only if the input had at least one value
-//   - what emitted errors imply about the result is the caller's contract
-func lowLevelReduceStage[A any](in Stream[A], n int, f func(A, A, func(error)) A) Stream[A] {
-	if n <= 1 {
-		return Generate(func(send func(A), sendErr func(error)) {
-			var acc A
-			first := true
-
-			for a := range in {
-				if a.Error != nil {
-					sendErr(a.Error)
-					continue
-				}
-
-				if first {
-					acc = a.Value
-					first = false
-					continue
-				}
-
-				res := f(acc, a.Value, sendErr)
-				acc = res
-			}
-
-			if !first {
-				send(acc)
-			}
-		})
-	}
-
-	chains := make([]Stream[A], n)
-	for i := range chains {
-		chains[i] = lowLevelReduceStage(in, 1, f)
-	}
-
-	partials := core.Merge(chains...)
-
-	// partials contains at most n values - one per chain. Reducing them in
-	// parallel takes at most n/2 concurrent f calls, so n/2 is all the
-	// concurrency the next level can use. The total concurrency across all
-	// levels still cannot exceed n: each concurrent f call at the next level
-	// requires two values, and hence two finished chains, at this level.
-	return lowLevelReduceStage(partials, n/2, f)
-}
-
-// lowLevelFoldStage is the seeded, sequential counterpart of
-// lowLevelReduceStage. The final value is a single chain over the input
-// in order: f(f(f(f(seed, a1), a2), a3), ...).
-// Same error model: the callback emits errors instead of returning them,
-// and always returns the value to carry forward.
-//
-// Unlike a reduce, for an empty input the final value is the seed.
-func lowLevelFoldStage[S any, A any](in Stream[A], seed S, f func(S, A, func(error)) S) Stream[S] {
-	return Generate(func(send func(S), sendErr func(error)) {
-		acc := seed
-
-		for v := range in {
-			if v.Error != nil {
-				sendErr(v.Error)
-				continue
-			}
-			acc = f(acc, v.Value, sendErr)
-		}
-
-		send(acc)
-	})
-}
 
 // Reduce combines all items from the input stream into a single value using a binary function f.
 //
@@ -278,6 +199,13 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 			merged, err := f(x, y)
 			if err != nil {
 				reportError(err)
+
+				// The merge is abandoned, the caller may assume there are no
+				// references left to x and y: remove the node from the list
+				mu.Lock()
+				nodes.Remove(current)
+				freeNode(current)
+				mu.Unlock()
 				return
 			}
 
@@ -286,6 +214,8 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 			mu.Unlock()
 		}
 	}
+
+	defer Discard(in)
 
 	// Start the workers
 	var wg sync.WaitGroup
@@ -304,97 +234,24 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 		close(out)
 	}()
 
-	defer Discard(in)
-
 	return First(out)
-}
-
-// mergeIntoMap adds the (k, v) pair to the map m.
-// If the key already exists, it is merged with the new value using the merge function.
-// On merge failure the map is left unchanged and the error is returned.
-func mergeIntoMap[K comparable, V any](m map[K]V, k K, v V, mergeFunc func(V, V) (V, error)) error {
-	val, ok := m[k]
-	if !ok {
-		m[k] = v
-		return nil
-	}
-
-	newVal, err := mergeFunc(val, v)
-	if err != nil {
-		return err
-	}
-
-	m[k] = newVal
-	return nil
-}
-
-// errSkip is a control-flow sentinel, compared by identity - the fs.SkipDir pattern.
-var errSkip = errors.New("skip")
-
-// mapReduceStage transforms a stream of values into a stream with a single map.
-//
-// Semantically it's equivalent to transforming each value into a single-key map using mapper
-// and then reducing those maps per key using reducer. The only difference is that empty input produces an empty map.
-//
-// nm and nr control the maximum number of concurrent mapper and reducer calls respectively.
-func mapReduceStage[A any, K comparable, V any](in Stream[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error)) Stream[map[K]V] {
-	type keyValue struct {
-		Key   K
-		Value V
-	}
-
-	pairs := FilterMap(in, nm, func(a A) (keyValue, bool, error) {
-		k, v, err := mapper(a)
-		if err == errSkip { //nolint:errorlint
-			return keyValue{}, false, nil
-		}
-		if err != nil {
-			return keyValue{}, false, err
-		}
-		return keyValue{k, v}, true, nil
-	})
-
-	chains := make([]Stream[map[K]V], nr)
-	for i := range chains {
-		chains[i] = lowLevelFoldStage(pairs, make(map[K]V), func(m map[K]V, p keyValue, sendErr func(error)) map[K]V {
-			if err := mergeIntoMap(m, p.Key, p.Value, reducer); err != nil {
-				sendErr(err)
-			}
-			return m
-		})
-	}
-
-	if len(chains) == 1 {
-		return chains[0]
-	}
-
-	// The same argument as in lowLevelReduceStage bounds concurrent reducer
-	// calls by nr: each concurrent merge at the next level requires two
-	// finished fold chains.
-	return lowLevelReduceStage(core.Merge(chains...), nr/2, func(m1, m2 map[K]V, sendErr func(error)) map[K]V {
-		for k, v := range m2 {
-			if err := mergeIntoMap(m1, k, v, reducer); err != nil {
-				sendErr(err)
-			}
-		}
-		return m1
-	})
 }
 
 // MapReduce transforms the input stream into a Go map using mapper and reducer functions.
 // The transformation is performed in two concurrent phases.
 //
 //   - The mapper function transforms each input item into a key-value pair.
-//   - The reducer function reduces values for the same key into a single value.
-//     This phase has the same semantics as the [Reduce] function, in particular
-//     the reducer function must be associative and commutative.
+//   - The reducer function reduces values of the same key into a single value.
+//     This phase has the same semantics as the [Reduce] function: for each key,
+//     values are combined in stream order, but the parenthesization is non-deterministic,
+//     so the reducer must be associative.
 //
-// MapReduce is a blocking unordered function that processes items concurrently using nm and nr goroutines
-// for the mapper and reducer functions respectively. When nm = 1 and nr = 1, items are mapped and reduced
-// sequentially in stream order, removing the need for the reducer to be associative and commutative.
-// Setting only nr = 1 does not provide this relaxation.
+// An empty input stream produces an empty map.
 //
-// See the package documentation for more information on blocking unordered functions and error handling.
+// MapReduce is a blocking function that processes items concurrently using nm and nr goroutines
+// for the mapper and reducer functions respectively.
+//
+// See the package documentation for more information on blocking functions and error handling.
 func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error)) (map[K]V, error) {
 	validateN(nm)
 	validateNilFunc(mapper == nil)
@@ -402,46 +259,102 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 	validateNilFunc(reducer == nil)
 
 	if nm == 1 && nr == 1 {
-		m := make(map[K]V)
+		acc := make(map[K]V)
 		err := ForEach(in, 1, func(a A) error {
 			k, v, err := mapper(a)
 			if err != nil {
 				return err
 			}
-			err = mergeIntoMap(m, k, v, reducer)
-			if err != nil {
-				return err
-			}
-			return nil
+			return upsertIntoMap(acc, k, v, reducer)
 		})
 
 		if err != nil {
 			return nil, err
 		}
-		return m, nil
+		return acc, nil
 	}
 
-	var stopped atomic.Bool
-	defer stopped.Store(true)
+	defer Discard(in)
+	var done atomic.Bool
+	defer done.Store(true)
 
-	var zeroK K
-	var zeroV V
+	// Pool for reusing intermediate maps.
+	// The size is O(nm + nr).
+	pool := &core.Pool[map[K]V]{
+		New:   func() map[K]V { return make(map[K]V) },
+		Reset: func(m map[K]V) { clear(m) },
+	}
 
-	out := mapReduceStage(in,
-		nm, func(a A) (K, V, error) {
-			if stopped.Load() {
-				return zeroK, zeroV, errSkip
+	// Turn each item into a single-key map
+	singletons := OrderedFilterMap(in, nm, func(a A) (map[K]V, bool, error) {
+		if done.Load() {
+			return nil, false, nil
+		}
+
+		k, v, err := mapper(a)
+		if err != nil {
+			return nil, false, err
+		}
+
+		m := pool.Get()
+		m[k] = v
+		return m, true, nil
+	})
+
+	// Reduce the singletons into one final map
+	res, ok, err := Reduce(singletons, nr, func(acc, m map[K]V) (map[K]V, error) {
+		merged, leftover, err := mergeMaps(acc, m, reducer)
+		pool.Put(leftover)
+		return merged, err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return make(map[K]V), nil
+	}
+	return res, nil
+}
+
+// upsertIntoMap adds the (k, v) pair to the map m.
+// If the key already exists, it is merged with the new value using the merge function.
+// On merge failure the map is left unchanged and the error is returned.
+func upsertIntoMap[K comparable, V any](m map[K]V, k K, v V, mergeFunc func(V, V) (V, error)) error {
+	old, ok := m[k]
+	if !ok {
+		m[k] = v
+		return nil
+	}
+
+	newV, err := mergeFunc(old, v)
+	if err != nil {
+		return err
+	}
+	m[k] = newV
+	return nil
+}
+
+// mergeMaps merges all keys from m into acc using upsertIntoMap and a reducer function.
+// Merge is done in-place: the larger map is used as the storage for the final result,
+// and the smaller one is returned as a leftover.
+func mergeMaps[K comparable, V any](acc, m map[K]V, reducer func(V, V) (V, error)) (result, leftover map[K]V, err error) {
+	if len(acc) >= len(m) {
+		for k, v := range m {
+			if err := upsertIntoMap(acc, k, v, reducer); err != nil {
+				return acc, m, err
 			}
-			return mapper(a)
-		},
-		nr, func(v1, v2 V) (V, error) {
-			if stopped.Load() {
-				return v1, nil
-			}
-			return reducer(v1, v2)
-		},
-	)
+		}
+		return acc, m, nil
+	}
 
-	m, _, err := First(out)
-	return m, err
+	// acc is the smaller one, so pour it into m; flip the operands to keep
+	// acc's value on the left.
+	flipped := func(mV, accV V) (V, error) { return reducer(accV, mV) }
+	for k, v := range acc {
+		if err := upsertIntoMap(m, k, v, flipped); err != nil {
+			return m, acc, err
+		}
+	}
+	return m, acc, nil
 }

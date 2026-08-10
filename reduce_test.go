@@ -2,6 +2,8 @@ package rill
 
 import (
 	"fmt"
+	"maps"
+	"reflect"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -200,9 +202,6 @@ func TestReduce(t *testing.T) {
 			})
 		})
 
-		// Concatenation is the free monoid: any associative f factors through
-		// it, so getting concat right at every n pins order preservation for
-		// all of them. The "|" separator keeps distinct orders distinguishable.
 		th.RunSynctest(t, "ordering", func(t *testing.T) {
 			tokens := make([]string, 100)
 			for i := range tokens {
@@ -273,6 +272,27 @@ func TestMapReduce(t *testing.T) {
 
 				th.ExpectNoError(t, err)
 				th.ExpectMap(t, out, map[string]int{})
+			})
+
+			th.RunSynctest(t, "single error stream", func(t *testing.T) {
+				in := FromSlice([]int{}, fmt.Errorf("err0"))
+
+				out, err := MapReduce(in,
+					nm, func(x int) (string, int, error) {
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return fmt.Sprint(x), x, nil
+					},
+					nr, func(x, y int) (int, error) {
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return x + y, nil
+					},
+				)
+
+				th.WaitForInflightWork()
+				th.ExpectDrainedChan(t, in)
+
+				th.ExpectError(t, err, "err0")
+				th.ExpectMap(t, out, nil)
 			})
 
 			th.RunSynctest(t, "single value keys", func(t *testing.T) {
@@ -527,32 +547,128 @@ func TestMapReduce(t *testing.T) {
 				})
 			})
 
+			th.RunSynctest(t, "ordering", func(t *testing.T) {
+				const numKeys = 3
+				slowTokens := []string{"20", "40", "60", "80"}
+
+				in := FromChan(th.FromRange(0, 100), nil)
+
+				out, err := MapReduce(in,
+					nm, func(x int) (int, string, error) {
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return x % numKeys, fmt.Sprint(x), nil
+					},
+					nr, func(x, y string) (string, error) {
+						th.SimulateWork(10*time.Second, 20*time.Second)
+
+						// Force out-of-order completion: a few leaves are expensive
+						// enough that while a worker sleeps on one, the others finish
+						// most of the remaining work first, so the late partials must
+						// re-attach in position.
+						if slices.Contains(slowTokens, x) || slices.Contains(slowTokens, y) {
+							th.SimulateWork(500*time.Second, 600*time.Second)
+						}
+
+						return x + "|" + y, nil
+					},
+				)
+
+				expected := make(map[int]string, numKeys)
+				for i := range 100 {
+					k := i % numKeys
+					if expected[k] == "" {
+						expected[k] = fmt.Sprint(i)
+					} else {
+						expected[k] += "|" + fmt.Sprint(i)
+					}
+				}
+
+				th.ExpectDrainedChan(t, in)
+
+				th.ExpectNoError(t, err)
+				th.ExpectMap(t, out, expected)
+			})
+
 		})
 	})
 
-	th.RunSynctest(t, "n=1 determinism", func(t *testing.T) {
-		in := FromSlice([]int{1, 2, 3, 4, 5}, nil)
+}
 
-		// race detector must not complain about dummy being accessed w/o synchronization
-		dummy1 := 0
-		dummy2 := 0
-		out, err := MapReduce(in,
-			1, func(x int) (bool, string, error) {
-				dummy1++
-				return x%2 == 0, fmt.Sprint(x), nil
-			},
-			1, func(x, y string) (string, error) {
-				dummy2++
-				return x + y, nil
-			})
+func TestMergeMaps(t *testing.T) {
+	concat := func(x, y string) (string, error) { return x + "|" + y, nil }
+
+	failingConcat := func(x, y string) (string, error) {
+		if x == "b" || y == "b" {
+			return "", fmt.Errorf("boom")
+		}
+		return x + "|" + y, nil
+	}
+
+	sameMap := func(a, b map[int]string) bool {
+		return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
+	}
+
+	t.Run("acc is larger", func(t *testing.T) {
+		acc := map[int]string{1: "a", 2: "b", 3: "c"}
+		m := map[int]string{2: "y", 4: "w"}
+		mBefore := maps.Clone(m)
+
+		res, leftover, err := mergeMaps(acc, m, concat)
 
 		th.ExpectNoError(t, err)
-		th.ExpectMap(t, out, map[bool]string{
-			true:  "24",
-			false: "135",
-		})
+		th.ExpectMap(t, res, map[int]string{1: "a", 2: "b|y", 3: "c", 4: "w"})
+		th.ExpectMap(t, leftover, mBefore)
 
-		th.ExpectValue(t, dummy1, 5)
-		th.ExpectValue(t, dummy2, 3)
+		// the larger map is the storage; the smaller one is a leftover
+		th.ExpectValue(t, sameMap(res, acc), true)
+		th.ExpectValue(t, sameMap(leftover, m), true)
+
+	})
+
+	t.Run("acc is larger with reducer error", func(t *testing.T) {
+		acc := map[int]string{1: "a", 2: "b", 3: "c"}
+		m := map[int]string{2: "y", 4: "w"}
+		mBefore := maps.Clone(m)
+
+		res, leftover, err := mergeMaps(acc, m, failingConcat)
+
+		th.ExpectError(t, err, "boom")
+		th.ExpectMap(t, leftover, mBefore)
+
+		// an aborted merge leaves the storage roles and the leftover unaffected
+		th.ExpectValue(t, sameMap(res, acc), true)
+		th.ExpectValue(t, sameMap(leftover, m), true)
+
+	})
+
+	t.Run("acc is smaller", func(t *testing.T) {
+		acc := map[int]string{2: "b", 4: "d"}
+		m := map[int]string{1: "x", 2: "y", 3: "z"}
+		accBefore := maps.Clone(acc)
+
+		res, leftover, err := mergeMaps(acc, m, concat)
+
+		th.ExpectNoError(t, err)
+		th.ExpectMap(t, res, map[int]string{1: "x", 2: "b|y", 3: "z", 4: "d"})
+		th.ExpectMap(t, leftover, accBefore)
+
+		th.ExpectValue(t, sameMap(res, m), true)
+		th.ExpectValue(t, sameMap(leftover, acc), true)
+
+	})
+
+	t.Run("acc is smaller with reducer error", func(t *testing.T) {
+		acc := map[int]string{2: "b", 4: "d"}
+		m := map[int]string{1: "x", 2: "y", 3: "z"}
+		accBefore := maps.Clone(acc)
+
+		res, leftover, err := mergeMaps(acc, m, failingConcat)
+
+		th.ExpectError(t, err, "boom")
+		th.ExpectMap(t, leftover, accBefore)
+
+		th.ExpectValue(t, sameMap(res, m), true)
+		th.ExpectValue(t, sameMap(leftover, acc), true)
+
 	})
 }
