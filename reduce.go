@@ -69,22 +69,11 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 		owned bool
 	}
 
-	// pool of list nodes to avoid per-item allocations
-	pool := list.New[Item]()
-
-	allocNode := func(v Item) *list.Node[Item] {
-		e := pool.Front()
-		if e == nil {
-			return &list.Node[Item]{Value: v}
-		}
-		pool.Remove(e)
-		e.Value = v
-		return e
-	}
-
-	freeNode := func(e *list.Node[Item]) {
-		e.Value = Item{}
-		pool.PushBack(e)
+	// Pool of list nodes to avoid per-item allocations.
+	pool := &core.Pool[*list.Node[Item]]{
+		New:            func() *list.Node[Item] { return new(list.Node[Item]) },
+		Reset:          func(node *list.Node[Item]) { node.Value = Item{} },
+		Unsynchronized: true,
 	}
 
 	nodes := list.New[Item]()
@@ -134,11 +123,14 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 		mu.Lock()
 		defer mu.Unlock()
 
-		first := allocNode(Item{value: buf[0], owned: true})
+		first := pool.Get()
+		first.Value = Item{value: buf[0], owned: true}
 		nodes.PushBack(first)
 
 		for i := 1; i < count; i++ {
-			nodes.PushBack(allocNode(Item{value: buf[i], owned: false}))
+			node := pool.Get()
+			node.Value = Item{value: buf[i], owned: false}
+			nodes.PushBack(node)
 		}
 
 		return first
@@ -191,7 +183,7 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 			}
 
 			nodes.Remove(nodeToAbsorb)
-			freeNode(nodeToAbsorb)
+			pool.Put(nodeToAbsorb)
 
 			mu.Unlock()
 
@@ -204,7 +196,7 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 				// references left to x and y: remove the node from the list
 				mu.Lock()
 				nodes.Remove(current)
-				freeNode(current)
+				pool.Put(current)
 				mu.Unlock()
 				return
 			}
