@@ -90,7 +90,7 @@ func lowLevelFoldStage[S any, A any](in Stream[A], seed S, f func(S, A, func(err
 // Reduce combines all items from the input stream into a single value using a binary function f.
 //
 // Treating f as a binary operator "*", Reduce computes in[0] * in[1] * ... * in[N-1]:
-// items are combined in stream order, but the parenthesization is unspecified
+// items are combined in stream order, but the parenthesization is non-deterministic
 // and may vary from run to run. This requires f to be associative -
 // (a * b) * c == a * (b * c) - so that every parenthesization yields the same
 // result. Commutativity is not required.
