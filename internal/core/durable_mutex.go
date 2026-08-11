@@ -36,6 +36,10 @@ type DurableMutex struct {
 }
 
 func (m *DurableMutex) Lock() {
+	// The algorithm is the three-state mutex from Drepper's "Futexes Are Tricky",
+	// with the channel standing in for the futex. A channel-based semaphore with
+	// capacity 1 would be simpler, but has no fast path.
+
 	// transition 0 -> 1: fast acquire
 	if m.state.CompareAndSwap(0, 1) {
 		return
