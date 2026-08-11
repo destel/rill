@@ -190,21 +190,22 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 
 			mu.Unlock()
 
-			// Release the mutex before calling f
+			// Release the mutex before calling f.
+			// Also we don't need it when writing node's value, since the node is owned by us.
+
 			merged, err := f(x, y)
 			if err != nil {
 				reportError(err)
 
-				// The merge is abandoned, the caller may assume there are no
-				// references left to x and y: remove the node from the list
-				mu.Lock()
-				current.Detach()
-				pool.Put(current)
-				mu.Unlock()
+				// There's no valid value to write to the node. We need to prevent someone from merging with it,
+				// otherwise the reducer would see an invalid pair of values.
+				// To do this, we leave the node's owned flag set and quit.
+
+				var zero A
+				current.Value.value = zero // helps GC
 				return
 			}
 
-			// no mutex needed: the node is owned by the worker
 			current.Value.value = merged
 		}
 	}
@@ -418,20 +419,22 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 
 			mu.Unlock()
 
-			// Release the mutex before calling the reducer
+			// Release the mutex before calling the reducer.
+			// Also we don't need it when writing node's value, since the node is owned by us.
+
 			merged, err := reducer(x, y)
 			if err != nil {
 				reportError(err)
 
-				// The merge is abandoned: remove the node from its list
-				mu.Lock()
-				current.Detach()
-				pool.Put(current)
-				mu.Unlock()
+				// There's no valid value to write to the node. We need to prevent someone from merging with it,
+				// otherwise the reducer would see an invalid pair of values.
+				// To do this, we leave the node's owned flag set and quit.
+
+				var zero V
+				current.Value.value = zero // helps GC
 				return
 			}
 
-			// no mutex needed: the node is owned by the worker
 			current.Value.value = merged
 		}
 	}
