@@ -11,7 +11,7 @@ import (
 // Reduce combines all items from the input stream into a single value using a binary function f.
 //
 // Treating f as a binary operator "*", Reduce computes in[0] * in[1] * ... * in[N-1]:
-// items are combined in stream order, but the parenthesization is non-deterministic
+// items are combined in stream order, but the parenthesization is unspecified
 // and may vary from run to run. This requires f to be associative -
 // (a * b) * c == a * (b * c) - so that every parenthesization yields the same
 // result. Commutativity is not required.
@@ -238,7 +238,7 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 //   - The mapper function transforms each input item into a key-value pair.
 //   - The reducer function reduces values of the same key into a single value.
 //     This phase has the same semantics as the [Reduce] function: for each key,
-//     values are combined in stream order, but the parenthesization is non-deterministic,
+//     values are combined in stream order, but the parenthesization is unspecified,
 //     so the reducer must be associative.
 //
 // An empty input stream produces an empty map.
