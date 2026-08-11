@@ -16,6 +16,7 @@ func expectList(t *testing.T, l *List[int], want ...int) {
 	var forward []int
 	for e := l.Front(); e != nil; e = e.Next() {
 		forward = append(forward, e.Value)
+		th.ExpectValue(t, e.list, l)
 	}
 	th.ExpectSlice(t, forward, want)
 	if t.Failed() {
@@ -86,23 +87,24 @@ func TestInsert(t *testing.T) {
 	expectList(t, l, 4, 2, 3, 1)
 }
 
-func TestRemove(t *testing.T) {
+func TestDetach(t *testing.T) {
 	l := New[int]()
 	e1, e2, e3 := node(1), node(2), node(3)
 	l.PushBack(e1)
 	l.PushBack(e2)
 	l.PushBack(e3)
 
-	l.Remove(e2)
+	e2.Detach()
 	expectList(t, l, 1, 3)
 	th.ExpectValue(t, e2.Next(), nil)
 	th.ExpectValue(t, e2.Prev(), nil)
+	th.ExpectValue(t, e2.list, nil)
 
-	l.Remove(e2) // already detached
+	e2.Detach() // already detached
 	expectList(t, l, 1, 3)
 
-	l.Remove(e1)
-	l.Remove(e3)
+	e1.Detach()
+	e3.Detach()
 	expectList(t, l)
 }
 
@@ -124,13 +126,9 @@ func TestCrossList(t *testing.T) {
 	l2.InsertBefore(e3, e1)
 	expectList(t, l2)
 
-	// remove first, then move across
-	l1.Remove(e1)
+	// detach first, then move across
+	e1.Detach()
 	l2.PushBack(e1)
 	expectList(t, l1, 2)
-	expectList(t, l2, 1)
-
-	// removing through the wrong list: no-op
-	l1.Remove(e1)
 	expectList(t, l2, 1)
 }

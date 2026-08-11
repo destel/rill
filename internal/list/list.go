@@ -3,8 +3,7 @@
 package list
 
 // Node is a node of a List. The zero value is a detached node ready to be
-// inserted into a list; removal detaches it again, so a node can be reused -
-// including in a different list.
+// inserted into a list.
 type Node[T any] struct {
 	Value T
 
@@ -26,6 +25,20 @@ func (n *Node[T]) Prev() *Node[T] {
 		return nil
 	}
 	return n.prev
+}
+
+// Detach removes n from the list it belongs to. It is a no-op if n is
+// already detached.
+func (n *Node[T]) Detach() {
+	if n.list == nil {
+		return
+	}
+
+	n.prev.next = n.next
+	n.next.prev = n.prev
+	n.next = nil
+	n.prev = nil
+	n.list = nil
 }
 
 // List is a doubly linked list. Lists must be created with [New].
@@ -57,22 +70,9 @@ func (l *List[T]) Back() *Node[T] {
 	return l.back.prev
 }
 
-// Remove detaches n from the list. It is a no-op if n is not a node of l.
-func (l *List[T]) Remove(n *Node[T]) {
-	if n.list != l {
-		return
-	}
-
-	n.prev.next = n.next
-	n.next.prev = n.prev
-	n.next = nil
-	n.prev = nil
-	n.list = nil
-}
-
 // PushBack inserts n at the back of the list. n can be a detached node or a
 // node of l, in which case it is moved to the new position. Pushing a node of
-// another list is a no-op - remove it there first.
+// another list is a no-op - detach it first.
 func (l *List[T]) PushBack(n *Node[T]) {
 	l.insertAfter(n, l.back.prev)
 }

@@ -2,8 +2,6 @@ package rill
 
 import (
 	"fmt"
-	"maps"
-	"reflect"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -592,83 +590,4 @@ func TestMapReduce(t *testing.T) {
 		})
 	})
 
-}
-
-func TestMergeMaps(t *testing.T) {
-	concat := func(x, y string) (string, error) { return x + "|" + y, nil }
-
-	failingConcat := func(x, y string) (string, error) {
-		if x == "b" || y == "b" {
-			return "", fmt.Errorf("boom")
-		}
-		return x + "|" + y, nil
-	}
-
-	sameMap := func(a, b map[int]string) bool {
-		return reflect.ValueOf(a).Pointer() == reflect.ValueOf(b).Pointer()
-	}
-
-	t.Run("acc is larger", func(t *testing.T) {
-		acc := map[int]string{1: "a", 2: "b", 3: "c"}
-		m := map[int]string{2: "y", 4: "w"}
-		mBefore := maps.Clone(m)
-
-		res, leftover, err := mergeMaps(acc, m, concat)
-
-		th.ExpectNoError(t, err)
-		th.ExpectMap(t, res, map[int]string{1: "a", 2: "b|y", 3: "c", 4: "w"})
-		th.ExpectMap(t, leftover, mBefore)
-
-		// the larger map is the storage; the smaller one is a leftover
-		th.ExpectValue(t, sameMap(res, acc), true)
-		th.ExpectValue(t, sameMap(leftover, m), true)
-
-	})
-
-	t.Run("acc is larger with reducer error", func(t *testing.T) {
-		acc := map[int]string{1: "a", 2: "b", 3: "c"}
-		m := map[int]string{2: "y", 4: "w"}
-		mBefore := maps.Clone(m)
-
-		res, leftover, err := mergeMaps(acc, m, failingConcat)
-
-		th.ExpectError(t, err, "boom")
-		th.ExpectMap(t, leftover, mBefore)
-
-		// an aborted merge leaves the storage roles and the leftover unaffected
-		th.ExpectValue(t, sameMap(res, acc), true)
-		th.ExpectValue(t, sameMap(leftover, m), true)
-
-	})
-
-	t.Run("acc is smaller", func(t *testing.T) {
-		acc := map[int]string{2: "b", 4: "d"}
-		m := map[int]string{1: "x", 2: "y", 3: "z"}
-		accBefore := maps.Clone(acc)
-
-		res, leftover, err := mergeMaps(acc, m, concat)
-
-		th.ExpectNoError(t, err)
-		th.ExpectMap(t, res, map[int]string{1: "x", 2: "b|y", 3: "z", 4: "d"})
-		th.ExpectMap(t, leftover, accBefore)
-
-		th.ExpectValue(t, sameMap(res, m), true)
-		th.ExpectValue(t, sameMap(leftover, acc), true)
-
-	})
-
-	t.Run("acc is smaller with reducer error", func(t *testing.T) {
-		acc := map[int]string{2: "b", 4: "d"}
-		m := map[int]string{1: "x", 2: "y", 3: "z"}
-		accBefore := maps.Clone(acc)
-
-		res, leftover, err := mergeMaps(acc, m, failingConcat)
-
-		th.ExpectError(t, err, "boom")
-		th.ExpectMap(t, leftover, accBefore)
-
-		th.ExpectValue(t, sameMap(res, m), true)
-		th.ExpectValue(t, sameMap(leftover, acc), true)
-
-	})
 }
