@@ -13,18 +13,18 @@ type Node[T any] struct {
 
 // Next returns the next node, or nil if n is the last one or detached.
 func (n *Node[T]) Next() *Node[T] {
-	if n.next == nil || n.next.next == nil {
-		return nil
+	if l := n.list; l != nil && n.next != &l.root {
+		return n.next
 	}
-	return n.next
+	return nil
 }
 
 // Prev returns the previous node, or nil if n is the first one or detached.
 func (n *Node[T]) Prev() *Node[T] {
-	if n.prev == nil || n.prev.prev == nil {
-		return nil
+	if l := n.list; l != nil && n.prev != &l.root {
+		return n.prev
 	}
-	return n.prev
+	return nil
 }
 
 // Detach removes n from the list it belongs to. It is a no-op if n is
@@ -43,44 +43,44 @@ func (n *Node[T]) Detach() {
 
 // List is a doubly linked list. Lists must be created with [New].
 type List[T any] struct {
-	front, back Node[T]
+	root Node[T] // sentinel closing the ring; its Value and list fields are unused
 }
 
 // New returns an initialized empty list.
 func New[T any]() *List[T] {
 	l := &List[T]{}
-	l.front.next = &l.back
-	l.back.prev = &l.front
+	l.root.next = &l.root
+	l.root.prev = &l.root
 	return l
 }
 
 // Front returns the first node, or nil if the list is empty.
 func (l *List[T]) Front() *Node[T] {
-	if l.front.next == &l.back {
-		return nil
+	if n := l.root.next; n != &l.root {
+		return n
 	}
-	return l.front.next
+	return nil
 }
 
 // Back returns the last node, or nil if the list is empty.
 func (l *List[T]) Back() *Node[T] {
-	if l.front.next == &l.back {
-		return nil
+	if n := l.root.prev; n != &l.root {
+		return n
 	}
-	return l.back.prev
+	return nil
 }
 
 // PushBack inserts n at the back of the list. n can be a detached node or a
 // node of l, in which case it is moved to the new position. Pushing a node of
 // another list is a no-op - detach it first.
 func (l *List[T]) PushBack(n *Node[T]) {
-	l.insertAfter(n, l.back.prev)
+	l.insertAfter(n, l.root.prev)
 }
 
 // PushFront inserts n at the front of the list. Same contract for n as
 // [List.PushBack].
 func (l *List[T]) PushFront(n *Node[T]) {
-	l.insertAfter(n, &l.front)
+	l.insertAfter(n, &l.root)
 }
 
 // InsertAfter inserts n after mark, which must be a node of l. Same contract
@@ -98,7 +98,7 @@ func (l *List[T]) InsertBefore(n, mark *Node[T]) {
 	}
 }
 
-// mark can be the front sentinel
+// mark can be the sentinel
 func (l *List[T]) insertAfter(n, mark *Node[T]) {
 	if mark == n {
 		return
