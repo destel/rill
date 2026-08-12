@@ -39,7 +39,6 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 		return nil
 	}
 
-	defer Discard(in)
 	var done atomic.Bool
 	defer done.Store(true)
 

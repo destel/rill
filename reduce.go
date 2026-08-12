@@ -222,10 +222,13 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 	go func() {
 		wg.Wait()
 
-		// By construction, the list contains 0 or 1 nodes
-		if first := nodes.Front(); !errSeen.Load() && first != nil {
-			out <- Try[A]{Value: first.Value.value}
+		if !errSeen.Load() {
+			// By construction, the list contains 0 or 1 nodes
+			if first := nodes.Front(); first != nil {
+				out <- Try[A]{Value: first.Value.value}
+			}
 		}
+
 		close(out)
 	}()
 
@@ -293,28 +296,32 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 	//     node: unlike the global list, a key's list is never empty - it is
 	//     created by an append and never loses its last node.
 
-	defer Discard(in)
-	var done atomic.Bool
-	defer done.Store(true)
+	// errors and the final map are reported via the out channel
+	var errSeen atomic.Bool
+	out := make(chan Try[map[K]V], 1)
 
-	type pair struct {
+	reportError := func(err error) {
+		errSeen.Store(true)
+		out <- Try[map[K]V]{Error: err}
+	}
+
+	type kv struct {
 		key   K
 		value V
 	}
 
 	// Turn each item into a (key, value) pair
-	pairs := OrderedFilterMap(in, nm, func(a A) (pair, bool, error) {
-		if done.Load() {
-			return pair{}, false, nil
+	entries := OrderedFilterMap(in, nm, func(a A) (kv, bool, error) {
+		if errSeen.Load() {
+			return kv{}, false, nil
 		}
 
 		k, v, err := mapper(a)
 		if err != nil {
-			return pair{}, false, err
+			return kv{}, false, err
 		}
-		return pair{key: k, value: v}, true, nil
+		return kv{k, v}, true, nil
 	})
-	defer Discard(pairs)
 
 	type Item struct {
 		value V
@@ -335,22 +342,13 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 	var mu sync.Mutex
 	var inputMu core.DurableMutex
 
-	// errors and the final map are reported via the out channel
-	var errSeen atomic.Bool
-	out := make(chan Try[map[K]V], 1)
-
-	reportError := func(err error) {
-		errSeen.Store(true)
-		out <- Try[map[K]V]{Error: err}
-	}
-
 	// Pulls one pair from the input and appends it to its key's list.
 	// The caller becomes the owner of the appended node.
 	pull1 := func() *list.Node[Item] {
 		inputMu.Lock()
 		defer inputMu.Unlock()
 
-		a, ok := <-pairs
+		a, ok := <-entries
 		if !ok || errSeen.Load() {
 			return nil
 		}
@@ -439,6 +437,8 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 		}
 	}
 
+	defer Discard(entries)
+
 	// Start the workers
 	var wg sync.WaitGroup
 	for range nr {
@@ -450,13 +450,14 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 		wg.Wait()
 
 		if !errSeen.Load() {
-			res := make(map[K]V, len(lists))
 			// By construction, each list has converged to exactly one node
+			res := make(map[K]V, len(lists))
 			for k, l := range lists {
 				res[k] = l.Front().Value.value
 			}
 			out <- Try[map[K]V]{Value: res}
 		}
+
 		close(out)
 	}()
 
