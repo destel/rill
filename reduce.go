@@ -1,131 +1,30 @@
 package rill
 
 import (
-	"errors"
+	"sync"
 	"sync/atomic"
 
 	"github.com/destel/rill/internal/core"
+	"github.com/destel/rill/internal/list"
 )
 
-// lowLevelReduceStage transforms a stream of values into a stream with a
-// single value - the fold of all input values using f.
-//
-// At n = 1 the final value is a single chain over the input in order: f(f(f(f(a1, a2), a3), a4), ...).
-// For n > 1 there are multiple such chains working concurrently so reduction order is undefined, and
-// the supplied callback must be commutative and associative.
-//
-//   - at most n calls to f run concurrently
-//   - all input errors are forwarded as they occur
-//   - the callback can emit any number of additional errors per call
-//   - the result is emitted at the end, after all errors, and only if the input had at least one value
-//   - what emitted errors imply about the result is the caller's contract
-func lowLevelReduceStage[A any](in Stream[A], n int, f func(A, A, func(error)) A) Stream[A] {
-	if n <= 1 {
-		return Generate(func(send func(A), sendErr func(error)) {
-			var acc A
-			first := true
-
-			for a := range in {
-				if a.Error != nil {
-					sendErr(a.Error)
-					continue
-				}
-
-				if first {
-					acc = a.Value
-					first = false
-					continue
-				}
-
-				res := f(acc, a.Value, sendErr)
-				acc = res
-			}
-
-			if !first {
-				send(acc)
-			}
-		})
-	}
-
-	chains := make([]Stream[A], n)
-	for i := range chains {
-		chains[i] = lowLevelReduceStage(in, 1, f)
-	}
-
-	partials := core.Merge(chains...)
-
-	// partials contains at most n values - one per chain. Reducing them in
-	// parallel takes at most n/2 concurrent f calls, so n/2 is all the
-	// concurrency the next level can use. The total concurrency across all
-	// levels still cannot exceed n: each concurrent f call at the next level
-	// requires two values, and hence two finished chains, at this level.
-	return lowLevelReduceStage(partials, n/2, f)
-}
-
-// lowLevelFoldStage is the seeded, sequential counterpart of
-// lowLevelReduceStage. The final value is a single chain over the input
-// in order: f(f(f(f(seed, a1), a2), a3), ...).
-// Same error model: the callback emits errors instead of returning them,
-// and always returns the value to carry forward.
-//
-// Unlike a reduce, for an empty input the final value is the seed.
-func lowLevelFoldStage[S any, A any](in Stream[A], seed S, f func(S, A, func(error)) S) Stream[S] {
-	return Generate(func(send func(S), sendErr func(error)) {
-		acc := seed
-
-		for v := range in {
-			if v.Error != nil {
-				sendErr(v.Error)
-				continue
-			}
-			acc = f(acc, v.Value, sendErr)
-		}
-
-		send(acc)
-	})
-}
-
-// reduceStage transforms a stream of values into a stream with a single
-// value - the fold of all input values using the associative and commutative
-// function f.
-//
-// It's lowLevelReduceStage with the conventional error handling; on top of
-// its contract:
-//   - f errors are emitted as they occur, exactly one per failed call
-//   - f errors make the result partial: a fold of only some subset of the
-//     values; the exact subset is only specified at n = 1 - the right
-//     operands of all failed f calls are excluded from the fold
-func reduceStage[A any](in Stream[A], n int, f func(A, A) (A, error)) Stream[A] {
-	return lowLevelReduceStage(in, n, func(a1, a2 A, sendErr func(error)) A {
-		res, err := f(a1, a2)
-		if err != nil {
-			sendErr(err)
-			return a1 // the left operand is the carried value; dropping a2 is what the partial-result bullet promises
-		}
-		return res
-	})
-}
-
 // Reduce combines all items from the input stream into a single value using a binary function f.
-// The function f is called for pairs of values, progressively reducing them until only one remains.
 //
-// As an unordered function, Reduce can apply f to any pair of items in any order, which requires f to be:
-//   - Associative: f(a, f(b, c)) == f(f(a, b), c)
-//   - Commutative: f(a, b) == f(b, a)
+// Treating f as a binary operator "*", Reduce computes in[0] * in[1] * ... * in[N-1]:
+// items are combined in stream order, but the parenthesization is unspecified
+// and may vary from run to run. This requires f to be associative -
+// (a * b) * c == a * (b * c) - so that every parenthesization yields the same
+// result. Commutativity is not required.
 //
 // The hasResult return flag is set to true if the stream contained at least one value and no error was encountered,
 // otherwise it is set to false.
 //
-// Reduce is a blocking unordered function that processes items concurrently using n goroutines.
-// When n = 1, items are processed sequentially in stream order,
-// removing the need for the function f to be associative and commutative.
+// Reduce is a blocking function that processes items concurrently using n goroutines.
 //
-// See the package documentation for more information on blocking unordered functions and error handling.
+// See the package documentation for more information on blocking functions and error handling.
 func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, hasResult bool, err error) {
 	validateN(n)
 	validateNilFunc(f == nil)
-
-	var zero A
 
 	if n == 1 {
 		var acc A
@@ -145,110 +44,212 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 			return nil
 		})
 		if err != nil {
+			var zero A
 			return zero, false, err
 		}
 		return acc, seeded, nil
 	}
 
-	var stopped atomic.Bool
-	defer stopped.Store(true)
+	// The high level idea: keep values in stream order in a linked list.
+	// A worker takes two adjacent nodes and merges them into one.
+	// If there's nothing to merge, worker pulls more values and appends them to the list.
+	// If there is nothing left to pull, worker quits.
+	//
+	// This gives us:
+	// - Reduction function can be non-commutative. Associativity is still required.
+	// - Maximized utilization: a worker quits only when no current or future work is available for it.
+	// - Convergence: after all workers quit, the list contains 0 or 1 nodes - at the last
+	//   release, every other node was already free, so a second node would have been
+	//   a free neighbor, and workers never release next to one.
+	// - With n workers, at most 2*n+1 nodes are live at any time.
+	// - The reduction tree is adaptive. It depends on both the scheduler and the observed cost of f.
+	//   If one partial result is expensive to produce, other workers keep merging around it,
+	//   so the emergent tree tends to be near-balanced exactly when it matters.
 
-	out := reduceStage(in, n, func(a1, a2 A) (A, error) {
-		if stopped.Load() {
-			return a1, nil
+	type Item struct {
+		value A
+		owned bool
+	}
+
+	// Pool of list nodes to avoid per-item allocations.
+	pool := &core.Pool[*list.Node[Item]]{
+		New:            func() *list.Node[Item] { return new(list.Node[Item]) },
+		Reset:          func(node *list.Node[Item]) { node.Value = Item{} },
+		Unsynchronized: true,
+	}
+
+	nodes := list.New[Item]()
+
+	// mu protects the state (list, pool, node values).
+	// inputMu ensures that pulling from the input channel and appending to the list is atomic
+	var mu sync.Mutex
+	var inputMu core.DurableMutex
+
+	// errors and the final result are reported via the out channel
+	var errSeen atomic.Bool
+	out := make(chan Try[A], 1)
+
+	reportError := func(err error) {
+		errSeen.Store(true)
+		out <- Try[A]{Error: err}
+	}
+
+	// Pulls at most 2 values from the input channel and appends them to the list.
+	// The first pulled value is marked as owned.
+	pull2 := func() *list.Node[Item] {
+		inputMu.Lock()
+		defer inputMu.Unlock()
+
+		var buf [2]A
+		count := 0
+
+		for a := range in {
+			if errSeen.Load() {
+				return nil
+			}
+			if a.Error != nil {
+				reportError(a.Error)
+				return nil
+			}
+			buf[count] = a.Value
+			count++
+			if count == 2 {
+				break
+			}
 		}
-		return f(a1, a2)
-	})
+
+		if count == 0 {
+			return nil
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		first := pool.Get()
+		first.Value = Item{value: buf[0], owned: true}
+		nodes.PushBack(first)
+
+		for i := 1; i < count; i++ {
+			node := pool.Get()
+			node.Value = Item{value: buf[i], owned: false}
+			nodes.PushBack(node)
+		}
+
+		return first
+	}
+
+	// How a worker finds work without scanning the entire list:
+	// Each worker owns some node L and on every iteration it checks if one of its neighbors is free
+	// and absorbs it into L if so. Otherwise it pulls or quits.
+	//
+	// Workers are greedy: a worker never releases its node while a free neighbor
+	// exists, so no two free nodes are ever adjacent. Quitting is optimal:
+	// any work discoverable by scanning would be an adjacent free pair.
+	worker := func() {
+		var current *list.Node[Item]
+
+		for {
+			// As soon as any worker reported an error, all workers quit
+			if errSeen.Load() {
+				return
+			}
+
+			if current == nil {
+				current = pull2()
+				if current == nil {
+					return
+				}
+			}
+
+			mu.Lock()
+
+			// Prefer the right neighbor so a fresh seat immediately
+			// consumes its pair-mate. Either direction preserves operand
+			// order.
+			var x, y A
+			var nodeToAbsorb *list.Node[Item]
+
+			if right := current.Next(); right != nil && !right.Value.owned {
+				x, y = current.Value.value, right.Value.value
+				nodeToAbsorb = right
+			} else if left := current.Prev(); left != nil && !left.Value.owned {
+				x, y = left.Value.value, current.Value.value
+				nodeToAbsorb = left
+			}
+
+			// Neither neighbor is free: release the current node and get back to pulling
+			if nodeToAbsorb == nil {
+				current.Value.owned = false
+				current = nil
+				mu.Unlock()
+				continue
+			}
+
+			nodeToAbsorb.Detach()
+			pool.Put(nodeToAbsorb)
+
+			mu.Unlock()
+
+			// Release the mutex before calling f.
+			// Also we don't need it when writing node's value, since the node is owned by us.
+
+			merged, err := f(x, y)
+			if err != nil {
+				reportError(err)
+
+				// There's no valid value to write to the node. We need to prevent someone from merging with it,
+				// otherwise the reducer would see an invalid pair of values.
+				// To do this, we leave the node's owned flag set and quit.
+
+				var zero A
+				current.Value.value = zero // helps GC
+				return
+			}
+
+			current.Value.value = merged
+		}
+	}
+
+	defer Discard(in)
+
+	// Start the workers
+	var wg sync.WaitGroup
+	for range n {
+		wg.Go(worker)
+	}
+
+	// Wait until all workers quit
+	go func() {
+		wg.Wait()
+
+		if !errSeen.Load() {
+			// By construction, the list contains 0 or 1 nodes
+			if first := nodes.Front(); first != nil {
+				out <- Try[A]{Value: first.Value.value}
+			}
+		}
+
+		close(out)
+	}()
 
 	return First(out)
-}
-
-// mergeIntoMap adds the (k, v) pair to the map m.
-// If the key already exists, it is merged with the new value using the merge function.
-// On merge failure the map is left unchanged and the error is returned.
-func mergeIntoMap[K comparable, V any](m map[K]V, k K, v V, mergeFunc func(V, V) (V, error)) error {
-	val, ok := m[k]
-	if !ok {
-		m[k] = v
-		return nil
-	}
-
-	newVal, err := mergeFunc(val, v)
-	if err != nil {
-		return err
-	}
-
-	m[k] = newVal
-	return nil
-}
-
-// errSkip is a control-flow sentinel, compared by identity - the fs.SkipDir pattern.
-var errSkip = errors.New("skip")
-
-// mapReduceStage transforms a stream of values into a stream with a single map.
-//
-// Semantically it's equivalent to transforming each value into a single-key map using mapper
-// and then reducing those maps per key using reducer. The only difference is that empty input produces an empty map.
-//
-// nm and nr control the maximum number of concurrent mapper and reducer calls respectively.
-func mapReduceStage[A any, K comparable, V any](in Stream[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error)) Stream[map[K]V] {
-	type keyValue struct {
-		Key   K
-		Value V
-	}
-
-	pairs := FilterMap(in, nm, func(a A) (keyValue, bool, error) {
-		k, v, err := mapper(a)
-		if err == errSkip { //nolint:errorlint
-			return keyValue{}, false, nil
-		}
-		if err != nil {
-			return keyValue{}, false, err
-		}
-		return keyValue{k, v}, true, nil
-	})
-
-	chains := make([]Stream[map[K]V], nr)
-	for i := range chains {
-		chains[i] = lowLevelFoldStage(pairs, make(map[K]V), func(m map[K]V, p keyValue, sendErr func(error)) map[K]V {
-			if err := mergeIntoMap(m, p.Key, p.Value, reducer); err != nil {
-				sendErr(err)
-			}
-			return m
-		})
-	}
-
-	if len(chains) == 1 {
-		return chains[0]
-	}
-
-	// The same argument as in lowLevelReduceStage bounds concurrent reducer
-	// calls by nr: each concurrent merge at the next level requires two
-	// finished fold chains.
-	return lowLevelReduceStage(core.Merge(chains...), nr/2, func(m1, m2 map[K]V, sendErr func(error)) map[K]V {
-		for k, v := range m2 {
-			if err := mergeIntoMap(m1, k, v, reducer); err != nil {
-				sendErr(err)
-			}
-		}
-		return m1
-	})
 }
 
 // MapReduce transforms the input stream into a Go map using mapper and reducer functions.
 // The transformation is performed in two concurrent phases.
 //
 //   - The mapper function transforms each input item into a key-value pair.
-//   - The reducer function reduces values for the same key into a single value.
-//     This phase has the same semantics as the [Reduce] function, in particular
-//     the reducer function must be associative and commutative.
+//   - The reducer function reduces values of the same key into a single value.
+//     This phase has the same semantics as the [Reduce] function: for each key,
+//     values are combined in stream order, but the parenthesization is unspecified,
+//     so the reducer must be associative.
 //
-// MapReduce is a blocking unordered function that processes items concurrently using nm and nr goroutines
-// for the mapper and reducer functions respectively. When nm = 1 and nr = 1, items are mapped and reduced
-// sequentially in stream order, removing the need for the reducer to be associative and commutative.
-// Setting only nr = 1 does not provide this relaxation.
+// An empty input stream produces an empty map.
 //
-// See the package documentation for more information on blocking unordered functions and error handling.
+// MapReduce is a blocking function that processes items concurrently using nm and nr goroutines
+// for the mapper and reducer functions respectively.
+//
+// See the package documentation for more information on blocking functions and error handling.
 func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error)) (map[K]V, error) {
 	validateN(nm)
 	validateNilFunc(mapper == nil)
@@ -256,46 +257,213 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 	validateNilFunc(reducer == nil)
 
 	if nm == 1 && nr == 1 {
-		m := make(map[K]V)
+		acc := make(map[K]V)
 		err := ForEach(in, 1, func(a A) error {
 			k, v, err := mapper(a)
 			if err != nil {
 				return err
 			}
-			err = mergeIntoMap(m, k, v, reducer)
+
+			old, ok := acc[k]
+			if !ok {
+				acc[k] = v
+				return nil
+			}
+
+			merged, err := reducer(old, v)
 			if err != nil {
 				return err
 			}
+			acc[k] = merged
 			return nil
 		})
 
 		if err != nil {
 			return nil, err
 		}
-		return m, nil
+		return acc, nil
 	}
 
-	var stopped atomic.Bool
-	defer stopped.Store(true)
+	// The high level idea: almost the same engine as in Reduce.
+	//   - One linked list per key instead of the global one. Lists are created lazily
+	//     as new keys are encountered.
+	//   - Worker pulls and appends one value at a time instead of two.
+	//   - Workers are not permanently bound to lists. When worker pulls a value, it appends it
+	//     to that key's list and works there next.
+	//   - O(c + n) live nodes for cardinality c.
+	//   - Each individual list conforms to the same invariant as the global list
+	//     in Reduce, and the algorithm converges to each list holding exactly one
+	//     node: unlike the global list, a key's list is never empty - it is
+	//     created by an append and never loses its last node.
 
-	var zeroK K
-	var zeroV V
+	// errors and the final map are reported via the out channel
+	var errSeen atomic.Bool
+	out := make(chan Try[map[K]V], 1)
 
-	out := mapReduceStage(in,
-		nm, func(a A) (K, V, error) {
-			if stopped.Load() {
-				return zeroK, zeroV, errSkip
+	reportError := func(err error) {
+		errSeen.Store(true)
+		out <- Try[map[K]V]{Error: err}
+	}
+
+	type kv struct {
+		key   K
+		value V
+	}
+
+	// Turn each item into a (key, value) pair
+	entries := OrderedFilterMap(in, nm, func(a A) (kv, bool, error) {
+		if errSeen.Load() {
+			return kv{}, false, nil
+		}
+
+		k, v, err := mapper(a)
+		if err != nil {
+			return kv{}, false, err
+		}
+		return kv{k, v}, true, nil
+	})
+
+	type Item struct {
+		value V
+		owned bool
+	}
+
+	// Pool of list nodes, shared by all per-key lists.
+	pool := &core.Pool[*list.Node[Item]]{
+		New:            func() *list.Node[Item] { return new(list.Node[Item]) },
+		Reset:          func(node *list.Node[Item]) { node.Value = Item{} },
+		Unsynchronized: true,
+	}
+
+	lists := make(map[K]*list.List[Item])
+
+	// mu protects the state (lists, pool, node values).
+	// inputMu ensures that pulling from the input channel and appending to a list is atomic
+	var mu sync.Mutex
+	var inputMu core.DurableMutex
+
+	// Pulls one pair from the input and appends it to its key's list.
+	// The caller becomes the owner of the appended node.
+	pull1 := func() *list.Node[Item] {
+		inputMu.Lock()
+		defer inputMu.Unlock()
+
+		a, ok := <-entries
+		if !ok || errSeen.Load() {
+			return nil
+		}
+		if a.Error != nil {
+			reportError(a.Error)
+			return nil
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		l := lists[a.Value.key]
+		if l == nil {
+			l = list.New[Item]()
+			lists[a.Value.key] = l
+		}
+
+		node := pool.Get()
+		node.Value = Item{value: a.Value.value, owned: true}
+		l.PushBack(node)
+
+		return node
+	}
+
+	worker := func() {
+		var current *list.Node[Item]
+
+		for {
+			// As soon as any worker reported an error, all workers quit
+			if errSeen.Load() {
+				return
 			}
-			return mapper(a)
-		},
-		nr, func(v1, v2 V) (V, error) {
-			if stopped.Load() {
-				return v1, nil
-			}
-			return reducer(v1, v2)
-		},
-	)
 
-	m, _, err := First(out)
-	return m, err
+			if current == nil {
+				current = pull1()
+				if current == nil {
+					return
+				}
+			}
+
+			mu.Lock()
+
+			// A fresh node sits at the back of its list, so left neighbor is checked first.
+			// Either direction preserves operand order.
+			var x, y V
+			var nodeToAbsorb *list.Node[Item]
+
+			if left := current.Prev(); left != nil && !left.Value.owned {
+				x, y = left.Value.value, current.Value.value
+				nodeToAbsorb = left
+			} else if right := current.Next(); right != nil && !right.Value.owned {
+				x, y = current.Value.value, right.Value.value
+				nodeToAbsorb = right
+			}
+
+			// Neither neighbor is free: release the current node and get back to pulling
+			if nodeToAbsorb == nil {
+				current.Value.owned = false
+				current = nil
+				mu.Unlock()
+				continue
+			}
+
+			nodeToAbsorb.Detach()
+			pool.Put(nodeToAbsorb)
+
+			mu.Unlock()
+
+			// Release the mutex before calling the reducer.
+			// Also we don't need it when writing node's value, since the node is owned by us.
+
+			merged, err := reducer(x, y)
+			if err != nil {
+				reportError(err)
+
+				// There's no valid value to write to the node. We need to prevent someone from merging with it,
+				// otherwise the reducer would see an invalid pair of values.
+				// To do this, we leave the node's owned flag set and quit.
+
+				var zero V
+				current.Value.value = zero // helps GC
+				return
+			}
+
+			current.Value.value = merged
+		}
+	}
+
+	defer Discard(entries)
+
+	// Start the workers
+	var wg sync.WaitGroup
+	for range nr {
+		wg.Go(worker)
+	}
+
+	// Wait until all workers quit, then harvest the final map
+	go func() {
+		wg.Wait()
+
+		if !errSeen.Load() {
+			// By construction, each list has converged to exactly one node
+			res := make(map[K]V, len(lists))
+			for k, l := range lists {
+				res[k] = l.Front().Value.value
+			}
+			out <- Try[map[K]V]{Value: res}
+		}
+
+		close(out)
+	}()
+
+	res, _, err := First(out)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }

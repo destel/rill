@@ -2,6 +2,8 @@ package rill
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -198,24 +200,41 @@ func TestReduce(t *testing.T) {
 			})
 		})
 
-	})
+		th.RunSynctest(t, "ordering", func(t *testing.T) {
+			tokens := make([]string, 100)
+			for i := range tokens {
+				tokens[i] = fmt.Sprintf("%d", i)
+			}
 
-	th.RunSynctest(t, "n=1 determinism", func(t *testing.T) {
-		in := FromSlice([]string{"1", "2", "3", "4", "5"}, nil)
+			slowTokens := []string{"20", "40", "60", "80"}
 
-		// race detector must not complain about dummy being accessed w/o synchronization
-		dummy := 0
-		out, ok, err := Reduce(in, 1, func(x, y string) (string, error) {
-			dummy++
-			return x + y, nil
+			in := FromSlice(tokens, nil)
+
+			out, ok, err := Reduce(in, n, func(x, y string) (string, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+
+				// Force out-of-order completion: a few leaves are expensive enough
+				// that while a worker sleeps on one, the others finish all or most
+				// of the remaining work first (at n=4 all four workers can be asleep
+				// at once), so the late partials must re-attach in position.
+				if slices.Contains(slowTokens, x) || slices.Contains(slowTokens, y) {
+					th.SimulateWork(100*time.Second, 200*time.Second)
+				}
+
+				return x + "|" + y, nil
+			})
+
+			expected := strings.Join(tokens, "|")
+
+			th.ExpectDrainedChan(t, in)
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, out, expected)
+			th.ExpectValue(t, ok, true)
 		})
 
-		th.ExpectNoError(t, err)
-		th.ExpectValue(t, out, "12345")
-		th.ExpectValue(t, ok, true)
-
-		th.ExpectValue(t, dummy, 4)
 	})
+
 }
 
 func TestMapReduce(t *testing.T) {
@@ -251,6 +270,27 @@ func TestMapReduce(t *testing.T) {
 
 				th.ExpectNoError(t, err)
 				th.ExpectMap(t, out, map[string]int{})
+			})
+
+			th.RunSynctest(t, "single error stream", func(t *testing.T) {
+				in := FromSlice([]int{}, fmt.Errorf("err0"))
+
+				out, err := MapReduce(in,
+					nm, func(x int) (string, int, error) {
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return fmt.Sprint(x), x, nil
+					},
+					nr, func(x, y int) (int, error) {
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return x + y, nil
+					},
+				)
+
+				th.WaitForInflightWork()
+				th.ExpectDrainedChan(t, in)
+
+				th.ExpectError(t, err, "err0")
+				th.ExpectMap(t, out, nil)
 			})
 
 			th.RunSynctest(t, "single value keys", func(t *testing.T) {
@@ -505,32 +545,49 @@ func TestMapReduce(t *testing.T) {
 				})
 			})
 
-		})
-	})
+			th.RunSynctest(t, "ordering", func(t *testing.T) {
+				const numKeys = 3
+				slowTokens := []string{"20", "40", "60", "80"}
 
-	th.RunSynctest(t, "n=1 determinism", func(t *testing.T) {
-		in := FromSlice([]int{1, 2, 3, 4, 5}, nil)
+				in := FromChan(th.FromRange(0, 100), nil)
 
-		// race detector must not complain about dummy being accessed w/o synchronization
-		dummy1 := 0
-		dummy2 := 0
-		out, err := MapReduce(in,
-			1, func(x int) (bool, string, error) {
-				dummy1++
-				return x%2 == 0, fmt.Sprint(x), nil
-			},
-			1, func(x, y string) (string, error) {
-				dummy2++
-				return x + y, nil
+				out, err := MapReduce(in,
+					nm, func(x int) (int, string, error) {
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return x % numKeys, fmt.Sprint(x), nil
+					},
+					nr, func(x, y string) (string, error) {
+						th.SimulateWork(10*time.Second, 20*time.Second)
+
+						// Force out-of-order completion: a few leaves are expensive
+						// enough that while a worker sleeps on one, the others finish
+						// most of the remaining work first, so the late partials must
+						// re-attach in position.
+						if slices.Contains(slowTokens, x) || slices.Contains(slowTokens, y) {
+							th.SimulateWork(500*time.Second, 600*time.Second)
+						}
+
+						return x + "|" + y, nil
+					},
+				)
+
+				expected := make(map[int]string, numKeys)
+				for i := range 100 {
+					k := i % numKeys
+					if expected[k] == "" {
+						expected[k] = fmt.Sprint(i)
+					} else {
+						expected[k] += "|" + fmt.Sprint(i)
+					}
+				}
+
+				th.ExpectDrainedChan(t, in)
+
+				th.ExpectNoError(t, err)
+				th.ExpectMap(t, out, expected)
 			})
 
-		th.ExpectNoError(t, err)
-		th.ExpectMap(t, out, map[bool]string{
-			true:  "24",
-			false: "135",
 		})
-
-		th.ExpectValue(t, dummy1, 5)
-		th.ExpectValue(t, dummy2, 3)
 	})
+
 }

@@ -38,28 +38,6 @@ func Loop[A, B any](in <-chan A, done chan<- B, n int, f func(A)) {
 	}
 }
 
-// signalChanPool is a fixed-size pool of reusable buffered(1) signal channels.
-// Get blocks until one is free; Release returns it.
-type signalChanPool struct {
-	free chan chan struct{}
-}
-
-func newSignalChanPool(size int) *signalChanPool {
-	free := make(chan chan struct{}, size)
-	for range size {
-		free <- make(chan struct{}, 1)
-	}
-	return &signalChanPool{free: free}
-}
-
-func (p *signalChanPool) Get() chan struct{} {
-	return <-p.free
-}
-
-func (p *signalChanPool) Release(ch chan struct{}) {
-	p.free <- ch
-}
-
 type orderedValue[A any] struct {
 	Value        A
 	CanWrite     chan struct{}
@@ -94,11 +72,11 @@ func OrderedLoop[A, B any](in <-chan A, done chan<- B, n int, f func(a A, canWri
 	// Each item holds its own canWrite channel and a reference to the next item's canWrite channel.
 	// After item is processed and written, it sends a signal to the next item that it can also be written.
 
-	// Recycle canWrite channels via a small per-call pool: no per-item allocation.
-	// Preferred over a package-level sync.Pool. It's faster for long loops, and safe
-	// under synctest (a shared pool would reuse channels across bubbles).
-	// Size n+1 is the minimum for full n-way concurrency.
-	pool := newSignalChanPool(n + 1)
+	// Pool of signal channels to avoid per-item allocations.
+	// Size is O(n). No Reset: f drains its canWrite channel exactly once.
+	pool := &Pool[chan struct{}]{
+		New: func() chan struct{} { return make(chan struct{}, 1) },
+	}
 
 	orderedIn := make(chan orderedValue[A])
 
@@ -121,7 +99,7 @@ func OrderedLoop[A, B any](in <-chan A, done chan<- B, n int, f func(a A, canWri
 			for a := range orderedIn {
 				f(a.Value, a.CanWrite)
 
-				pool.Release(a.CanWrite)
+				pool.Put(a.CanWrite)
 				a.NextCanWrite <- struct{}{}
 			}
 		})
