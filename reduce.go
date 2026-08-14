@@ -87,7 +87,7 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 
 	// errors and the final result are reported via the out channel
 	var errSeen atomic.Bool
-	out := make(chan Try[A], 1)
+	out := make(chan Try[A], n)
 
 	reportError := func(err error) {
 		errSeen.Store(true)
@@ -298,7 +298,7 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 
 	// errors and the final map are reported via the out channel
 	var errSeen atomic.Bool
-	out := make(chan Try[map[K]V], 1)
+	out := make(chan Try[map[K]V], nr)
 
 	reportError := func(err error) {
 		errSeen.Store(true)
