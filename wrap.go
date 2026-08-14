@@ -35,11 +35,14 @@ func Wrap[A any](value A, err error) Try[A] {
 // FromSlice converts a slice into a stream.
 // If err is not nil, it is added to the end of the stream.
 //
+// The slice is read in the background until the returned stream
+// is fully consumed. Modifying it before is a data race.
+//
 // Such function signature allows concise wrapping of functions that return a slice and an error:
 //
 //	stream := rill.FromSlice(someFunc())
 func FromSlice[A any](slice []A, err error) <-chan Try[A] {
-	const maxBufferSize = 512
+	const maxBufferSize = 64
 
 	sendAll := func(out chan Try[A]) {
 		for _, a := range slice {
