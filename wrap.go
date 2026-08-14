@@ -35,6 +35,9 @@ func Wrap[A any](value A, err error) Try[A] {
 // FromSlice converts a slice into a stream.
 // If err is not nil, it is added to the end of the stream.
 //
+// The slice is read in the background until the returned stream
+// is fully consumed. Modifying it before is a data race.
+//
 // Such function signature allows concise wrapping of functions that return a slice and an error:
 //
 //	stream := rill.FromSlice(someFunc())
