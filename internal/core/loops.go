@@ -38,12 +38,6 @@ func Loop[A, B any](in <-chan A, done chan<- B, n int, f func(A)) {
 	}
 }
 
-type orderedValue[A any] struct {
-	Value        A
-	CanWrite     chan struct{}
-	NextCanWrite chan struct{}
-}
-
 // OrderedLoop is similar to Loop, but it allows to write results to some channel in the same order as items were read from the input.
 // If done channel is not nil, it will be closed after all items are processed.
 // Special "canWrite" channel is passed to user's function f. Typical f function looks like this:
@@ -68,39 +62,45 @@ func OrderedLoop[A, B any](in <-chan A, done chan<- B, n int, f func(a A, canWri
 		return
 	}
 
-	// High level idea:
-	// Each item holds its own canWrite channel and a reference to the next item's canWrite channel.
-	// After item is processed and written, it sends a signal to the next item that it can also be written.
+	// High level idea: permission passing chain.
+	// Each item is associated with a canWrite channel, and knows next item's canWrite channel.
+	// After the item is processed and written, it signals the next item that it can also be written.
 
-	// Pool of signal channels to avoid per-item allocations.
-	// Size is O(n). No Reset: f drains its canWrite channel exactly once.
-	pool := &Pool[chan struct{}]{
-		New: func() chan struct{} { return make(chan struct{}, 1) },
-	}
+	// Workers pull from the input themselves. inputMu makes receiving an item and
+	// chain linking atomic and serialized. Everything else happens concurrently.
+	var inputMu DurableMutex
 
-	orderedIn := make(chan orderedValue[A])
-
-	go func() {
-		defer close(orderedIn)
-
-		var canWrite, nextCanWrite chan struct{}
-		nextCanWrite = pool.Get()
-		nextCanWrite <- struct{}{} // first item can be written immediately
-
-		for a := range in {
-			canWrite, nextCanWrite = nextCanWrite, pool.Get()
-			orderedIn <- orderedValue[A]{a, canWrite, nextCanWrite}
-		}
-	}()
+	// A channel that the next item will wait for to be written.
+	// Initially filled, so the very first item can be written immediately.
+	nextCanWrite := make(chan struct{}, 1)
+	nextCanWrite <- struct{}{}
 
 	var wg sync.WaitGroup
 	for range n {
 		wg.Go(func() {
-			for a := range orderedIn {
-				f(a.Value, a.CanWrite)
+			// We write to this channel when the current item is processed and written
+			itemDone := make(chan struct{}, 1)
 
-				pool.Put(a.CanWrite)
-				a.NextCanWrite <- struct{}{}
+			for {
+				inputMu.Lock()
+
+				a, ok := <-in
+				if !ok {
+					inputMu.Unlock()
+					return
+				}
+
+				canWrite := nextCanWrite // wait for this
+				nextCanWrite = itemDone  // our itemDone becomes the next item's canWrite
+
+				inputMu.Unlock()
+
+				f(a, canWrite)
+				itemDone <- struct{}{}
+
+				// No need to allocate a new channel:
+				// canWrite was drained by f, and is not used by anyone anymore, so we can reuse it
+				itemDone = canWrite
 			}
 		})
 	}
