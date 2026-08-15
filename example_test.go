@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/destel/rill"
@@ -689,6 +690,47 @@ func ExampleReduce() {
 
 	fmt.Println("Result:", sum, ok)
 	fmt.Println("Error:", err)
+}
+
+func ExampleTee() {
+	// Convert a slice of numbers into a stream
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Create two identical copies of the stream
+	// Each copy can be transformed separately
+	numbers1, numbers2 := rill.Tee(numbers)
+
+	// Keep only the odd numbers in the first copy
+	// Concurrency = 3
+	odd := rill.Filter(numbers1, 3, func(x int) (bool, error) {
+		return x%2 != 0, nil
+	})
+
+	// Double the numbers in the second copy
+	// Concurrency = 3
+	doubled := rill.Map(numbers2, 3, func(x int) (int, error) {
+		return x * 2, nil
+	})
+
+	// Both copies must be consumed concurrently, otherwise Tee deadlocks
+	var wg sync.WaitGroup
+
+	// First consumer prints the odd numbers
+	wg.Go(func() {
+		printStream(odd)
+	})
+
+	// Second consumer sums the doubled numbers
+	wg.Go(func() {
+		sum, _, err := rill.Reduce(doubled, 3, func(a, b int) (int, error) {
+			return a + b, nil
+		})
+
+		fmt.Println("Sum:", sum)
+		fmt.Println("Sum error:", err)
+	})
+
+	wg.Wait()
 }
 
 func ExampleToSlice() {
