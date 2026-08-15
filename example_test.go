@@ -366,7 +366,7 @@ func ExampleCatch() {
 	// Convert strings to ints
 	// Concurrency = 3
 	ids := rill.Map(strs, 3, func(s string) (int, error) {
-		randomSleep(500 * time.Millisecond) // simulate some additional work
+		simulateWork(500 * time.Millisecond)
 		return strconv.Atoi(s)
 	})
 
@@ -391,7 +391,7 @@ func ExampleOrderedCatch() {
 	// Convert strings to ints
 	// Concurrency = 3; Ordered
 	ids := rill.OrderedMap(strs, 3, func(s string) (int, error) {
-		randomSleep(500 * time.Millisecond) // simulate some additional work
+		simulateWork(500 * time.Millisecond)
 		return strconv.Atoi(s)
 	})
 
@@ -518,7 +518,7 @@ func ExampleFlatMap() {
 	// Replace each number in the input stream with three strings
 	// Concurrency = 2
 	result := rill.FlatMap(numbers, 2, func(x int) <-chan rill.Try[string] {
-		randomSleep(500 * time.Millisecond) // simulate some additional work
+		simulateWork(500 * time.Millisecond)
 
 		return rill.FromSlice([]string{
 			fmt.Sprintf("foo%d", x),
@@ -538,7 +538,7 @@ func ExampleOrderedFlatMap() {
 	// Replace each number in the input stream with three strings
 	// Concurrency = 2; Ordered
 	result := rill.OrderedFlatMap(numbers, 2, func(x int) <-chan rill.Try[string] {
-		randomSleep(500 * time.Millisecond) // simulate some additional work
+		simulateWork(500 * time.Millisecond)
 
 		return rill.FromSlice([]string{
 			fmt.Sprintf("foo%d", x),
@@ -786,7 +786,7 @@ func ExampleToSeq2() {
 // helper function that checks if a number is prime
 // and simulates some additional work using sleep
 func isPrime(n int) bool {
-	randomSleep(500 * time.Millisecond) // simulate some additional work
+	simulateWork(500 * time.Millisecond)
 
 	if n < 2 {
 		return false
@@ -802,7 +802,7 @@ func isPrime(n int) bool {
 // helper function that squares the number
 // and simulates some additional work using sleep
 func square(x int) int {
-	randomSleep(500 * time.Millisecond) // simulate some additional work
+	simulateWork(500 * time.Millisecond)
 	return x * x
 }
 
@@ -816,6 +816,6 @@ func printStream[A any](stream <-chan rill.Try[A]) {
 	fmt.Println("Error:", err)
 }
 
-func randomSleep(max time.Duration) {
+func simulateWork(max time.Duration) {
 	time.Sleep(time.Duration(rand.Intn(int(max))))
 }
