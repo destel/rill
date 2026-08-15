@@ -344,14 +344,12 @@ func ExampleAny() {
 // Also check out the package level examples to see Batch in action
 func ExampleBatch() {
 	// Generate a stream of numbers 0 to 49, where a new number is emitted every 50ms
-	numbers := make(chan rill.Try[int])
-	go func() {
-		defer close(numbers)
+	numbers := rill.Generate(func(send func(int), sendErr func(error)) {
 		for i := range 50 {
-			numbers <- rill.Wrap(i, nil)
+			send(i)
 			time.Sleep(50 * time.Millisecond)
 		}
-	}()
+	})
 
 	// Group numbers into batches of up to 5
 	batches := rill.Batch(numbers, 5, 1*time.Second)
