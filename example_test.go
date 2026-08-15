@@ -215,43 +215,6 @@ func Example_ordering() {
 	}
 }
 
-// This example demonstrates how to use the Fan-in and Fan-out patterns
-// to send messages through multiple servers concurrently.
-func Example_fanIn_FanOut() {
-	// Convert a slice of messages into a stream
-	messages := rill.FromSlice([]string{
-		"message1", "message2", "message3", "message4", "message5",
-		"message6", "message7", "message8", "message9", "message10",
-	}, nil)
-
-	// Fan-out the messages to three servers
-	results1 := rill.Map(messages, 2, func(message string) (string, error) {
-		return message, sendMessage(message, "server1")
-	})
-
-	results2 := rill.Map(messages, 2, func(message string) (string, error) {
-		return message, sendMessage(message, "server2")
-	})
-
-	results3 := rill.Map(messages, 2, func(message string) (string, error) {
-		return message, sendMessage(message, "server3")
-	})
-
-	// Fan-in the results from all servers into a single stream
-	results := rill.Merge(results1, results2, results3)
-
-	// Handle errors
-	err := rill.Err(results)
-	fmt.Println("Error:", err)
-}
-
-// Helper function that simulates sending a message through a server
-func sendMessage(message string, server string) error {
-	randomSleep(500 * time.Millisecond) // simulate some additional work
-	fmt.Printf("Sent through %s: %s\n", server, message)
-	return nil
-}
-
 // This example demonstrates using [FlatMap] to fetch users from multiple departments concurrently.
 // Additionally, it demonstrates how to write a reusable streaming wrapper over paginated API calls - the StreamUsers function
 func Example_flatMap() {
