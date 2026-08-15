@@ -62,10 +62,9 @@ func GetDepartments() ([]string, error) {
 
 // GetUser returns a user by ID.
 func GetUser(ctx context.Context, id int) (*User, error) {
-	if err := ctx.Err(); err != nil {
+	if err := simulateWork(ctx, 500*time.Millisecond); err != nil {
 		return nil, err
 	}
-	randomSleep(ctx, 500*time.Millisecond)
 
 	mu.RLock()
 	defer mu.RUnlock()
@@ -82,10 +81,9 @@ func GetUser(ctx context.Context, id int) (*User, error) {
 // GetUsers returns a list of users by IDs.
 // If a user is not found, nil is returned in the corresponding position.
 func GetUsers(ctx context.Context, ids []int) ([]*User, error) {
-	if err := ctx.Err(); err != nil {
+	if err := simulateWork(ctx, 1000*time.Millisecond); err != nil {
 		return nil, err
 	}
-	randomSleep(ctx, 1000*time.Millisecond)
 
 	mu.RLock()
 	defer mu.RUnlock()
@@ -111,10 +109,9 @@ type UserQuery struct {
 
 // ListUsers returns a paginated list of users optionally filtered by department.
 func ListUsers(ctx context.Context, query *UserQuery) ([]*User, error) {
-	if err := ctx.Err(); err != nil {
+	if err := simulateWork(ctx, 1000*time.Millisecond); err != nil {
 		return nil, err
 	}
-	randomSleep(ctx, 1000*time.Millisecond)
 
 	const pageSize = 10
 	if query == nil {
@@ -150,10 +147,9 @@ func ListUsers(ctx context.Context, query *UserQuery) ([]*User, error) {
 
 // SaveUser saves a user.
 func SaveUser(ctx context.Context, user *User) error {
-	if err := ctx.Err(); err != nil {
+	if err := simulateWork(ctx, 1000*time.Millisecond); err != nil {
 		return err
 	}
-	randomSleep(ctx, 1000*time.Millisecond)
 
 	if user == nil {
 		return fmt.Errorf("user is nil")
@@ -195,13 +191,16 @@ func hash(input ...any) int {
 	return int(hasher.Sum32())
 }
 
-func randomSleep(ctx context.Context, max time.Duration) {
+// simulateWork sleeps for a random duration up to max, and returns the context error, if any.
+func simulateWork(ctx context.Context, max time.Duration) error {
 	dur := time.Duration(rand.Intn(int(max)))
 	t := time.NewTimer(dur)
 	defer t.Stop()
 
 	select {
 	case <-t.C:
+		return nil
 	case <-ctx.Done():
+		return ctx.Err()
 	}
 }

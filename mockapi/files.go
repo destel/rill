@@ -8,8 +8,7 @@ import (
 
 // DownloadFile simulates a file download. It returns the whole content as []byte.
 func DownloadFile(ctx context.Context, url string) ([]byte, error) {
-	randomSleep(ctx, 1000*time.Millisecond)
-	if err := ctx.Err(); err != nil {
+	if err := simulateWork(ctx, 1000*time.Millisecond); err != nil {
 		return nil, err
 	}
 
