@@ -144,7 +144,7 @@ func UpdateUserTimestamp(userID int) {
 // This is a background worker that sends queued updates to the database in batches.
 // For simplicity, there are no retries, error handling and synchronization
 func updateUserTimestampWorker() {
-	// convert channel of userIDsStream into a stream
+	// convert the channel of user IDs into a stream
 	ids := rill.FromChan(userIDsToUpdate, nil)
 
 	// Group IDs into batches of 5 for bulk processing
@@ -279,7 +279,7 @@ func Example_context() {
 	fmt.Printf("Check result: %v\n", err)
 }
 
-// CheckAllUsersExist uses several concurrent workers to checks if all users with given IDs exist.
+// CheckAllUsersExist uses several concurrent workers to check if all users with given IDs exist.
 func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 	// Create new context that will be canceled when this function returns
 	ctx, cancel := context.WithCancel(ctx)
@@ -427,7 +427,7 @@ func ExampleErr() {
 		return struct{}{}, mockapi.SaveUser(ctx, user)
 	})
 
-	// We're only need to know if all users were saved successfully
+	// We only need to know if all users were saved successfully
 	err := rill.Err(results)
 	fmt.Println("Error:", err)
 }
@@ -500,12 +500,12 @@ func ExampleFirst() {
 
 	// Keep only the numbers divisible by 4
 	// Concurrency = 3; Ordered
-	dvisibleBy4 := rill.OrderedFilter(numbers, 3, func(x int) (bool, error) {
+	divisibleBy4 := rill.OrderedFilter(numbers, 3, func(x int) (bool, error) {
 		return x%4 == 0, nil
 	})
 
 	// Get the first number divisible by 4
-	first, ok, err := rill.First(dvisibleBy4)
+	first, ok, err := rill.First(divisibleBy4)
 
 	fmt.Println("Result:", first, ok)
 	fmt.Println("Error:", err)
