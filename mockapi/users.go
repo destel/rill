@@ -191,7 +191,8 @@ func hash(input ...any) int {
 	return int(hasher.Sum32())
 }
 
-// simulateWork sleeps for a random duration up to max, and returns the context error, if any.
+// simulateWork sleeps for a random duration up to max.
+// It returns early with the context error if ctx is canceled.
 func simulateWork(ctx context.Context, max time.Duration) error {
 	dur := time.Duration(rand.Intn(int(max)))
 	t := time.NewTimer(dur)
