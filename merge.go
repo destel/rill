@@ -44,6 +44,9 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 // tags each item with the decision and routes on the tag. The same pattern
 // extends to n-way splitting by tagging with an index or key instead of a bool.
 func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
+	validateN(n)
+	validateNilFunc(f == nil)
+
 	type Decision[A any] struct {
 		Value    A
 		Decision bool
@@ -81,6 +84,9 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-
 // tags each item with the decision and routes on the tag. The same pattern
 // extends to n-way splitting by tagging with an index or key instead of a bool.
 func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
+	validateN(n)
+	validateNilFunc(f == nil)
+
 	type Decision[A any] struct {
 		Value    A
 		Decision bool

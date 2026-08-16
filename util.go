@@ -35,6 +35,7 @@ func DrainNB[A any](in <-chan A) {
 //	// Now work with the users channel as usual.
 //	// Up to 100 users can be buffered if subsequent stages of the pipeline are slow.
 func Buffer[A any](in <-chan A, size int) <-chan A {
+	validateMinSize(size, 0)
 	return core.Buffer(in, size)
 }
 
