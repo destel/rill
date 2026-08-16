@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/destel/rill"
@@ -144,7 +145,7 @@ func UpdateUserTimestamp(userID int) {
 // This is a background worker that sends queued updates to the database in batches.
 // For simplicity, there are no retries, error handling and synchronization
 func updateUserTimestampWorker() {
-	// convert channel of userIDsStream into a stream
+	// convert the channel of user IDs into a stream
 	ids := rill.FromChan(userIDsToUpdate, nil)
 
 	// Group IDs into batches of 5 for bulk processing
@@ -215,43 +216,6 @@ func Example_ordering() {
 	}
 }
 
-// This example demonstrates how to use the Fan-in and Fan-out patterns
-// to send messages through multiple servers concurrently.
-func Example_fanIn_FanOut() {
-	// Convert a slice of messages into a stream
-	messages := rill.FromSlice([]string{
-		"message1", "message2", "message3", "message4", "message5",
-		"message6", "message7", "message8", "message9", "message10",
-	}, nil)
-
-	// Fan-out the messages to three servers
-	results1 := rill.Map(messages, 2, func(message string) (string, error) {
-		return message, sendMessage(message, "server1")
-	})
-
-	results2 := rill.Map(messages, 2, func(message string) (string, error) {
-		return message, sendMessage(message, "server2")
-	})
-
-	results3 := rill.Map(messages, 2, func(message string) (string, error) {
-		return message, sendMessage(message, "server3")
-	})
-
-	// Fan-in the results from all servers into a single stream
-	results := rill.Merge(results1, results2, results3)
-
-	// Handle errors
-	err := rill.Err(results)
-	fmt.Println("Error:", err)
-}
-
-// Helper function that simulates sending a message through a server
-func sendMessage(message string, server string) error {
-	randomSleep(500 * time.Millisecond) // simulate some additional work
-	fmt.Printf("Sent through %s: %s\n", server, message)
-	return nil
-}
-
 // This example demonstrates using [FlatMap] to fetch users from multiple departments concurrently.
 // Additionally, it demonstrates how to write a reusable streaming wrapper over paginated API calls - the StreamUsers function
 func Example_flatMap() {
@@ -316,7 +280,7 @@ func Example_context() {
 	fmt.Printf("Check result: %v\n", err)
 }
 
-// CheckAllUsersExist uses several concurrent workers to checks if all users with given IDs exist.
+// CheckAllUsersExist uses several concurrent workers to check if all users with given IDs exist.
 func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 	// Create new context that will be canceled when this function returns
 	ctx, cancel := context.WithCancel(ctx)
@@ -381,14 +345,12 @@ func ExampleAny() {
 // Also check out the package level examples to see Batch in action
 func ExampleBatch() {
 	// Generate a stream of numbers 0 to 49, where a new number is emitted every 50ms
-	numbers := make(chan rill.Try[int])
-	go func() {
-		defer close(numbers)
+	numbers := rill.Generate(func(send func(int), sendErr func(error)) {
 		for i := range 50 {
-			numbers <- rill.Wrap(i, nil)
+			send(i)
 			time.Sleep(50 * time.Millisecond)
 		}
-	}()
+	})
 
 	// Group numbers into batches of up to 5
 	batches := rill.Batch(numbers, 5, 1*time.Second)
@@ -403,7 +365,7 @@ func ExampleCatch() {
 	// Convert strings to ints
 	// Concurrency = 3
 	ids := rill.Map(strs, 3, func(s string) (int, error) {
-		randomSleep(500 * time.Millisecond) // simulate some additional work
+		simulateWork(500 * time.Millisecond)
 		return strconv.Atoi(s)
 	})
 
@@ -428,7 +390,7 @@ func ExampleOrderedCatch() {
 	// Convert strings to ints
 	// Concurrency = 3; Ordered
 	ids := rill.OrderedMap(strs, 3, func(s string) (int, error) {
-		randomSleep(500 * time.Millisecond) // simulate some additional work
+		simulateWork(500 * time.Millisecond)
 		return strconv.Atoi(s)
 	})
 
@@ -464,7 +426,7 @@ func ExampleErr() {
 		return struct{}{}, mockapi.SaveUser(ctx, user)
 	})
 
-	// We're only need to know if all users were saved successfully
+	// We only need to know if all users were saved successfully
 	err := rill.Err(results)
 	fmt.Println("Error:", err)
 }
@@ -537,12 +499,12 @@ func ExampleFirst() {
 
 	// Keep only the numbers divisible by 4
 	// Concurrency = 3; Ordered
-	dvisibleBy4 := rill.OrderedFilter(numbers, 3, func(x int) (bool, error) {
+	divisibleBy4 := rill.OrderedFilter(numbers, 3, func(x int) (bool, error) {
 		return x%4 == 0, nil
 	})
 
 	// Get the first number divisible by 4
-	first, ok, err := rill.First(dvisibleBy4)
+	first, ok, err := rill.First(divisibleBy4)
 
 	fmt.Println("Result:", first, ok)
 	fmt.Println("Error:", err)
@@ -555,7 +517,7 @@ func ExampleFlatMap() {
 	// Replace each number in the input stream with three strings
 	// Concurrency = 2
 	result := rill.FlatMap(numbers, 2, func(x int) <-chan rill.Try[string] {
-		randomSleep(500 * time.Millisecond) // simulate some additional work
+		simulateWork(500 * time.Millisecond)
 
 		return rill.FromSlice([]string{
 			fmt.Sprintf("foo%d", x),
@@ -575,7 +537,7 @@ func ExampleOrderedFlatMap() {
 	// Replace each number in the input stream with three strings
 	// Concurrency = 2; Ordered
 	result := rill.OrderedFlatMap(numbers, 2, func(x int) <-chan rill.Try[string] {
-		randomSleep(500 * time.Millisecond) // simulate some additional work
+		simulateWork(500 * time.Millisecond)
 
 		return rill.FromSlice([]string{
 			fmt.Sprintf("foo%d", x),
@@ -730,6 +692,47 @@ func ExampleReduce() {
 	fmt.Println("Error:", err)
 }
 
+func ExampleTee() {
+	// Convert a slice of numbers into a stream
+	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Create two identical copies of the stream
+	// Each copy can be transformed separately
+	numbers1, numbers2 := rill.Tee(numbers)
+
+	// Keep only the odd numbers in the first copy
+	// Concurrency = 3
+	odd := rill.Filter(numbers1, 3, func(x int) (bool, error) {
+		return x%2 != 0, nil
+	})
+
+	// Double the numbers in the second copy
+	// Concurrency = 3
+	doubled := rill.Map(numbers2, 3, func(x int) (int, error) {
+		return x * 2, nil
+	})
+
+	// Both copies must be consumed concurrently, otherwise Tee deadlocks
+	var wg sync.WaitGroup
+
+	// First consumer prints the odd numbers
+	wg.Go(func() {
+		printStream(odd)
+	})
+
+	// Second consumer sums the doubled numbers
+	wg.Go(func() {
+		sum, _, err := rill.Reduce(doubled, 3, func(a, b int) (int, error) {
+			return a + b, nil
+		})
+
+		fmt.Println("Sum:", sum)
+		fmt.Println("Sum error:", err)
+	})
+
+	wg.Wait()
+}
+
 func ExampleToSlice() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
@@ -823,7 +826,7 @@ func ExampleToSeq2() {
 // helper function that checks if a number is prime
 // and simulates some additional work using sleep
 func isPrime(n int) bool {
-	randomSleep(500 * time.Millisecond) // simulate some additional work
+	simulateWork(500 * time.Millisecond)
 
 	if n < 2 {
 		return false
@@ -839,7 +842,7 @@ func isPrime(n int) bool {
 // helper function that squares the number
 // and simulates some additional work using sleep
 func square(x int) int {
-	randomSleep(500 * time.Millisecond) // simulate some additional work
+	simulateWork(500 * time.Millisecond)
 	return x * x
 }
 
@@ -853,6 +856,6 @@ func printStream[A any](stream <-chan rill.Try[A]) {
 	fmt.Println("Error:", err)
 }
 
-func randomSleep(max time.Duration) {
+func simulateWork(max time.Duration) {
 	time.Sleep(time.Duration(rand.Intn(int(max))))
 }
