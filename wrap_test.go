@@ -280,11 +280,11 @@ func TestToChans(t *testing.T) {
 
 func TestGenerate(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		in := Generate(func(send func(int), sendErr func(error)) {
+		in := Generate(func(send func(int), sendError func(error)) {
 			send(1)
-			sendErr(fmt.Errorf("err1"))
+			sendError(fmt.Errorf("err1"))
 			send(2)
-			sendErr(nil) // skipped: produces no item
+			sendError(nil) // skipped: produces no item
 			send(3)
 		})
 

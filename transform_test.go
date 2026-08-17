@@ -259,14 +259,14 @@ func TestFlatMap(t *testing.T) {
 				out := universalFlatMap(ord, in, n, func(x int) <-chan Try[string] {
 					th.SimulateWork(1*time.Second, 2*time.Second)
 
-					return Generate(func(send func(string), sendErr func(error)) {
+					return Generate(func(send func(string), sendError func(error)) {
 						send(fmt.Sprintf("%03dA", x))
-						sendErr(fmt.Errorf("err%03dA", x))
+						sendError(fmt.Errorf("err%03dA", x))
 
 						th.SimulateWork(1*time.Second, 2*time.Second)
 
 						send(fmt.Sprintf("%03dB", x))
-						sendErr(fmt.Errorf("err%03dB", x))
+						sendError(fmt.Errorf("err%03dB", x))
 					})
 				})
 
@@ -295,9 +295,9 @@ func TestFlatMap(t *testing.T) {
 						time.Sleep(10 * time.Second) // force out-of-order completion
 					}
 
-					return Generate(func(send func(string), sendErr func(error)) {
+					return Generate(func(send func(string), sendError func(error)) {
 						send(fmt.Sprintf("%03d-A", x))
-						sendErr(fmt.Errorf("%03d-A-err", x))
+						sendError(fmt.Errorf("%03d-A-err", x))
 
 						if x%9 == 0 {
 							// A gap between this item's A and B outputs, so the assertions below also
@@ -306,7 +306,7 @@ func TestFlatMap(t *testing.T) {
 						}
 
 						send(fmt.Sprintf("%03d-B", x))
-						sendErr(fmt.Errorf("%03d-B-err", x))
+						sendError(fmt.Errorf("%03d-B-err", x))
 					})
 				})
 
