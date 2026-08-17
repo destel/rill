@@ -1,6 +1,7 @@
 package rill
 
-// Try is a container holding a value of type A or an error
+// Try represents either a value of type A or an error.
+// When Error is non-nil, callers must ignore Value.
 type Try[A any] struct {
 	Value A
 	Error error
@@ -22,14 +23,18 @@ type Try[A any] struct {
 //	}
 type Stream[T any] = <-chan Try[T]
 
-// Wrap converts a value and/or error into a [Try] container.
+// Wrap converts a value-error pair into a [Try].
+// If err is non-nil, Wrap returns an error item and ignores value.
 // It's a convenience function to avoid creating a [Try] container manually and benefit from type inference.
 //
 // Such function signature also allows concise wrapping of functions that return a value and an error:
 //
-//	item := rill.Wrap(strconv.ParseInt("42"))
+//	item := rill.Wrap(strconv.Atoi("42"))
 func Wrap[A any](value A, err error) Try[A] {
-	return Try[A]{Value: value, Error: err}
+	if err != nil {
+		return Try[A]{Error: err}
+	}
+	return Try[A]{Value: value}
 }
 
 // FromSlice converts a slice into a stream.

@@ -117,6 +117,18 @@ func TestFirst(t *testing.T) {
 		th.ExpectDrainedChan(t, in)
 	})
 
+	t.Run("value alongside error", func(t *testing.T) {
+		in := make(chan Try[int], 1)
+		in <- Try[int]{Value: 10, Error: fmt.Errorf("err")}
+		close(in)
+
+		x, ok, err := First(in)
+
+		th.ExpectValue(t, x, 0) // zeroed
+		th.ExpectValue(t, ok, false)
+		th.ExpectError(t, err, "err")
+	})
+
 	t.Run("unclosed", func(t *testing.T) {
 		th.ExpectLeak(t, func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 20), nil)

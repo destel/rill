@@ -9,8 +9,12 @@ import (
 )
 
 func TestWrap(t *testing.T) {
-	item := Wrap(10, fmt.Errorf("err"))
+	item := Wrap(10, nil)
 	th.ExpectValue(t, item.Value, 10)
+	th.ExpectNoError(t, item.Error)
+
+	item = Wrap(10, fmt.Errorf("err"))
+	th.ExpectValue(t, item.Value, 0)
 	th.ExpectError(t, item.Error, "err")
 }
 

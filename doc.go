@@ -5,7 +5,8 @@
 //
 // # Streams and Try Containers
 //
-// In this package, a stream refers to a channel of [Try] containers. A Try container is a simple struct that holds a value and an error.
+// In this package, a stream is a channel of [Try] containers.
+// Each Try represents either a value or an error.
 // When an "empty stream" is referred to, it means a channel of Try containers that has been closed and was never written to.
 //
 // Most functions in this package are concurrent, and the level of concurrency can be controlled by the argument n.

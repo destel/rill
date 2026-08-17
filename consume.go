@@ -68,21 +68,21 @@ func Err[A any](in <-chan Try[A]) error {
 	return nil
 }
 
-// First returns the first item or error encountered in the input stream, whichever comes first.
-// The found return flag is set to false if the stream was empty or if the first item was an error,
-// otherwise it is set to true.
+// First returns the first value or error encountered in the input stream.
+// If the stream is empty or its first item is an error, found is false and
+// value is the zero value of A.
 //
 // This is a blocking ordered function that processes items sequentially.
 // See the package documentation for more information on blocking ordered functions and error handling.
 func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
 	defer Discard(in)
 
-	for a := range in {
-		return a.Value, a.Error == nil, a.Error
-	}
-
 	var zero A
-	return zero, false, nil
+	a, ok := <-in
+	if !ok || a.Error != nil {
+		return zero, false, a.Error
+	}
+	return a.Value, true, nil
 }
 
 // errFound is a control-flow sentinel, compared by identity - the fs.SkipDir
