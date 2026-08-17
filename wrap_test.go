@@ -280,26 +280,21 @@ func TestToChans(t *testing.T) {
 
 func TestGenerate(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		in := Generate(func(send func(int), sendErr func(error)) {
-			for i := range 10 {
-				if i%2 == 0 {
-					send(i)
-				} else {
-					sendErr(fmt.Errorf("err%d", i))
-				}
-			}
+		in := Generate(func(send func(int), sendError func(error)) {
+			send(1)
+			sendError(fmt.Errorf("err1"))
+			send(2)
+			sendError(nil) // skipped: produces no item
+			send(3)
 		})
 
 		outSlice := toItemSlice(in)
 
 		var expectedSlice []Item[int]
-		for i := range 10 {
-			if i%2 == 0 {
-				expectedSlice = appendVal(expectedSlice, i)
-			} else {
-				expectedSlice = appendErr(expectedSlice, fmt.Errorf("err%d", i))
-			}
-		}
+		expectedSlice = appendVal(expectedSlice, 1)
+		expectedSlice = appendErr(expectedSlice, fmt.Errorf("err1"))
+		expectedSlice = appendVal(expectedSlice, 2)
+		expectedSlice = appendVal(expectedSlice, 3)
 
 		th.ExpectSlice(t, outSlice, expectedSlice)
 	})

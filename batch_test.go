@@ -34,7 +34,7 @@ func TestBatch(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "with timeout", func(t *testing.T) {
-		in := Generate(func(send func(int), sendErr func(error)) {
+		in := Generate(func(send func(int), sendError func(error)) {
 			// flush by size: the mid-batch pause is too short to trigger the timeout
 			send(11)
 			send(12)
@@ -56,7 +56,7 @@ func TestBatch(t *testing.T) {
 			send(31)
 			time.Sleep(4 * time.Second)
 			send(32)
-			sendErr(fmt.Errorf("err1"))
+			sendError(fmt.Errorf("err1"))
 
 			// flush by timeout again: the error disarmed the previous deadline,
 			// otherwise [41] would have flushed alone before 42 arrived
@@ -66,8 +66,8 @@ func TestBatch(t *testing.T) {
 			time.Sleep(4 * time.Second)
 
 			// errors hitting an empty batch are forwarded alone
-			sendErr(fmt.Errorf("err2"))
-			sendErr(fmt.Errorf("err3"))
+			sendError(fmt.Errorf("err2"))
+			sendError(fmt.Errorf("err3"))
 
 			// trailing partial is flushed when the input closes
 			send(51)
@@ -83,7 +83,7 @@ func TestBatch(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "no timeout", func(t *testing.T) {
-		in := Generate(func(send func(int), sendErr func(error)) {
+		in := Generate(func(send func(int), sendError func(error)) {
 			// flush by size: sleep has no effect
 			send(11)
 			send(12)
@@ -94,11 +94,11 @@ func TestBatch(t *testing.T) {
 			// flush by error: the partial batch is flushed first, then the error is forwarded
 			send(21)
 			send(22)
-			sendErr(fmt.Errorf("err1"))
+			sendError(fmt.Errorf("err1"))
 
 			// errors hitting an empty batch are forwarded alone
-			sendErr(fmt.Errorf("err2"))
-			sendErr(fmt.Errorf("err3"))
+			sendError(fmt.Errorf("err2"))
+			sendError(fmt.Errorf("err3"))
 
 			// trailing partial is flushed when the input closes
 			send(31)
@@ -120,12 +120,12 @@ func TestUnbatch(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "correctness", func(t *testing.T) {
-		in := Generate(func(send func([]int), sendErr func(error)) {
+		in := Generate(func(send func([]int), sendError func(error)) {
 			send([]int{1, 2})
-			sendErr(fmt.Errorf("err1"))
+			sendError(fmt.Errorf("err1"))
 			send([]int{10, 11, 12})
 			send([]int{13, 14})
-			sendErr(fmt.Errorf("err2"))
+			sendError(fmt.Errorf("err2"))
 			send([]int{20, 21})
 		})
 
@@ -138,15 +138,15 @@ func TestUnbatch(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "inverse of Batch", func(t *testing.T) {
-		in := Generate(func(send func(int), sendErr func(error)) {
+		in := Generate(func(send func(int), sendError func(error)) {
 			send(0)
 			send(1)
 			send(2)
 			send(3)
 			send(4)
-			sendErr(fmt.Errorf("err5"))
+			sendError(fmt.Errorf("err5"))
 			send(6)
-			sendErr(fmt.Errorf("err7"))
+			sendError(fmt.Errorf("err7"))
 			send(8)
 			send(9)
 		})

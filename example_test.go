@@ -181,7 +181,7 @@ func Example_ordering() {
 	// Generate a stream of URLs from https://example.com/file-0.txt
 	// to https://example.com/file-999.txt
 	// Stop generating URLs if the context is canceled
-	urls := rill.Generate(func(send func(string), sendErr func(error)) {
+	urls := rill.Generate(func(send func(string), sendError func(error)) {
 		for i := 0; i < 1000 && ctx.Err() == nil; i++ {
 			send(fmt.Sprintf("https://example.com/file-%d.txt", i))
 		}
@@ -243,7 +243,7 @@ func Example_flatMap() {
 // It iterates through all listing pages and uses [Generate] to simplify sending users and errors to the resulting stream.
 // This function is useful both on its own and as part of larger pipelines.
 func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[*mockapi.User] {
-	return rill.Generate(func(send func(*mockapi.User), sendErr func(error)) {
+	return rill.Generate(func(send func(*mockapi.User), sendError func(error)) {
 		var currentQuery mockapi.UserQuery
 		if query != nil {
 			currentQuery = *query
@@ -254,7 +254,7 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 
 			users, err := mockapi.ListUsers(ctx, &currentQuery)
 			if err != nil {
-				sendErr(err)
+				sendError(err)
 				return
 			}
 
@@ -288,7 +288,7 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 
 	// Convert the slice into a stream
 	// Use Generate instead of FromSlice to make the first stage context-aware
-	idsStream := rill.Generate(func(send func(int), sendErr func(error)) {
+	idsStream := rill.Generate(func(send func(int), sendError func(error)) {
 		for _, id := range ids {
 			if ctx.Err() != nil {
 				return
@@ -345,7 +345,7 @@ func ExampleAny() {
 // Also check out the package level examples to see Batch in action
 func ExampleBatch() {
 	// Generate a stream of numbers 0 to 49, where a new number is emitted every 50ms
-	numbers := rill.Generate(func(send func(int), sendErr func(error)) {
+	numbers := rill.Generate(func(send func(int), sendError func(error)) {
 		for i := range 50 {
 			send(i)
 			time.Sleep(50 * time.Millisecond)
@@ -591,7 +591,7 @@ func ExampleForEach_ordered() {
 
 // Generate a stream of URLs from https://example.com/file-0.txt to https://example.com/file-9.txt
 func ExampleGenerate() {
-	urls := rill.Generate(func(send func(string), sendErr func(error)) {
+	urls := rill.Generate(func(send func(string), sendError func(error)) {
 		for i := range 10 {
 			send(fmt.Sprintf("https://example.com/file-%d.txt", i))
 		}
@@ -606,7 +606,7 @@ func ExampleGenerate_context() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	numbers := rill.Generate(func(send func(int), sendErr func(error)) {
+	numbers := rill.Generate(func(send func(int), sendError func(error)) {
 		for i := 1; ctx.Err() == nil; i++ {
 			send(i)
 			time.Sleep(500 * time.Millisecond)
