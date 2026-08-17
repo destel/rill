@@ -187,7 +187,6 @@ func getUserIndex(id int) (int, error) {
 }
 
 // hash returns a deterministic non-negative number derived from the inputs.
-// The mask keeps it non-negative even where int is 32 bits.
 func hash(input ...any) int {
 	hasher := fnv.New32()
 	_, _ = fmt.Fprintln(hasher, input...)
