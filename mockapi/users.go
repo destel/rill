@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"hash/fnv"
+	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -185,10 +186,12 @@ func getUserIndex(id int) (int, error) {
 	return -1, fmt.Errorf("user not found")
 }
 
+// hash returns a deterministic non-negative number derived from the inputs.
+// The mask keeps it non-negative even where int is 32 bits.
 func hash(input ...any) int {
 	hasher := fnv.New32()
 	_, _ = fmt.Fprintln(hasher, input...)
-	return int(hasher.Sum32())
+	return int(hasher.Sum32() & math.MaxInt32)
 }
 
 // simulateWork sleeps for a random duration up to max.
