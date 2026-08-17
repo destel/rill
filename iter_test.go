@@ -131,13 +131,11 @@ func TestFromSeq2(t *testing.T) {
 		gen := func(yield func(x int, err error) bool) {
 			for i := range 10 {
 				var err error
-				var val = i
 
 				if i == 5 {
-					val = 0
 					err = fmt.Errorf("err5")
 				}
-				if !yield(val, err) {
+				if !yield(i, err) {
 					break
 				}
 			}

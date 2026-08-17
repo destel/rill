@@ -32,6 +32,7 @@ func FromSeq[A any](seq iter.Seq[A], err error) <-chan Try[A] {
 }
 
 // FromSeq2 converts an iterator of value-error pairs into a stream.
+// For pairs with a non-nil error, FromSeq2 emits an error item and ignores the value.
 func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 	validateNilFunc(seq == nil)
 
