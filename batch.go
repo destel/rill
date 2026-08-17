@@ -36,52 +36,55 @@ func Batch[A any](in <-chan Try[A], size int, timeout time.Duration) <-chan Try[
 	}
 
 	out := make(chan Try[[]A])
-	t := time.NewTimer(1 * time.Hour)
-	t.Stop()
 
-	var batch []A
+	go func() {
+		defer close(out)
 
-	flush := func() {
-		t.Stop() // no need to drain t.C since Go 1.23
+		t := time.NewTimer(1 * time.Hour)
+		t.Stop()
 
-		if len(batch) > 0 {
-			out <- Try[[]A]{Value: batch}
-			batch = make([]A, 0, size)
+		var batch []A
+
+		flush := func() {
+			t.Stop() // no need to drain t.C since Go 1.23
+
+			if len(batch) > 0 {
+				out <- Try[[]A]{Value: batch}
+				batch = nil
+			}
 		}
-	}
 
-	sendError := func(err error) {
-		out <- Try[[]A]{Error: err}
-	}
+		sendError := func(err error) {
+			flush()
+			out <- Try[[]A]{Error: err}
+		}
 
-	// infinite timeout
-	if timeout < 0 {
-		go func() {
-			defer close(out)
-			defer flush()
+		send := func(x A) {
+			if batch == nil {
+				batch = make([]A, 0, size)
+			}
+			batch = append(batch, x)
+			if len(batch) >= size {
+				flush()
+			}
+		}
 
+		defer flush()
+
+		// infinite timeout
+		if timeout < 0 {
 			for x := range in {
 				if x.Error != nil {
-					flush()
 					sendError(x.Error)
 					continue
 				}
 
-				batch = append(batch, x.Value)
-				if len(batch) >= size {
-					flush()
-				}
+				send(x.Value)
 			}
-		}()
+			return
+		}
 
-		return out
-	}
-
-	// finite timeout
-	go func() {
-		defer close(out)
-		defer flush()
-
+		// finite timeout
 		for {
 			select {
 			case <-t.C:
@@ -93,20 +96,14 @@ func Batch[A any](in <-chan Try[A], size int, timeout time.Duration) <-chan Try[
 				}
 
 				if x.Error != nil {
-					flush()
 					sendError(x.Error)
 					continue
 				}
 
-				batch = append(batch, x.Value)
-				if len(batch) >= size {
-					flush()
-					continue
-				}
+				send(x.Value)
 
 				if len(batch) == 1 {
-					// First item was just added to the batch - start the timer.
-					// The invariant: no item sits in the batcher longer than timeout.
+					// x became the first item in a new batch - start the timer.
 					t.Reset(timeout)
 				}
 			}
