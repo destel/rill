@@ -16,6 +16,10 @@ func TestDrain(t *testing.T) {
 }
 
 func TestDiscard(t *testing.T) {
+	th.RunSynctest(t, "nil", func(t *testing.T) {
+		Discard[int](nil) // leak would be caught by the bubble
+	})
+
 	th.RunSynctest(t, "normal", func(t *testing.T) {
 		in := make(chan int)
 		Discard(in) // doesn't block
