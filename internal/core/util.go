@@ -6,6 +6,10 @@ func Drain[A any](in <-chan A) {
 }
 
 func Discard[A any](in <-chan A) {
+	if in == nil {
+		return
+	}
+
 	// do nothing if the channel is already closed
 	select {
 	case _, ok := <-in:
