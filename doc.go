@@ -69,8 +69,13 @@
 //
 // # Concurrency
 //
-// Most stages and sinks are concurrent: they process items using a worker
-// pool and take the pool size as the argument n.
+// Most stages and sinks are concurrent, and take the argument n - the
+// maximum number of concurrent invocations of the user callback.
+// Concurrency is per stage, not per pipeline: each stage enforces its own
+// limit, so an I/O-bound stage can use a much larger n than a CPU-bound one.
+//
+// With n = 1, the callback is never invoked concurrently: items are
+// processed one by one, in input order.
 //
 // # Backpressure
 //
