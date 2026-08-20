@@ -123,19 +123,20 @@
 // The cancellation model is cooperative and follows from three properties
 // of the library:
 //
-//   - pipelines are not first-class objects, but compositions of simpler stages
-//   - streams are plain channels: stages know nothing about each other;
-//     data and errors can only travel downstream
+//   - pipelines are not first-class objects, but compositions of simpler
+//     stages, which know nothing about other stages or their in-flight
+//     callbacks
+//   - streams are plain channels: data and errors can only travel downstream
 //   - a source can be infinite, and no stage or sink can know whether it is
 //
 // The entire model is built around one idea: return control to the user
 // code as soon as possible, and let it stop the source from producing new
-// items. All other behaviors emerge from this idea:
+// items. All other behaviors serve this idea:
 //
 //   - stages forward all errors downstream
 //   - the sink returns the first error it observes, without waiting for
-//     callbacks already in flight to complete or for its input to end,
-//     which might not even be possible if the source is infinite
+//     in-flight callbacks to complete or for its input to end, which might
+//     not even be possible if the source is infinite
 //   - the sink keeps draining and discarding its input in the background,
 //     so that nothing upstream is blocked during the cancellation
 //
@@ -148,7 +149,7 @@
 //
 // A pipeline doing I/O. Create a cancellable context before building the
 // pipeline, and defer cancel(). Stages doing database or network calls are
-// typically context-aware: when the sink returns and the deferred cancel
+// typically context-aware. When the sink returns and the deferred cancel
 // fires, the source and all in-flight I/O stop quickly, while the sink's
 // background drain disposes of whatever the pipeline still produces, late
 // errors included.
@@ -175,7 +176,7 @@
 // necessary: after the return, the sink switches into drain mode and
 // discards the remaining input items without invoking the user's callback.
 //
-//	err := rill.ForEach(finiteSource, 5, func(x int) error {
+//	err := rill.ForEach(rill.FromSlice(finiteSource), 5, func(x int) error {
 //		return doSomething(x)
 //	})
 //
