@@ -1,14 +1,14 @@
 package rill
 
-// Try represents either a value of type A or an error.
-// When Error is non-nil, callers must ignore Value.
+// Try holds either a value of type A or an error. When Error is
+// non-nil, Value is meaningless.
 type Try[A any] struct {
 	Value A
 	Error error
 }
 
-// Stream is a type alias for a channel of [Try] containers.
-// This alias is optional, but it can make the code more readable.
+// Stream is a type alias for a receive-only channel of [Try] structs.
+// Using it is optional, but improves readability.
 //
 // Before:
 //
@@ -23,11 +23,11 @@ type Try[A any] struct {
 //	}
 type Stream[T any] = <-chan Try[T]
 
-// Wrap converts a value-error pair into a [Try].
-// If err is non-nil, Wrap returns an error item and ignores value.
-// It's a convenience function to avoid creating a [Try] container manually and benefit from type inference.
+// Wrap converts a value-error pair into a [Try]. If err is not nil,
+// Wrap returns an error item and ignores value.
 //
-// Such function signature also allows concise wrapping of functions that return a value and an error:
+// This signature allows concise wrapping of functions that return a
+// value and an error:
 //
 //	item := rill.Wrap(strconv.Atoi("42"))
 func Wrap[A any](value A, err error) Try[A] {
@@ -40,10 +40,12 @@ func Wrap[A any](value A, err error) Try[A] {
 // FromSlice converts a slice into a stream.
 // If err is not nil, it is added to the end of the stream.
 //
-// The slice is read in the background until the returned stream
-// is fully consumed. Modifying it before is a data race.
+// Modifying the slice before the stream is fully consumed is a data
+// race.
 //
-// Such function signature allows concise wrapping of functions that return a slice and an error:
+// This signature allows concise wrapping of functions that return a
+// slice and an error. FromSlice assumes that a non-empty slice along
+// with an error is a partial result, and preserves both.
 //
 //	stream := rill.FromSlice(someFunc())
 func FromSlice[A any](slice []A, err error) <-chan Try[A] {
@@ -75,12 +77,12 @@ func FromSlice[A any](slice []A, err error) <-chan Try[A] {
 	return out
 }
 
-// ToSlice converts an input stream into a slice.
-// If the stream contains errors, ToSlice returns the values that precede
-// the first error, along with that error.
+// ToSlice collects the stream's values into a slice. When ToSlice
+// encounters an error, it immediately returns that error along with the
+// partial slice. Otherwise, it consumes the stream to the end and
+// returns a slice of all values.
 //
-// This is a blocking ordered function that processes items sequentially.
-// See the package documentation for more information on blocking ordered functions and error handling.
+// See the package documentation for the behaviors that all sinks share.
 func ToSlice[A any](in <-chan Try[A], options ...SinkOption) ([]A, error) {
 	defer Discard(in, options...)
 
@@ -94,10 +96,16 @@ func ToSlice[A any](in <-chan Try[A], options ...SinkOption) ([]A, error) {
 	return res, nil
 }
 
-// FromChan converts a regular channel into a stream.
-// If err is not nil, the function ignores the passed values and returns a stream with a single error.
+// FromChan converts a regular channel into a stream. If err is not nil,
+// FromChan returns a stream with only that error and ignores values.
 //
-// Such function signature allows concise wrapping of functions that return a channel and an error:
+// Otherwise, values are forwarded to the output as they arrive, and the
+// output is closed once values is exhausted. A nil input is never
+// exhausted, so the output never closes.
+//
+// This signature allows concise wrapping of functions that return a
+// channel and an error. FromChan assumes a non-nil error means
+// someFunc() could not construct the channel.
 //
 //	stream := rill.FromChan(someFunc())
 func FromChan[A any](values <-chan A, err error) <-chan Try[A] {
@@ -122,13 +130,16 @@ func FromChan[A any](values <-chan A, err error) <-chan Try[A] {
 	return out
 }
 
-// FromChans creates a stream from independent value and error channels.
-// Items from both inputs are added to the output stream as they arrive, and nil
-// errors are skipped.
-// The output stream is closed only when both input channels are exhausted.
-// In particular, if at least one input is nil, the output stream never closes.
+// FromChans converts separate value and error channels into a single
+// stream. Values and errors are forwarded to the output as they arrive,
+// and nil errors are skipped.
 //
-// Such function signature allows concise wrapping of functions that return two channels:
+// The output is closed only when both inputs are exhausted. A nil input
+// is never exhausted, so the output never closes.
+//
+// This signature allows concise wrapping of functions that return two
+// channels. FromChans assumes someFunc() returns two channels that
+// eventually close.
 //
 //	stream := rill.FromChans(someFunc())
 func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
@@ -168,9 +179,12 @@ func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 	return out
 }
 
-// ToChans splits an input stream into two channels: one for values and one for errors.
-// Both output channels are closed when the input stream is exhausted.
-// They must be consumed concurrently to avoid deadlocks.
+// ToChans splits the stream into two channels: one for values and one
+// for errors. It returns immediately, forwards each item to the
+// appropriate channel as it arrives, and closes both channels once the
+// input is exhausted.
+//
+// The channels must be consumed concurrently to avoid a deadlock.
 func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 	if in == nil {
 		return nil, nil
@@ -195,9 +209,9 @@ func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 	return out, errs
 }
 
-// Generate is a shorthand for creating streams.
-// It provides a more ergonomic way of sending both values and errors to a stream, manages goroutine and channel lifecycle.
-// Nil errors passed to sendError are skipped.
+// Generate is a shorthand for creating streams: it manages the
+// goroutine and channel lifecycle. Inside f, send writes a value to the
+// stream, and sendError writes an error unless it is nil.
 //
 //	stream := rill.Generate(func(send func(int), sendError func(error)) {
 //		for i := 0; i < 100; i++ {
@@ -206,7 +220,7 @@ func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 //		sendError(someError)
 //	})
 //
-// Here's how the same code would look without Generate:
+// The same stream without Generate:
 //
 //	stream := make(chan rill.Try[int])
 //	go func() {
