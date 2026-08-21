@@ -51,13 +51,16 @@ func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan 
 	})
 }
 
-// Filter takes a stream of items of type A and filters them using a predicate function f.
-// Returns a new stream of items that passed the filter.
+// Filter takes a stream of values and returns a new stream, keeping
+// only the values that match the condition f. When f returns an error,
+// it's written to the output instead of the value.
 //
-// This is a non-blocking unordered function that processes items concurrently using n goroutines.
-// An ordered version of this function, [OrderedFilter], is also available.
+// The argument n bounds the number of concurrent calls to f. Results are
+// written to the output as they become ready, so their order can differ
+// from the input order when n > 1. Use [OrderedFilter] to preserve the
+// order.
 //
-// See the package documentation for more information on non-blocking unordered functions and error handling.
+// See the package documentation for the behaviors that all stages share.
 func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -76,7 +79,8 @@ func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[
 	})
 }
 
-// OrderedFilter is the ordered version of [Filter].
+// OrderedFilter is the ordered version of [Filter]: the output preserves
+// the input order, for values and errors alike.
 func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -95,14 +99,17 @@ func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-ch
 	})
 }
 
-// FilterMap takes a stream of items of type A, applies a function f that can filter and transform them into items of type B.
-// Returns a new stream of transformed items that passed the filter. This operation is equivalent to a
-// [Filter] followed by a [Map].
+// FilterMap takes a stream of values of type A and returns a stream of
+// values of type B, using f to transform each value and decide whether
+// to keep the result. When f returns an error, it's written to the
+// output instead of a value.
 //
-// This is a non-blocking unordered function that processes items concurrently using n goroutines.
-// An ordered version of this function, [OrderedFilterMap], is also available.
+// The argument n bounds the number of concurrent calls to f. Results are
+// written to the output as they become ready, so their order can differ
+// from the input order when n > 1. Use [OrderedFilterMap] to preserve
+// the order.
 //
-// See the package documentation for more information on non-blocking unordered functions and error handling.
+// See the package documentation for the behaviors that all stages share.
 func FilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -121,7 +128,8 @@ func FilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-
 	})
 }
 
-// OrderedFilterMap is the ordered version of [FilterMap].
+// OrderedFilterMap is the ordered version of [FilterMap]: the output
+// preserves the input order, for values and errors alike.
 func OrderedFilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -200,17 +208,17 @@ func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) 
 	return out
 }
 
-// Catch allows handling errors in the middle of a stream processing pipeline.
-// Every error encountered in the input stream is passed to the function f for handling.
+// Catch takes a stream and returns a new stream with the errors
+// optionally handled by f. Each error is passed to f, which returns nil
+// to drop it from the stream, the same error to keep it, or a different
+// one to replace it. Values never reach f and are passed through as-is.
 //
-// The outcome depends on the return value of f:
-//   - If f returns nil, the error is considered handled and filtered out from the output stream.
-//   - If f returns a non-nil error, the original error is replaced with the result of f.
+// The argument n bounds the number of concurrent calls to f. Items are
+// written to the output as they become ready, so their order can differ
+// from the input order when n > 1. Use [OrderedCatch] to preserve the
+// order.
 //
-// This is a non-blocking unordered function that handles errors concurrently using n goroutines.
-// An ordered version of this function, [OrderedCatch], is also available.
-//
-// See the package documentation for more information on non-blocking unordered functions and error handling.
+// See the package documentation for the behaviors that all stages share.
 func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -229,7 +237,8 @@ func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	})
 }
 
-// OrderedCatch is the ordered version of [Catch].
+// OrderedCatch is the ordered version of [Catch]: the output preserves
+// the input order, for values and errors alike.
 func OrderedCatch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)
