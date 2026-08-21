@@ -8,20 +8,24 @@ import (
 	"github.com/destel/rill/internal/list"
 )
 
-// Reduce combines all items from the input stream into a single value using a binary function f.
+// Reduce combines all values of the stream into a single value using
+// the binary function f.
 //
-// Treating f as a binary operator "*", Reduce computes in[0] * in[1] * ... * in[N-1]:
-// items are combined in stream order, but the parenthesization is unspecified
-// and may vary from run to run. This requires f to be associative -
-// (a * b) * c == a * (b * c) - so that every parenthesization yields the same
-// result. Commutativity is not required.
+// Treating f as a binary operator "*", Reduce computes
+// in[0] * in[1] * ... * in[N-1]: values are combined in stream order,
+// but the parenthesization is unspecified and may vary from run to run.
+// This requires f to be associative - (a * b) * c == a * (b * c) - so
+// that every parenthesization yields the same result. Commutativity is
+// not required.
 //
-// The hasResult return flag is set to true if the stream contained at least one value and no error was encountered,
-// otherwise it is set to false.
+// Reduce immediately returns (zero, false, err) on the first observed
+// error. Otherwise, it returns (zero, false, nil) if the stream is
+// empty, or (result, true, nil) after the input is fully consumed and
+// every call to f has returned.
 //
-// Reduce is a blocking function that processes items concurrently using n goroutines.
+// The argument n bounds the number of concurrent calls to f.
 //
-// See the package documentation for more information on blocking functions and error handling.
+// See the package documentation for the behaviors that all sinks share.
 func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, hasResult bool, err error) {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -235,21 +239,23 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 	return First(out)
 }
 
-// MapReduce transforms the input stream into a Go map using mapper and reducer functions.
-// The transformation is performed in two concurrent phases.
+// MapReduce consumes the stream and builds a map: mapper turns each
+// value into a key-value pair, and reducer combines the values that
+// share a key.
 //
-//   - The mapper function transforms each input item into a key-value pair.
-//   - The reducer function reduces values of the same key into a single value.
-//     This phase has the same semantics as the [Reduce] function: for each key,
-//     values are combined in stream order, but the parenthesization is unspecified,
-//     so the reducer must be associative.
+// For each key, the values are combined as in [Reduce]: in stream
+// order, with unspecified parenthesization, so reducer must be
+// associative. Commutativity is not required.
 //
-// An empty input stream produces an empty map.
+// MapReduce immediately returns (nil, err) on the first observed
+// error. Otherwise, it returns the map after the input is fully
+// consumed and every call to mapper and reducer has returned. An empty
+// stream results in an empty map.
 //
-// MapReduce is a blocking function that processes items concurrently using nm and nr goroutines
-// for the mapper and reducer functions respectively.
+// The arguments nm and nr bound the number of concurrent calls to
+// mapper and reducer, respectively.
 //
-// See the package documentation for more information on blocking functions and error handling.
+// See the package documentation for the behaviors that all sinks share.
 func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error)) (map[K]V, error) {
 	validateN(nm)
 	validateNilFunc(mapper == nil)
