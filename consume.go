@@ -54,10 +54,11 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 	return Err(out)
 }
 
-// Err returns the first error encountered in the input stream or nil if there were no errors.
+// Err consumes the stream and immediately returns the first error it
+// contains. Otherwise, it returns nil after the input is fully
+// consumed.
 //
-// This is a blocking ordered function that processes items sequentially.
-// See the package documentation for more information on blocking ordered functions and error handling.
+// See the package documentation for the behaviors that all sinks share.
 func Err[A any](in <-chan Try[A]) error {
 	defer Discard(in)
 
@@ -70,12 +71,12 @@ func Err[A any](in <-chan Try[A]) error {
 	return nil
 }
 
-// First returns the first value or error encountered in the input stream.
-// If the stream is empty or its first item is an error, found is false and
-// value is the zero value of A.
+// First returns the first item of the stream: (value, true, nil) if
+// the item is a value, (zero, false, err) if it is an error, or
+// (zero, false, nil) if the stream is empty.
 //
-// This is a blocking ordered function that processes items sequentially.
-// See the package documentation for more information on blocking ordered functions and error handling.
+// The rest of the stream is discarded. See the package documentation
+// for the behaviors that all sinks share.
 func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
 	defer Discard(in)
 
