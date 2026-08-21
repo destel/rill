@@ -4,13 +4,15 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Map takes a stream of items of type A and transforms them into items of type B using a function f.
-// Returns a new stream of transformed items.
+// Map takes a stream of values of type A and returns a stream of values of
+// type B, using f to transform each. When f returns an error, it's written
+// to the output instead of a value.
 //
-// This is a non-blocking unordered function that processes items concurrently using n goroutines.
-// An ordered version of this function, [OrderedMap], is also available.
+// The argument n bounds the number of concurrent calls to f. Results are
+// written to the output as they become ready, so their order can differ
+// from the input order when n > 1. Use [OrderedMap] to preserve the order.
 //
-// See the package documentation for more information on non-blocking unordered functions and error handling.
+// See the package documentation for the behaviors that all stages share.
 func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -29,7 +31,8 @@ func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] 
 	})
 }
 
-// OrderedMap is the ordered version of [Map].
+// OrderedMap is the ordered version of [Map]: the output preserves the
+// input order, for values and errors alike.
 func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
