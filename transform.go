@@ -148,13 +148,18 @@ func OrderedFilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, err
 	})
 }
 
-// FlatMap takes a stream of items of type A and transforms each item into a new sub-stream of items of type B using a function f.
-// Those sub-streams are then flattened into a single output stream, which is returned.
+// FlatMap takes a stream of values of type A and returns a stream of
+// values of type B, using f to expand each value into its own sub-stream.
+// The sub-streams are flattened into the output: every item is forwarded,
+// values and errors alike.
 //
-// This is a non-blocking unordered function that processes items concurrently using n goroutines.
-// An ordered version of this function, [OrderedFlatMap], is also available.
+// The argument n bounds the number of sub-streams consumed concurrently:
+// each worker consumes one sub-stream to the end before starting the next.
+// When n > 1, items from different sub-streams can interleave in the
+// output. Use [OrderedFlatMap] to concatenate the sub-streams in the
+// input order.
 //
-// See the package documentation for more information on non-blocking unordered functions and error handling.
+// See the package documentation for the behaviors that all stages share.
 func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -180,7 +185,43 @@ func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan 
 	return out
 }
 
-// OrderedFlatMap is the ordered version of [FlatMap].
+// OrderedFlatMap is the ordered version of [FlatMap]: the output is the
+// sub-streams concatenated in the input order.
+//
+// The argument n bounds the number of concurrent calls to f. The
+// sub-streams are prepared concurrently, but - unlike in [FlatMap] -
+// consumed one at a time and in order: nothing reads from a sub-stream
+// before its turn. In practice, to keep the stage concurrent, a
+// sub-stream must do all or part of its expensive work ahead of its
+// turn.
+//
+// Consider a stream of URLs: each file should be downloaded, and its
+// lines streamed to the output, all in order. Downloading is the
+// expensive work here.
+//
+// Example 1: f downloads the whole file into memory, then streams the
+// lines from there. Up to 5 downloads run concurrently.
+//
+//	rill.OrderedFlatMap(urls, 5, func(u string) <-chan rill.Try[string] {
+//		lines, err := getFileLines(u)
+//		return rill.FromSlice(lines, err)
+//	})
+//
+// Example 2: f streams the lines as the file is being downloaded,
+// through a [Buffer] that lets the sub-stream run ahead of its turn.
+// Again up to 5 concurrent downloads, but each pauses after the first
+// 100 lines, until its turn comes.
+//
+//	rill.OrderedFlatMap(urls, 5, func(u string) <-chan rill.Try[string] {
+//		lines := streamFileLines(u)
+//		return rill.Buffer(lines, 100)
+//	})
+//
+// The two examples do the same thing: they buffer the lines, with or
+// without a bound. Without any buffering, the downloads would run one
+// at a time, and the stage would turn sequential.
+//
+// See the package documentation for the behaviors that all stages share.
 func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
