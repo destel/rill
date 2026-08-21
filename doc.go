@@ -69,13 +69,15 @@
 //
 // # Concurrency
 //
-// Most stages and sinks are concurrent, and take the argument n - the
-// maximum number of concurrent invocations of the user callback.
-// Concurrency is per stage, not per pipeline: each stage enforces its own
-// limit, so an I/O-bound stage can use a much larger n than a CPU-bound one.
+// Most stages and sinks are concurrent, and take the argument n, which
+// acts as both an upper bound and a target for the number of concurrent
+// invocations of the user callback. Rill never exceeds this bound, and,
+// given enough input, reaches it. With n = 1, the callback is never
+// invoked concurrently: items are processed one by one, in input order.
 //
-// With n = 1, the callback is never invoked concurrently: items are
-// processed one by one, in input order.
+// Concurrency is per stage, not per pipeline: each stage enforces its own
+// limit, so an I/O-bound stage can use a much larger n than a CPU-bound
+// one.
 //
 // # Backpressure
 //
