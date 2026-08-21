@@ -5,9 +5,9 @@ import (
 	"sync/atomic"
 )
 
-// ForEach consumes the stream, calling f on each value. It immediately
-// returns the first observed error. Otherwise, it returns nil after the
-// input is fully consumed and every call to f has returned.
+// ForEach calls f on the stream's values, like a concurrent for-range
+// loop. It immediately returns the first observed error. Otherwise, it returns nil after f has been
+// called on every value and every call has returned.
 //
 // The argument n bounds the number of concurrent calls to f. When n = 1,
 // ForEach processes items sequentially in stream order, similar to a
@@ -54,9 +54,8 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error, options ...SinkOpt
 	return Err(out, options...)
 }
 
-// Err consumes the stream and immediately returns the first error it
-// contains. Otherwise, it returns nil after the input is fully
-// consumed.
+// Err immediately returns the first error of the stream. Otherwise, it
+// returns nil after the input is fully consumed.
 //
 // See the package documentation for the behaviors that all sinks share.
 func Err[A any](in <-chan Try[A], options ...SinkOption) error {
@@ -95,10 +94,10 @@ func First[A any](in <-chan Try[A], options ...SinkOption) (value A, found bool,
 var errFound = errors.New("found")
 
 // Any reports whether the stream contains a value that matches the
-// condition f. It consumes the stream, calling f on each value, and
-// immediately returns (true, nil) or (false, err) on the first observed
-// match or error, respectively. Otherwise, it returns (false, nil) after
-// the input is fully consumed and every call to f has returned.
+// condition f. It immediately returns (true, nil) or (false, err) on
+// the first observed match or error, respectively. Otherwise, it
+// returns (false, nil) after f has been called on every value and every
+// call has returned.
 //
 // The argument n bounds the number of concurrent calls to f.
 //
@@ -124,11 +123,11 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...Sin
 	return false, err
 }
 
-// All reports whether every value in the stream matches the condition f.
-// It consumes the stream, calling f on each value, and immediately returns
-// (false, nil) or (false, err) on the first observed mismatch or error,
-// respectively. Otherwise, it returns (true, nil) after the input is fully
-// consumed and every call to f has returned.
+// All reports whether every value in the stream matches the condition
+// f. It immediately returns (false, nil) or (false, err) on the first
+// observed mismatch or error, respectively. Otherwise, it returns
+// (true, nil) after f has been called on every value and every call has
+// returned.
 //
 // The argument n bounds the number of concurrent calls to f.
 //
