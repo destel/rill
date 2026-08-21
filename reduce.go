@@ -239,9 +239,8 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 	return First(out)
 }
 
-// MapReduce consumes the stream and builds a map: mapper turns each
-// value into a key-value pair, and reducer combines the values that
-// share a key.
+// MapReduce builds a map from the stream: mapper turns each value into
+// a key-value pair, and reducer combines the values that share a key.
 //
 // For each key, the values are combined as in [Reduce]: in stream
 // order, with unspecified parenthesization, so reducer must be
