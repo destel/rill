@@ -5,11 +5,14 @@ import (
 	"sync"
 )
 
-// FromSeq converts an iterator into a stream.
-// If err is not nil, the function ignores the passed seq and returns a stream with a single error.
+// FromSeq converts an iterator into a stream. If err is not nil,
+// FromSeq returns a stream with only that error and ignores seq.
+// Otherwise, the values of seq are forwarded to the output, and the
+// output is closed once seq ends.
 //
-// Such function signature allows concise wrapping of functions that return an
-// iterator and an error:
+// This signature allows concise wrapping of functions that return an
+// iterator and an error. FromSeq assumes a non-nil error means
+// someFunc() could not construct the iterator.
 //
 //	stream := rill.FromSeq(someFunc())
 func FromSeq[A any](seq iter.Seq[A], err error) <-chan Try[A] {
@@ -33,7 +36,9 @@ func FromSeq[A any](seq iter.Seq[A], err error) <-chan Try[A] {
 }
 
 // FromSeq2 converts an iterator of value-error pairs into a stream.
-// For pairs with a non-nil error, FromSeq2 emits an error item and ignores the value.
+// Each pair becomes one item. For pairs with a non-nil error, FromSeq2
+// emits an error item and ignores the value. The output is closed once
+// seq ends.
 func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 	validateNilFunc(seq == nil)
 
@@ -47,13 +52,16 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 	return out
 }
 
-// ToSeq2 converts an input stream into an iterator of value-error pairs.
-// Errors are yielded as ordinary pairs and do not stop the iteration;
-// handle them inside the loop.
+// ToSeq2 converts the stream into an iterator of value-error pairs,
+// typically consumed with a for-range loop. Pairs are yielded until the
+// stream is exhausted or the loop exits with break or return. Error
+// items do not stop the iteration: they are yielded as ordinary pairs.
 //
-// ToSeq2 returns a single-use iterator, which must be called for the pipeline
-// to settle. If iteration stops early using break or return, ToSeq2 drains the
-// remaining input in the background.
+// On an early exit, ToSeq2 discards the rest of the stream in the
+// background, the same way sinks do.
+//
+// The returned iterator is single-use and must be ranged for the
+// pipeline to settle. If it is never ranged, the input is never drained.
 func ToSeq2[A any](in <-chan Try[A], options ...SinkOption) iter.Seq2[A, error] {
 	// Unlike other sinks, ToSeq2 opens the options at the call site: its work
 	// happens while the iterator is ranged, which can be arbitrarily far from
