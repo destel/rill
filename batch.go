@@ -4,23 +4,30 @@ import (
 	"time"
 )
 
-// Batch takes a stream of items and returns a stream of batches based on a maximum size and a timeout.
+// Batch groups consecutive values of the stream into batches. In its
+// simplest form, with timeout = -1 and no errors in the input, Batch
+// accumulates values into a pending batch and emits it as soon as it
+// reaches the target size.
 //
-// A batch is emitted when one of the following conditions is met:
-//   - The batch reaches the maximum size
-//   - The time since the first item was added to the batch exceeds the timeout
-//   - An error is encountered in the input stream
-//   - The input stream is closed
+// A positive timeout is the time each batch has to fill, starting from
+// its first value. When it expires, the pending batch is emitted even
+// if it is not full. This trades batch size for latency: batches can be
+// smaller when the input is sparse, but no value is ever held longer
+// than timeout.
 //
-// Errors are never included in batches. Each error is forwarded to the output as a separate item,
-// preserving the relative order of values and errors.
+// A zero timeout panics: the expected behavior would be to accumulate
+// until reading from the input blocks, but in practice, with an
+// unbuffered input, that often produces a flood of one-item batches.
+// Use a small positive timeout instead.
 //
-// This function never emits empty batches. To disable the timeout and emit batches only based on the size,
-// set the timeout to -1. Setting the timeout to zero is not supported and will result in a panic
+// Input errors become batch boundaries: the pending batch, if not
+// empty, is emitted first, and the error follows as a separate item.
 //
-// This is a non-blocking ordered function that processes items sequentially.
+// When the end of the input is reached, whatever has accumulated is
+// emitted as a final batch. This function never emits empty batches,
+// regardless of what triggered the emission.
 //
-// See the package documentation for more information on non-blocking ordered functions and error handling.
+// See the package documentation for the behaviors that all stages share.
 func Batch[A any](in <-chan Try[A], size int, timeout time.Duration) <-chan Try[[]A] {
 	validateMinSize(size, 1)
 	if timeout == 0 {
@@ -113,10 +120,10 @@ func Batch[A any](in <-chan Try[A], size int, timeout time.Duration) <-chan Try[
 	return out
 }
 
-// Unbatch is the inverse of [Batch]. It takes a stream of batches and returns a stream of individual items.
+// Unbatch flattens a stream of slices into a stream of their values.
+// This function is the inverse of [Batch].
 //
-// This is a non-blocking ordered function that processes items sequentially.
-// See the package documentation for more information on non-blocking ordered functions and error handling.
+// See the package documentation for the behaviors that all stages share.
 func Unbatch[A any](in <-chan Try[[]A]) <-chan Try[A] {
 	if in == nil {
 		return nil
