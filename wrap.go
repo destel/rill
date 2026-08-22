@@ -99,10 +99,10 @@ func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
 
 // FromChan converts a regular channel into a stream. If err is not nil,
 // FromChan returns a stream with only that error and ignores values.
-//
 // Otherwise, values are forwarded to the output as they arrive, and the
-// output is closed once values is exhausted. A nil input is never
-// exhausted, so the output never closes.
+// output is closed once the input is exhausted.
+//
+// A nil input is never exhausted, so the output never closes.
 //
 // This signature allows concise wrapping of functions that return a
 // channel and an error. FromChan assumes a non-nil error means
@@ -133,10 +133,10 @@ func FromChan[A any](values <-chan A, err error) <-chan Try[A] {
 
 // FromChans converts separate value and error channels into a single
 // stream. Values and errors are forwarded to the output as they arrive,
-// and nil errors are skipped.
+// and nil errors are skipped. The output is closed only when both
+// inputs are exhausted.
 //
-// The output is closed only when both inputs are exhausted. A nil input
-// is never exhausted, so the output never closes.
+// A nil input is never exhausted, so the output never closes.
 //
 // This signature allows concise wrapping of functions that return two
 // channels. FromChans assumes someFunc() returns two channels that
