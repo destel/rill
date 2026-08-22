@@ -6,12 +6,14 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Drain consumes and discards all items from an input channel, blocking until the channel is exhausted.
+// Drain consumes and discards all items of the channel, blocking until
+// it is exhausted.
 func Drain[A any](in <-chan A) {
 	core.Drain(in)
 }
 
-// Discard returns immediately, consumes the input channel in the background, and discards all its items.
+// Discard returns immediately, then consumes and discards all items of
+// the channel in the background.
 func Discard[A any](in <-chan A, options ...SinkOption) {
 	opts := collectSinkOptions(options)
 
@@ -36,24 +38,22 @@ func Discard[A any](in <-chan A, options ...SinkOption) {
 	}()
 }
 
-// DrainNB returns immediately, consumes the input channel in the background, and discards all its items.
+// DrainNB is a non-blocking version of [Drain].
 //
-// Deprecated: use [Discard] instead. DrainNB will be removed in v1.0.
+// Deprecated: use [Discard] instead, which is identical. DrainNB will
+// be removed in v1.0.
 func DrainNB[A any](in <-chan A) {
 	Discard(in)
 }
 
-// Buffer takes a channel of items and returns a buffered channel of exact same items in the same order.
-// This can be useful for preventing write operations on the input channel from blocking, especially if subsequent stages
-// in the processing pipeline are slow.
-// Up to size items can be buffered before back pressure is applied to the upstream producer.
-//
-// Typical usage of Buffer might look like this:
+// Buffer forwards all input items to a new channel with a capacity of
+// size. It returns immediately and closes the output once the input is
+// exhausted.
 //
 //	users := getUsers(ctx, companyID)
 //	users = rill.Buffer(users, 100)
-//	// Now work with the users channel as usual.
-//	// Up to 100 users can be buffered if subsequent stages of the pipeline are slow.
+//	// Up to 100 users can be buffered if subsequent stages of the
+//	// pipeline are slow.
 func Buffer[A any](in <-chan A, size int) <-chan A {
 	validateMinSize(size, 0)
 	return core.Buffer(in, size)
