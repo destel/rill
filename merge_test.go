@@ -126,7 +126,7 @@ func TestSplit2(t *testing.T) {
 
 func TestTee(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
-		out1, out2 := Tee[int](nil)
+		out1, out2 := Tee[Try[int]](nil)
 		th.ExpectValue(t, out1, nil)
 		th.ExpectValue(t, out2, nil)
 	})
