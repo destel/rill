@@ -4,27 +4,31 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Merge performs a fan-in operation on the list of input channels, returning a single output channel.
-// The resulting channel will contain all items from all inputs,
-// and will be closed when all inputs are exhausted.
-// In particular, Merge with no arguments returns an already closed channel.
+// Merge performs a fan-in, combining multiple channels into a single
+// output channel. It returns immediately, and consumes the inputs
+// simultaneously and independently, interleaving their items in the
+// output as they arrive. Merge preserves the relative order of items
+// from the same input.
 //
-// This is a non-blocking function that processes items from each input sequentially.
-//
-// See the package documentation for more information on non-blocking functions and error handling.
+// The output is closed only when all inputs are exhausted.
+// A nil input is never exhausted, so the output never closes.
+// Merge with no arguments immediately returns an empty closed channel.
 func Merge[A any](ins ...<-chan A) <-chan A {
 	return core.Merge(ins...)
 }
 
-// Split2 divides the input stream into two output streams based on the predicate function f:
-// The splitting behavior is determined by the boolean return value of f. When f returns true, the item is sent to the outTrue stream,
-// otherwise it is sent to the outFalse stream. In case of any error, the item is sent to both output streams.
-// Both output streams must be consumed independently to avoid deadlocks.
+// Split2 divides the stream into two streams: values that match the
+// condition f go to outTrue, and the rest go to outFalse. Errors are
+// sent to both outputs.
 //
-// This is a non-blocking unordered function that processes items concurrently using n goroutines.
-// An ordered version of this function, [OrderedSplit2], is also available.
+// The streams must be consumed concurrently to avoid a deadlock.
 //
-// See the package documentation for more information on non-blocking unordered functions and error handling.
+// The argument n bounds the number of concurrent calls to f. Items are
+// written to the outputs as they become ready, so their order can
+// differ from the input order when n > 1. Use [OrderedSplit2] to
+// preserve the order.
+//
+// See the package documentation for the behaviors that all stages share.
 //
 // Deprecated: Split2 will be removed in v1.0. Since the introduction of [Tee]
 // in v0.8, splitting no longer needs a dedicated operation — it can be composed
@@ -64,7 +68,8 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-
 	return
 }
 
-// OrderedSplit2 is the ordered version of [Split2].
+// OrderedSplit2 is the ordered version of [Split2]: the outputs
+// preserve the input order, for values and errors alike.
 //
 // Deprecated: OrderedSplit2 will be removed in v1.0. Since the introduction of
 // [Tee] in v0.8, splitting no longer needs a dedicated operation — it can be
@@ -104,25 +109,26 @@ func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (out
 	return
 }
 
-// Tee returns two streams that are identical to the input stream (both errors and values).
-// Both output streams must be consumed independently to avoid deadlocks.
+// Tee duplicates the input channel into two identical channels. It
+// returns immediately, forwards each item to both outputs as it
+// arrives, and closes both once the input is exhausted.
 //
-// This is a non-blocking function that processes items in a single goroutine.
-// See the package documentation for more information on non-blocking functions and error handling.
+// The outputs must be consumed concurrently to avoid a deadlock.
 //
-// If deep copying of values is needed, use [Map] on one or both outputs:
+// If deep copying of values is needed, use [Map] on one or both
+// outputs:
 //
 //	out1, out2 := rill.Tee(in)
 //	out2 = rill.Map(out2, 1, func(x A) (A, error) {
 //		return deepCopy(x), nil
 //	})
-func Tee[A any](in <-chan Try[A]) (<-chan Try[A], <-chan Try[A]) {
+func Tee[A any](in <-chan A) (<-chan A, <-chan A) {
 	if in == nil {
 		return nil, nil
 	}
 
-	out1 := make(chan Try[A])
-	out2 := make(chan Try[A])
+	out1 := make(chan A)
+	out2 := make(chan A)
 
 	go func() {
 		defer close(out1)
