@@ -23,165 +23,185 @@ func TestReduce(t *testing.T) {
 		th.RunSynctest(t, "empty", func(t *testing.T) {
 			in := FromSlice([]int{}, nil)
 
+			settled, opt := Settlement()
+
+			var calls int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				atomic.AddInt64(&calls, 1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				return x + y, nil
-			})
-
-			th.ExpectDrainedChan(t, in)
+			}, opt)
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, out, 0)
 			th.ExpectValue(t, ok, false)
+
+			th.ExpectNoRace(calls)
+			th.ExpectDrainedChan(t, in)
+			th.ExpectValue(t, calls, 0)
+
+			<-settled // asserts that settlement is reported
 		})
 
 		th.RunSynctest(t, "single value stream", func(t *testing.T) {
 			in := FromSlice([]int{5}, nil)
 
-			var reducerCalls atomic.Int64
+			settled, opt := Settlement()
+
+			var calls int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				reducerCalls.Add(1)
+				atomic.AddInt64(&calls, 1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				return x + y, nil
-			})
-
-			th.ExpectDrainedChan(t, in)
+			}, opt)
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, out, 5)
 			th.ExpectValue(t, ok, true)
 
-			th.ExpectValue(t, reducerCalls.Load(), 0)
+			th.ExpectNoRace(calls)
+			th.ExpectDrainedChan(t, in)
+			th.ExpectValue(t, calls, 0) // never called
+
+			<-settled // asserts that settlement is reported
 		})
 
 		th.RunSynctest(t, "single error stream", func(t *testing.T) {
 			in := FromSlice([]int{}, fmt.Errorf("err0"))
 
+			settled, opt := Settlement()
+
+			var calls int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				atomic.AddInt64(&calls, 1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				return x + y, nil
-			})
-
-			th.WaitForInflightWork()
-			th.ExpectDrainedChan(t, in)
+			}, opt)
 
 			th.ExpectError(t, err, "err0")
 			th.ExpectValue(t, out, 0)
 			th.ExpectValue(t, ok, false)
+
+			<-settled
+
+			th.ExpectNoRace(calls)
+			th.ExpectDrainedChan(t, in)
+			th.ExpectValue(t, calls, 0)
 		})
 
 		th.RunSynctest(t, "no errors", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 100), nil)
 
+			settled, opt := Settlement()
+
+			var calls int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				atomic.AddInt64(&calls, 1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				return x + y, nil
-			})
-
-			th.ExpectDrainedChan(t, in)
+			}, opt)
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, out, 99*100/2)
 			th.ExpectValue(t, ok, true)
-		})
 
-		th.RunSynctest(t, "concurrency", func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 100), nil)
+			th.ExpectNoRace(calls)
+			th.ExpectDrainedChan(t, in)
+			th.ExpectValue(t, calls, 99)
 
-			var gauge th.InFlightGauge
-
-			_, _, _ = Reduce(in, n, func(x, y int) (int, error) {
-				gauge.Enter()
-				defer gauge.Exit()
-				th.SimulateWork(1*time.Second, 2*time.Second)
-
-				return x + y, nil
-			})
-
-			th.ExpectValue(t, gauge.Max(), n)
+			<-settled // asserts that settlement is reported
 		})
 
 		th.RunSynctest(t, "error in input", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = replaceWithError(in, 200, fmt.Errorf("err200"))
-			in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
 
-			var extraCalls atomic.Int64
+			settled, opt := Settlement()
+
+			var extraCalls int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				extraCalls.Add(1)
+				atomic.AddInt64(&extraCalls, 1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				return x + y, nil
-			})
-			extraCalls.Store(0)
+			}, opt)
+			atomic.StoreInt64(&extraCalls, 0)
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, out, 0)
 			th.ExpectValue(t, ok, false)
 
-			_, inStillOpen := <-in
-			th.ExpectValue(t, inStillOpen, true)
-
-			th.WaitForInflightWork()
+			<-settled
+			th.ExpectNoRace(extraCalls)
 			th.ExpectDrainedChan(t, in)
 
 			if n == 1 {
-				th.ExpectValue(t, extraCalls.Load(), 0)
+				th.ExpectValue(t, extraCalls, 0)
 			} else {
-				th.ExpectBetween(t, extraCalls.Load(), 0, 50)
+				th.ExpectLTE(t, extraCalls, 50)
 			}
 		})
 
 		th.RunSynctest(t, "error in func", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
-			in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
 
-			var extraCalls atomic.Int64
-			var i atomic.Int64
+			settled, opt := Settlement()
+
+			var extraCalls int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				extraCalls.Add(1)
+				c := atomic.AddInt64(&extraCalls, 1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
-				if i.Add(1) == 200 {
+				if c == 200 {
 					return 0, fmt.Errorf("err200")
 				}
 				return x + y, nil
-			})
-			extraCalls.Store(0)
+			}, opt)
+			atomic.StoreInt64(&extraCalls, 0)
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, out, 0)
 			th.ExpectValue(t, ok, false)
 
-			_, inStillOpen := <-in
-			th.ExpectValue(t, inStillOpen, true)
-
-			th.WaitForInflightWork()
+			<-settled
+			th.ExpectNoRace(extraCalls)
 			th.ExpectDrainedChan(t, in)
 
 			if n == 1 {
-				th.ExpectValue(t, extraCalls.Load(), 0)
+				th.ExpectValue(t, extraCalls, 0)
 			} else {
-				th.ExpectBetween(t, extraCalls.Load(), 0, 50)
+				th.ExpectLTE(t, extraCalls, 50)
 			}
+
 		})
 
 		th.RunSynctest(t, "error in func (last)", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 
-			var i atomic.Int64
-			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				th.SimulateWork(1*time.Second, 2*time.Second)
+			settled, opt := Settlement()
 
-				if i.Add(1) == 999 {
+			var extraCalls int64
+			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				c := atomic.AddInt64(&extraCalls, 1)
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				if c == 999 {
 					return 0, fmt.Errorf("err999")
 				}
 				return x + y, nil
-			})
+			}, opt)
+			atomic.StoreInt64(&extraCalls, 0)
 
 			th.ExpectError(t, err, "err999")
 			th.ExpectValue(t, out, 0)
 			th.ExpectValue(t, ok, false)
 
+			<-settled
+			th.ExpectNoRace(extraCalls)
 			th.ExpectDrainedChan(t, in)
+
+			if n == 1 {
+				th.ExpectValue(t, extraCalls, 0)
+			} else {
+				th.ExpectLTE(t, extraCalls, 50)
+			}
 		})
 
 		t.Run("unclosed", func(t *testing.T) {
@@ -198,6 +218,22 @@ func TestReduce(t *testing.T) {
 				th.ExpectValue(t, out, 0)
 				th.ExpectValue(t, ok, false)
 			})
+		})
+
+		th.RunSynctest(t, "concurrency", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 100), nil)
+
+			var gauge th.InFlightGauge
+
+			_, _, _ = Reduce(in, n, func(x, y int) (int, error) {
+				gauge.Enter()
+				defer gauge.Exit()
+				th.SimulateWork(1*time.Second, 2*time.Second)
+
+				return x + y, nil
+			})
+
+			th.ExpectValue(t, gauge.Max(), n)
 		})
 
 		th.RunSynctest(t, "ordering", func(t *testing.T) {

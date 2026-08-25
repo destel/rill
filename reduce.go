@@ -22,7 +22,7 @@ import (
 // Reduce is a blocking function that processes items concurrently using n goroutines.
 //
 // See the package documentation for more information on blocking functions and error handling.
-func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, hasResult bool, err error) {
+func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error), options ...SinkOption) (result A, hasResult bool, err error) {
 	validateN(n)
 	validateNilFunc(f == nil)
 
@@ -42,7 +42,8 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 			}
 			acc = res
 			return nil
-		})
+		}, options...)
+
 		if err != nil {
 			var zero A
 			return zero, false, err
@@ -210,7 +211,8 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 		}
 	}
 
-	defer Discard(in)
+	inputDrained, opt := Settlement()
+	defer Discard(in, opt)
 
 	// Start the workers
 	var wg sync.WaitGroup
@@ -222,17 +224,26 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error)) (result A, 
 	go func() {
 		wg.Wait()
 
-		if !errSeen.Load() {
-			// By construction, the list contains 0 or 1 nodes
-			if first := nodes.Front(); first != nil {
-				out <- Try[A]{Value: first.Value.value}
-			}
+		// The out channel propagates both the result and the settlement signal to First.
+		// We're only allowed to close it after the input is drained.
+
+		// Error path: items can remain in the input, so we wait for the drain
+		if errSeen.Load() {
+			<-inputDrained
+			close(out)
+			return
+		}
+
+		// Happy path: the workers exhausted the input, so there is nothing to
+		// drain. By construction, the list contains 0 or 1 nodes.
+		if first := nodes.Front(); first != nil {
+			out <- Try[A]{Value: first.Value.value}
 		}
 
 		close(out)
 	}()
 
-	return First(out)
+	return First(out, options...)
 }
 
 // MapReduce transforms the input stream into a Go map using mapper and reducer functions.
