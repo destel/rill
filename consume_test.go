@@ -154,75 +154,77 @@ func TestForEach(t *testing.T) {
 		th.RunSynctest(t, "no errors", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 20), nil)
 
-			var sum atomic.Int64
+			settled, opt := Settlement()
+
+			var sum int64
 			err := ForEach(in, n, func(x int) error {
 				th.SimulateWork(1*time.Second, 2*time.Second)
-
-				sum.Add(int64(x))
+				atomic.AddInt64(&sum, int64(x))
 				return nil
-			})
-
-			th.ExpectDrainedChan(t, in)
+			}, opt)
 
 			th.ExpectNoError(t, err)
-			th.ExpectValue(t, sum.Load(), int64(19*20/2))
+			th.ExpectValue(t, sum, 19*20/2)
+
+			th.ExpectNoRace(sum)
+			th.ExpectDrainedChan(t, in)
+
+			<-settled // asserts that settlement is reported
 		})
 
 		th.RunSynctest(t, "error in input", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = replaceWithError(in, 200, fmt.Errorf("err200"))
-			in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
 
-			var extraCalls atomic.Int64
+			settled, opt := Settlement()
+
+			var extraCalls int64 // external side-effect state
 			err := ForEach(in, n, func(x int) error {
-				extraCalls.Add(1)
+				atomic.AddInt64(&extraCalls, 1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				return nil
-			})
-			extraCalls.Store(0)
+			}, opt)
+			atomic.StoreInt64(&extraCalls, 0)
 
 			th.ExpectError(t, err, "err200")
 
-			_, inStillOpen := <-in
-			th.ExpectValue(t, inStillOpen, true)
-
-			th.WaitForInflightWork()
+			<-settled
+			th.ExpectNoRace(extraCalls)
 			th.ExpectDrainedChan(t, in)
 
 			if n == 1 {
-				th.ExpectValue(t, extraCalls.Load(), 0)
+				th.ExpectValue(t, extraCalls, 0)
 			} else {
-				th.ExpectBetween(t, extraCalls.Load(), 0, 50)
+				th.ExpectLTE(t, extraCalls, 50)
 			}
 		})
 
 		th.RunSynctest(t, "error in func", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
-			in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
 
-			var extraCalls atomic.Int64
+			settled, opt := Settlement()
+
+			var extraCalls int64
 			err := ForEach(in, n, func(x int) error {
-				extraCalls.Add(1)
+				atomic.AddInt64(&extraCalls, 1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				if x == 200 {
 					return fmt.Errorf("err200")
 				}
 				return nil
-			})
-			extraCalls.Store(0)
+			}, opt)
+			atomic.StoreInt64(&extraCalls, 0)
 
 			th.ExpectError(t, err, "err200")
 
-			_, inStillOpen := <-in
-			th.ExpectValue(t, inStillOpen, true)
-
-			th.WaitForInflightWork()
+			<-settled
+			th.ExpectNoRace(extraCalls)
 			th.ExpectDrainedChan(t, in)
 
 			if n == 1 {
-				th.ExpectValue(t, extraCalls.Load(), 0)
+				th.ExpectValue(t, extraCalls, 0)
 			} else {
-				th.ExpectBetween(t, extraCalls.Load(), 0, 50)
+				th.ExpectLTE(t, extraCalls, 50)
 			}
 		})
 

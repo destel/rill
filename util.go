@@ -6,21 +6,45 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Drain consumes and discards all items from an input channel, blocking until the channel is closed.
+// Drain consumes and discards all items from an input channel, blocking until the channel is exhausted.
 func Drain[A any](in <-chan A) {
 	core.Drain(in)
 }
 
-// Discard is a non-blocking function that discards all items from an input channel.
-func Discard[A any](in <-chan A) {
-	core.Discard(in)
+// Discard returns immediately, consumes the input channel in the background, and discards all its items.
+func Discard[A any](in <-chan A, options ...SinkOption) {
+	opts := collectSinkOptions(options)
+
+	if in == nil {
+		return
+	}
+
+	// do nothing if the channel is already closed
+	select {
+	case _, ok := <-in:
+		if !ok {
+			if opts.settleChan != nil {
+				close(opts.settleChan)
+			}
+			return
+		}
+	default:
+	}
+
+	// drain in background
+	go func() {
+		core.Drain(in)
+		if opts.settleChan != nil {
+			close(opts.settleChan)
+		}
+	}()
 }
 
-// DrainNB is a non-blocking version of [Drain]. It does draining in a separate goroutine.
+// DrainNB returns immediately, consumes the input channel in the background, and discards all its items.
 //
 // Deprecated: use [Discard] instead. DrainNB will be removed in v1.0.
 func DrainNB[A any](in <-chan A) {
-	core.Discard(in)
+	Discard(in)
 }
 
 // Buffer takes a channel of items and returns a buffered channel of exact same items in the same order.

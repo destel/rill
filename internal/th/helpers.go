@@ -46,6 +46,24 @@ func DontClose[A any](in <-chan A) <-chan A {
 	return out
 }
 
+// ExpectNoRace is a semantic name for a bare unsynchronized read.
+// Tests sometimes need to do an unsynchronized access to a variable, to
+// have the race detector confirm that all writes in other goroutines
+// happen before this read. It's enough to do a no-op read:
+//
+//	_ = myVariable
+//
+// This works, but requires an explaining comment at every site.
+// ExpectNoRace is also a no-op, but makes the call site clearer:
+//
+//	th.ExpectNoRace(myVariable)
+//
+//go:noinline
+func ExpectNoRace[T any](value T) {
+	// This function does nothing and has a noinline pragma to make sure
+	// the compiler does not remove the variable access.
+}
+
 // DelayEach forwards items, sleeping for the given duration before each one.
 // Useful to make a stream slow. Under synctest even a minimal 1ns delay acts
 // as a freeze point: the stream cannot advance past this stage while any
