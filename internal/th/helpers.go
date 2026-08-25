@@ -67,7 +67,8 @@ func ExpectNoRace[T any](value T) {
 // DelayEach forwards items, sleeping for the given duration before each one.
 // Under synctest this makes it impossible to consume the channel in zero fake
 // time, hence one goroutine (main) can observe the intermediate state of another
-// goroutine (drain) consuming the stream.
+// goroutine (drain) consuming the stream. This function is usually
+// paired with [ExpectOpenChan].
 //
 // A sleep of 1ns - written as a bare 1 in the tests - is the minimum that
 // gives observability: the sleep completes only when every goroutine in the
