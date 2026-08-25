@@ -166,38 +166,15 @@ func TestForEach(t *testing.T) {
 		th.RunSynctest(t, "no errors", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 20), nil)
 
-			settled, opt := Settlement()
-
-			var sum int64
+			var sum atomic.Int64
 			err := ForEach(in, n, func(x int) error {
 				th.SimulateWork(1*time.Second, 2*time.Second)
-				atomic.AddInt64(&sum, int64(x))
-				return nil
-			}, opt)
-
-			th.ExpectNoError(t, err)
-			th.ExpectValue(t, sum, 19*20/2)
-
-			th.ExpectNoRace(sum)
-			th.ExpectDrainedChan(t, in)
-
-			<-settled // should not leak
-		})
-
-		th.RunSynctest(t, "no errors (no settlement)", func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 20), nil)
-
-			var sum int64
-			err := ForEach(in, n, func(x int) error {
-				th.SimulateWork(1*time.Second, 2*time.Second)
-				atomic.AddInt64(&sum, int64(x))
+				sum.Add(int64(x))
 				return nil
 			})
 
 			th.ExpectNoError(t, err)
-			th.ExpectValue(t, sum, 19*20/2)
-
-			th.ExpectNoRace(sum)
+			th.ExpectValue(t, sum.Load(), 19*20/2)
 			th.ExpectDrainedChan(t, in)
 		})
 
@@ -206,89 +183,45 @@ func TestForEach(t *testing.T) {
 			in = th.DelayEach(in, 1)
 			in = replaceWithError(in, 200, fmt.Errorf("err200"))
 
-			settled, opt := Settlement()
-
-			var extraCalls int64 // external side-effect state
+			var extraCalls atomic.Int64
 			err := ForEach(in, n, func(x int) error {
-				atomic.AddInt64(&extraCalls, 1)
+				extraCalls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				return nil
-			}, opt)
-			atomic.StoreInt64(&extraCalls, 0)
+			})
+			extraCalls.Store(0)
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectOpenChan(t, in)
 
-			<-settled
-			th.ExpectNoRace(extraCalls)
-			th.ExpectDrainedChan(t, in)
+			time.Sleep(24 * time.Hour) // eventually drained
 
-			if n == 1 {
-				th.ExpectValue(t, extraCalls, 0)
-			} else {
-				th.ExpectLTE(t, extraCalls, 50)
-			}
+			th.ExpectLTE(t, int(extraCalls.Load()), when(n == 1, 0, 50))
+			th.ExpectDrainedChan(t, in)
 		})
 
 		th.RunSynctest(t, "error in func", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = th.DelayEach(in, 1)
 
-			settled, opt := Settlement()
-
-			var extraCalls int64
+			var extraCalls atomic.Int64
 			err := ForEach(in, n, func(x int) error {
-				atomic.AddInt64(&extraCalls, 1)
-				th.SimulateWork(1*time.Second, 2*time.Second)
-				if x == 200 {
-					return fmt.Errorf("err200")
-				}
-				return nil
-			}, opt)
-			atomic.StoreInt64(&extraCalls, 0)
-
-			th.ExpectError(t, err, "err200")
-			th.ExpectOpenChan(t, in)
-
-			<-settled
-			th.ExpectNoRace(extraCalls)
-			th.ExpectDrainedChan(t, in)
-
-			if n == 1 {
-				th.ExpectValue(t, extraCalls, 0)
-			} else {
-				th.ExpectLTE(t, extraCalls, 50)
-			}
-		})
-
-		th.RunSynctest(t, "error in func (no settlement)", func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 1000), nil)
-			in = th.DelayEach(in, 1)
-
-			var extraCalls int64 //nolint:modernize // kept as int64 to mirror the preceding subtest
-			err := ForEach(in, n, func(x int) error {
-				atomic.AddInt64(&extraCalls, 1)
+				extraCalls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				if x == 200 {
 					return fmt.Errorf("err200")
 				}
 				return nil
 			})
-			atomic.StoreInt64(&extraCalls, 0)
+			extraCalls.Store(0)
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectOpenChan(t, in)
 
-			time.Sleep(14 * time.Hour) // eventually drained
-			th.ExpectDrainedChan(t, in)
+			time.Sleep(24 * time.Hour) // eventually drained
 
-			// unlike the preceding subtest, here we can't have unprotected access to extraCalls:
-			// it would trigger the race detector w/o the `<-settled` barrier
-			if n == 1 {
-				th.ExpectValue(t, atomic.LoadInt64(&extraCalls), 0)
-			} else {
-				th.ExpectLTE(t, atomic.LoadInt64(&extraCalls), 50)
-			}
+			th.ExpectLTE(t, int(extraCalls.Load()), when(n == 1, 0, 50))
+			th.ExpectDrainedChan(t, in)
 		})
 
 		t.Run("unclosed", func(t *testing.T) {
@@ -303,6 +236,51 @@ func TestForEach(t *testing.T) {
 
 				th.ExpectError(t, err, "err200")
 			})
+		})
+
+		th.RunSynctest(t, "settlement", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 20), nil)
+
+			settled, opt := Settlement()
+
+			var state int64
+			err := ForEach(in, n, func(x int) error {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				atomic.AddInt64(&state, 1)
+				return nil
+			}, opt)
+
+			th.ExpectNoError(t, err)
+
+			th.ExpectNoRace(state)
+			th.ExpectDrainedChan(t, in)
+
+			<-settled // should not leak
+		})
+
+		th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1)
+
+			settled, opt := Settlement()
+
+			var state int64
+			err := ForEach(in, n, func(x int) error {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				if x == 200 {
+					return fmt.Errorf("err200")
+				}
+				atomic.AddInt64(&state, 1)
+				return nil
+			}, opt)
+
+			th.ExpectError(t, err, "err200")
+			th.ExpectOpenChan(t, in)
+
+			<-settled
+
+			th.ExpectNoRace(state)
+			th.ExpectDrainedChan(t, in)
 		})
 
 	})
