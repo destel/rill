@@ -18,26 +18,18 @@ func TestErr(t *testing.T) {
 
 	th.RunSynctest(t, "empty", func(t *testing.T) {
 		in := FromSlice([]int{}, nil)
-
-		settled, opt := Settlement()
-		err := Err(in, opt)
+		err := Err(in)
 
 		th.ExpectNoError(t, err)
 		th.ExpectDrainedChan(t, in)
-
-		<-settled // should not leak
 	})
 
 	th.RunSynctest(t, "no errors", func(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
-
-		settled, opt := Settlement()
-		err := Err(in, opt)
+		err := Err(in)
 
 		th.ExpectNoError(t, err)
 		th.ExpectDrainedChan(t, in)
-
-		<-settled // should not leak
 	})
 
 	th.RunSynctest(t, "error", func(t *testing.T) {
@@ -46,13 +38,12 @@ func TestErr(t *testing.T) {
 		in = replaceWithError(in, 15, fmt.Errorf("err015"))
 		in = th.DelayEach(in, 1)
 
-		settled, opt := Settlement()
-		err := Err(in, opt)
+		err := Err(in)
 
 		th.ExpectError(t, err, "err010")
 		th.ExpectOpenChan(t, in)
 
-		<-settled
+		time.Sleep(24 * time.Hour) // eventually drained
 
 		th.ExpectDrainedChan(t, in)
 	})
@@ -68,6 +59,34 @@ func TestErr(t *testing.T) {
 			th.ExpectError(t, err, "err010")
 		})
 	})
+
+	th.RunSynctest(t, "settlement", func(t *testing.T) {
+		in := FromChan(th.FromRange(0, 20), nil)
+
+		settled, opt := Settlement()
+		err := Err(in, opt)
+
+		th.ExpectNoError(t, err)
+		th.ExpectDrainedChan(t, in)
+
+		<-settled // should not leak
+	})
+
+	th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+		in := FromChan(th.FromRange(0, 20), nil)
+		in = replaceWithError(in, 10, fmt.Errorf("err010"))
+		in = th.DelayEach(in, 1)
+
+		settled, opt := Settlement()
+		err := Err(in, opt)
+
+		th.ExpectError(t, err, "err010")
+		th.ExpectOpenChan(t, in)
+
+		<-settled
+
+		th.ExpectDrainedChan(t, in)
+	})
 }
 
 func TestFirst(t *testing.T) {
@@ -80,15 +99,13 @@ func TestFirst(t *testing.T) {
 	th.RunSynctest(t, "empty", func(t *testing.T) {
 		in := FromSlice([]int{}, nil)
 
-		settled, opt := Settlement()
-		_, ok, err := First(in, opt)
+		x, ok, err := First(in)
 
 		th.ExpectNoError(t, err)
 		th.ExpectValue(t, ok, false)
+		th.ExpectValue(t, x, 0)
 
 		th.ExpectDrainedChan(t, in)
-
-		<-settled // should not leak
 	})
 
 	th.RunSynctest(t, "value is first", func(t *testing.T) {
@@ -96,16 +113,14 @@ func TestFirst(t *testing.T) {
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
 		in = th.DelayEach(in, 1)
 
-		settled, opt := Settlement()
-		x, ok, err := First(in, opt)
+		x, ok, err := First(in)
 
 		th.ExpectNoError(t, err)
 		th.ExpectValue(t, ok, true)
 		th.ExpectValue(t, x, 0)
-
 		th.ExpectOpenChan(t, in)
 
-		<-settled
+		time.Sleep(24 * time.Hour) // eventually drained
 
 		th.ExpectDrainedChan(t, in)
 	})
@@ -115,16 +130,14 @@ func TestFirst(t *testing.T) {
 		in = replaceWithError(in, 0, fmt.Errorf("err000"))
 		in = th.DelayEach(in, 1)
 
-		settled, opt := Settlement()
-		x, ok, err := First(in, opt)
+		x, ok, err := First(in)
 
 		th.ExpectError(t, err, "err000")
-		th.ExpectValue(t, x, 0)
 		th.ExpectValue(t, ok, false)
-
+		th.ExpectValue(t, x, 0)
 		th.ExpectOpenChan(t, in)
 
-		<-settled
+		time.Sleep(24 * time.Hour) // eventually drained
 
 		th.ExpectDrainedChan(t, in)
 	})
@@ -136,9 +149,9 @@ func TestFirst(t *testing.T) {
 
 		x, ok, err := First(in)
 
-		th.ExpectValue(t, x, 0) // zeroed
-		th.ExpectValue(t, ok, false)
 		th.ExpectError(t, err, "err")
+		th.ExpectValue(t, ok, false)
+		th.ExpectValue(t, x, 0) // zeroed
 	})
 
 	t.Run("unclosed", func(t *testing.T) {
@@ -151,6 +164,37 @@ func TestFirst(t *testing.T) {
 			th.ExpectValue(t, ok, true)
 			th.ExpectValue(t, x, 0)
 		})
+	})
+
+	th.RunSynctest(t, "settlement", func(t *testing.T) {
+		in := FromSlice([]int{}, nil)
+
+		settled, opt := Settlement()
+		x, ok, err := First(in, opt)
+
+		th.ExpectNoError(t, err)
+		th.ExpectValue(t, ok, false)
+		th.ExpectValue(t, x, 0)
+		th.ExpectDrainedChan(t, in)
+
+		<-settled // should not leak
+	})
+
+	th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+		in := FromChan(th.FromRange(0, 20), nil)
+		in = th.DelayEach(in, 1)
+
+		settled, opt := Settlement()
+		x, ok, err := First(in, opt)
+
+		th.ExpectNoError(t, err)
+		th.ExpectValue(t, ok, true)
+		th.ExpectValue(t, x, 0)
+		th.ExpectOpenChan(t, in)
+
+		<-settled
+
+		th.ExpectDrainedChan(t, in)
 	})
 }
 
@@ -180,8 +224,8 @@ func TestForEach(t *testing.T) {
 
 		th.RunSynctest(t, "error in input", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
-			in = th.DelayEach(in, 1)
 			in = replaceWithError(in, 200, fmt.Errorf("err200"))
+			in = th.DelayEach(in, 1)
 
 			var extraCalls atomic.Int64
 			err := ForEach(in, n, func(x int) error {
