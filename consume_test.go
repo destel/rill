@@ -18,36 +18,42 @@ func TestErr(t *testing.T) {
 
 	th.RunSynctest(t, "empty", func(t *testing.T) {
 		in := FromSlice([]int{}, nil)
-		err := Err(in)
 
-		th.ExpectDrainedChan(t, in)
+		settled, opt := Settlement()
+		err := Err(in, opt)
 
 		th.ExpectNoError(t, err)
+		th.ExpectDrainedChan(t, in)
+
+		<-settled // should not leak
 	})
 
 	th.RunSynctest(t, "no errors", func(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
-		err := Err(in)
 
-		th.ExpectDrainedChan(t, in)
+		settled, opt := Settlement()
+		err := Err(in, opt)
 
 		th.ExpectNoError(t, err)
+		th.ExpectDrainedChan(t, in)
+
+		<-settled // should not leak
 	})
 
 	th.RunSynctest(t, "error", func(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
 		in = replaceWithError(in, 15, fmt.Errorf("err015"))
-		in = th.DelayEach(in, 1) // needed for inStillOpen assertion
+		in = th.DelayEach(in, 1)
 
-		err := Err(in)
+		settled, opt := Settlement()
+		err := Err(in, opt)
 
 		th.ExpectError(t, err, "err010")
+		th.ExpectOpenChan(t, in)
 
-		_, inStillOpen := <-in
-		th.ExpectValue(t, inStillOpen, true)
+		<-settled
 
-		th.WaitForInflightWork()
 		th.ExpectDrainedChan(t, in)
 	})
 
@@ -73,51 +79,57 @@ func TestFirst(t *testing.T) {
 
 	th.RunSynctest(t, "empty", func(t *testing.T) {
 		in := FromSlice([]int{}, nil)
-		_, ok, err := First(in)
 
-		th.ExpectDrainedChan(t, in)
+		settled, opt := Settlement()
+		_, ok, err := First(in, opt)
 
 		th.ExpectNoError(t, err)
 		th.ExpectValue(t, ok, false)
+
+		th.ExpectDrainedChan(t, in)
+
+		<-settled // should not leak
 	})
 
 	th.RunSynctest(t, "value is first", func(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
-		in = th.DelayEach(in, 1) // needed for inStillOpen assertion
+		in = th.DelayEach(in, 1)
 
-		x, ok, err := First(in)
+		settled, opt := Settlement()
+		x, ok, err := First(in, opt)
 
 		th.ExpectNoError(t, err)
 		th.ExpectValue(t, ok, true)
 		th.ExpectValue(t, x, 0)
 
-		_, inStillOpen := <-in
-		th.ExpectValue(t, inStillOpen, true)
+		th.ExpectOpenChan(t, in)
 
-		th.WaitForInflightWork()
+		<-settled
+
 		th.ExpectDrainedChan(t, in)
 	})
 
 	th.RunSynctest(t, "error is first", func(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 0, fmt.Errorf("err000"))
-		in = th.DelayEach(in, 1) // needed for inStillOpen assertion
+		in = th.DelayEach(in, 1)
 
-		x, ok, err := First(in)
+		settled, opt := Settlement()
+		x, ok, err := First(in, opt)
 
 		th.ExpectError(t, err, "err000")
 		th.ExpectValue(t, x, 0)
 		th.ExpectValue(t, ok, false)
 
-		_, inStillOpen := <-in
-		th.ExpectValue(t, inStillOpen, true)
+		th.ExpectOpenChan(t, in)
 
-		th.WaitForInflightWork()
+		<-settled
+
 		th.ExpectDrainedChan(t, in)
 	})
 
-	t.Run("value alongside error", func(t *testing.T) {
+	th.RunSynctest(t, "value alongside error", func(t *testing.T) {
 		in := make(chan Try[int], 1)
 		in <- Try[int]{Value: 10, Error: fmt.Errorf("err")}
 		close(in)
