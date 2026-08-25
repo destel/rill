@@ -36,8 +36,7 @@ func TestDiscard(t *testing.T) {
 		Discard(in) // doesn't block
 
 		time.Sleep(60 * time.Second)
-		_, stillOpen := <-in
-		th.ExpectTrue(t, stillOpen)
+		th.ExpectOpenChan(t, in)
 
 		time.Sleep(60 * time.Second)
 		th.ExpectDrainedChan(t, in)
@@ -51,8 +50,7 @@ func TestDiscard(t *testing.T) {
 		Discard(in, opt) // doesn't block
 
 		time.Sleep(60 * time.Second)
-		_, stillOpen := <-in
-		th.ExpectTrue(t, stillOpen)
+		th.ExpectOpenChan(t, in)
 
 		<-settled
 		th.ExpectDrainedChan(t, in)
@@ -74,7 +72,7 @@ func TestDiscard(t *testing.T) {
 
 		th.ExpectDrainedChan(t, in)
 
-		<-settled // important
+		<-settled // should not leak
 	})
 }
 

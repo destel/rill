@@ -65,10 +65,14 @@ func ExpectNoRace[T any](value T) {
 }
 
 // DelayEach forwards items, sleeping for the given duration before each one.
-// Useful to make a stream slow. Under synctest even a minimal 1ns delay acts
-// as a freeze point: the stream cannot advance past this stage while any
-// goroutine in the bubble is runnable, because fake time only advances when
-// all goroutines are durably blocked.
+// Under synctest this makes it impossible to consume the channel in zero fake
+// time, hence one goroutine (main) can observe the intermediate state of another
+// goroutine (drain) consuming the stream.
+//
+// A sleep of 1ns - written as a bare 1 in the tests - is the minimum that
+// gives observability: the sleep completes only when every goroutine in the
+// bubble is durably blocked, so the stream cannot advance while any goroutine
+// is runnable.
 func DelayEach[A any](in <-chan A, delay time.Duration) <-chan A {
 	out := make(chan A)
 	go func() {

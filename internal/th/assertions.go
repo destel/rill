@@ -132,6 +132,16 @@ func ExpectDrainedChan[A any](t *testing.T, ch <-chan A) {
 	}
 }
 
+// ExpectOpenChan consumes one item from the channel and asserts that the
+// channel was open. It blocks until an item arrives or the channel is closed.
+func ExpectOpenChan[A any](t *testing.T, ch <-chan A) {
+	t.Helper()
+	_, isOpen := <-ch
+	if !isOpen {
+		t.Errorf("expected channel to be open, but it's closed")
+	}
+}
+
 // ExpectBlock runs f in a synctest bubble and asserts that the main goroutine
 // is durably blocked.
 func ExpectBlock(t *testing.T, f func(t *testing.T)) {

@@ -38,7 +38,7 @@ func TestErr(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
 		in = replaceWithError(in, 15, fmt.Errorf("err015"))
-		in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
+		in = th.DelayEach(in, 1) // needed for inStillOpen assertion
 
 		err := Err(in)
 
@@ -84,7 +84,7 @@ func TestFirst(t *testing.T) {
 	th.RunSynctest(t, "value is first", func(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
-		in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
+		in = th.DelayEach(in, 1) // needed for inStillOpen assertion
 
 		x, ok, err := First(in)
 
@@ -102,7 +102,7 @@ func TestFirst(t *testing.T) {
 	th.RunSynctest(t, "error is first", func(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 0, fmt.Errorf("err000"))
-		in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
+		in = th.DelayEach(in, 1) // needed for inStillOpen assertion
 
 		x, ok, err := First(in)
 
@@ -169,11 +169,12 @@ func TestForEach(t *testing.T) {
 			th.ExpectNoRace(sum)
 			th.ExpectDrainedChan(t, in)
 
-			<-settled // asserts that settlement is reported
+			<-settled // should not leak
 		})
 
 		th.RunSynctest(t, "error in input", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1)
 			in = replaceWithError(in, 200, fmt.Errorf("err200"))
 
 			settled, opt := Settlement()
@@ -187,6 +188,7 @@ func TestForEach(t *testing.T) {
 			atomic.StoreInt64(&extraCalls, 0)
 
 			th.ExpectError(t, err, "err200")
+			th.ExpectOpenChan(t, in)
 
 			<-settled
 			th.ExpectNoRace(extraCalls)
@@ -201,6 +203,7 @@ func TestForEach(t *testing.T) {
 
 		th.RunSynctest(t, "error in func", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1)
 
 			settled, opt := Settlement()
 
@@ -216,6 +219,7 @@ func TestForEach(t *testing.T) {
 			atomic.StoreInt64(&extraCalls, 0)
 
 			th.ExpectError(t, err, "err200")
+			th.ExpectOpenChan(t, in)
 
 			<-settled
 			th.ExpectNoRace(extraCalls)

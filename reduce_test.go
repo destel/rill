@@ -40,7 +40,7 @@ func TestReduce(t *testing.T) {
 			th.ExpectDrainedChan(t, in)
 			th.ExpectValue(t, calls, 0)
 
-			<-settled // asserts that settlement is reported
+			<-settled // should not leak
 		})
 
 		th.RunSynctest(t, "single value stream", func(t *testing.T) {
@@ -63,7 +63,7 @@ func TestReduce(t *testing.T) {
 			th.ExpectDrainedChan(t, in)
 			th.ExpectValue(t, calls, 0) // never called
 
-			<-settled // asserts that settlement is reported
+			<-settled // should not leak
 		})
 
 		th.RunSynctest(t, "single error stream", func(t *testing.T) {
@@ -109,11 +109,12 @@ func TestReduce(t *testing.T) {
 			th.ExpectDrainedChan(t, in)
 			th.ExpectValue(t, calls, 99)
 
-			<-settled // asserts that settlement is reported
+			<-settled // should not leak
 		})
 
 		th.RunSynctest(t, "error in input", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1)
 			in = replaceWithError(in, 200, fmt.Errorf("err200"))
 
 			settled, opt := Settlement()
@@ -129,6 +130,7 @@ func TestReduce(t *testing.T) {
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, out, 0)
 			th.ExpectValue(t, ok, false)
+			th.ExpectOpenChan(t, in)
 
 			<-settled
 			th.ExpectNoRace(extraCalls)
@@ -143,6 +145,7 @@ func TestReduce(t *testing.T) {
 
 		th.RunSynctest(t, "error in func", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1)
 
 			settled, opt := Settlement()
 
@@ -160,6 +163,7 @@ func TestReduce(t *testing.T) {
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, out, 0)
 			th.ExpectValue(t, ok, false)
+			th.ExpectOpenChan(t, in)
 
 			<-settled
 			th.ExpectNoRace(extraCalls)
@@ -417,7 +421,7 @@ func TestMapReduce(t *testing.T) {
 			th.RunSynctest(t, "error in input", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 				in = replaceWithError(in, 200, fmt.Errorf("err200"))
-				in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
+				in = th.DelayEach(in, 1) // needed for inStillOpen assertion
 
 				var extraMapCalls, extraReduceCalls atomic.Int64
 				out, err := MapReduce(in,
@@ -455,7 +459,7 @@ func TestMapReduce(t *testing.T) {
 
 			th.RunSynctest(t, "error in mapper", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
-				in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
+				in = th.DelayEach(in, 1) // needed for inStillOpen assertion
 
 				var extraMapCalls, extraReduceCalls atomic.Int64
 				var i atomic.Int64
@@ -497,7 +501,7 @@ func TestMapReduce(t *testing.T) {
 
 			th.RunSynctest(t, "error in reducer", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
-				in = th.DelayEach(in, 1*time.Nanosecond) // needed for inStillOpen assertion
+				in = th.DelayEach(in, 1) // needed for inStillOpen assertion
 
 				var extraMapCalls, extraReduceCalls atomic.Int64
 				var i atomic.Int64
