@@ -104,14 +104,6 @@ func SimulateWork(min, max time.Duration) {
 	time.Sleep(d)
 }
 
-// WaitForInflightWork is just a sleep with a semantic name.
-// It fast-forwards fake time far enough that any goroutines currently
-// simulating work have a chance to complete.
-// Mostly used with early-exit tests.
-func WaitForInflightWork() {
-	time.Sleep(1 * time.Hour)
-}
-
 func DoConcurrently(ff ...func()) {
 	var wg sync.WaitGroup
 

@@ -304,61 +304,69 @@ func TestMapReduce(t *testing.T) {
 			th.RunSynctest(t, "empty", func(t *testing.T) {
 				in := FromSlice([]int{}, nil)
 
+				var callsMapper, callsReducer atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
+						callsMapper.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
 						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
+						callsReducer.Add(1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
 						return x + y, nil
 					})
 
-				th.ExpectDrainedChan(t, in)
-
 				th.ExpectNoError(t, err)
 				th.ExpectMap(t, out, map[string]int{})
+				th.ExpectValue(t, callsMapper.Load(), 0)
+				th.ExpectValue(t, callsReducer.Load(), 0)
+				th.ExpectDrainedChan(t, in)
 			})
 
 			th.RunSynctest(t, "single error stream", func(t *testing.T) {
 				in := FromSlice([]int{}, fmt.Errorf("err0"))
 
+				var callsMapper, callsReducer atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
+						callsMapper.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
 						return fmt.Sprint(x), x, nil
 					},
 					nr, func(x, y int) (int, error) {
+						callsReducer.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
 						return x + y, nil
 					},
 				)
 
-				th.WaitForInflightWork()
-				th.ExpectDrainedChan(t, in)
-
 				th.ExpectError(t, err, "err0")
 				th.ExpectMap(t, out, nil)
+
+				time.Sleep(24 * time.Hour) // eventually drained
+
+				th.ExpectValue(t, callsMapper.Load(), 0)
+				th.ExpectValue(t, callsReducer.Load(), 0)
+				th.ExpectDrainedChan(t, in)
 			})
 
 			th.RunSynctest(t, "single value keys", func(t *testing.T) {
 				in := FromSlice([]int{1, 2, 3, 4, 5}, nil)
 
-				var reducerCalls atomic.Int64
-
+				var callsMapper, callsReducer atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
+						callsMapper.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
 						return fmt.Sprint(x), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						reducerCalls.Add(1)
+						callsReducer.Add(1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
 						return x + y, nil
 					},
 				)
-
-				th.ExpectDrainedChan(t, in)
 
 				th.ExpectNoError(t, err)
 				th.ExpectMap(t, out, map[string]int{
@@ -368,25 +376,27 @@ func TestMapReduce(t *testing.T) {
 					"4": 4,
 					"5": 5,
 				})
-
-				th.ExpectValue(t, reducerCalls.Load(), 0)
+				th.ExpectValue(t, callsMapper.Load(), 5)
+				th.ExpectValue(t, callsReducer.Load(), 0)
+				th.ExpectDrainedChan(t, in)
 			})
 
 			th.RunSynctest(t, "no errors", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 200), nil)
 
+				var callsMapper, callsReducer atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
+						callsMapper.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
 						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
+						callsReducer.Add(1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
 						return x + y, nil
 					},
 				)
-
-				th.ExpectDrainedChan(t, in)
 
 				th.ExpectNoError(t, err)
 				th.ExpectMap(t, out, map[string]int{
@@ -394,6 +404,229 @@ func TestMapReduce(t *testing.T) {
 					"2-digit": (10 + 99) * 90 / 2,
 					"3-digit": (100 + 199) * 100 / 2,
 				})
+				th.ExpectValue(t, callsMapper.Load(), 200)
+				th.ExpectValue(t, callsReducer.Load(), 9+89+99)
+				th.ExpectDrainedChan(t, in)
+			})
+
+			th.RunSynctest(t, "error in input", func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 1000), nil)
+				in = replaceWithError(in, 200, fmt.Errorf("err200"))
+				in = th.DelayEach(in, 1)
+
+				var extraCallsMapper, extraCallsReducer atomic.Int64
+				out, err := MapReduce(in,
+					nm, func(x int) (string, int, error) {
+						extraCallsMapper.Add(1)
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
+					},
+					nr, func(x, y int) (int, error) {
+						extraCallsReducer.Add(1)
+						th.SimulateWork(10*time.Second, 20*time.Second)
+						return x + y, nil
+					},
+				)
+				extraCallsMapper.Store(0)
+				extraCallsReducer.Store(0)
+
+				th.ExpectError(t, err, "err200")
+				th.ExpectMap(t, out, nil)
+				th.ExpectOpenChan(t, in)
+
+				time.Sleep(24 * time.Hour) // eventually drained
+
+				th.ExpectLTE(t, int(extraCallsMapper.Load()), when(nm == 1 && nr == 1, 0, 50))
+				th.ExpectLTE(t, int(extraCallsReducer.Load()), when(nr == 1, 0, 50))
+				th.ExpectDrainedChan(t, in)
+			})
+
+			th.RunSynctest(t, "error in mapper", func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 1000), nil)
+				in = th.DelayEach(in, 1)
+
+				var extraCallsMapper, extraCallsReducer atomic.Int64
+				out, err := MapReduce(in,
+					nm, func(x int) (string, int, error) {
+						c := extraCallsMapper.Add(1)
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						if c == 200 {
+							return "", 0, fmt.Errorf("err200")
+						}
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
+					},
+					nr, func(x, y int) (int, error) {
+						extraCallsReducer.Add(1)
+						th.SimulateWork(10*time.Second, 20*time.Second)
+						return x + y, nil
+					},
+				)
+				extraCallsMapper.Store(0)
+				extraCallsReducer.Store(0)
+
+				th.ExpectError(t, err, "err200")
+				th.ExpectMap(t, out, nil)
+				th.ExpectOpenChan(t, in)
+
+				time.Sleep(24 * time.Hour) // eventually drained
+
+				th.ExpectLTE(t, int(extraCallsMapper.Load()), when(nm == 1 && nr == 1, 0, 50))
+				th.ExpectLTE(t, int(extraCallsReducer.Load()), when(nr == 1, 0, 50))
+				th.ExpectDrainedChan(t, in)
+			})
+
+			th.RunSynctest(t, "error in reducer", func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 1000), nil)
+				in = th.DelayEach(in, 1)
+
+				var extraCallsMapper, extraCallsReducer atomic.Int64
+				out, err := MapReduce(in,
+					nm, func(x int) (string, int, error) {
+						extraCallsMapper.Add(1)
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
+					},
+					nr, func(x, y int) (int, error) {
+						c := extraCallsReducer.Add(1)
+						th.SimulateWork(10*time.Second, 20*time.Second)
+						if c == 200 {
+							return 0, fmt.Errorf("err200")
+						}
+						return x + y, nil
+					},
+				)
+				extraCallsMapper.Store(0)
+				extraCallsReducer.Store(0)
+
+				th.ExpectError(t, err, "err200")
+				th.ExpectMap(t, out, nil)
+				th.ExpectOpenChan(t, in)
+
+				time.Sleep(24 * time.Hour) // eventually drained
+
+				th.ExpectLTE(t, int(extraCallsMapper.Load()), when(nm == 1 && nr == 1, 0, 50))
+				th.ExpectLTE(t, int(extraCallsReducer.Load()), when(nr == 1, 0, 50))
+				th.ExpectDrainedChan(t, in)
+			})
+
+			th.RunSynctest(t, "error in reducer (last)", func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 1000), nil)
+
+				var extraCallsMapper, extraCallsReducer atomic.Int64
+				out, err := MapReduce(in,
+					nm, func(x int) (string, int, error) {
+						extraCallsMapper.Add(1)
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
+					},
+					nr, func(x, y int) (int, error) {
+						c := extraCallsReducer.Add(1)
+						th.SimulateWork(10*time.Second, 20*time.Second)
+						if c == 9+89+899 {
+							return 0, fmt.Errorf("errLast")
+						}
+						return x + y, nil
+					},
+				)
+				extraCallsMapper.Store(0)
+				extraCallsReducer.Store(0)
+
+				th.ExpectError(t, err, "errLast")
+				th.ExpectMap(t, out, nil)
+
+				time.Sleep(24 * time.Hour) // eventually drained
+
+				th.ExpectLTE(t, int(extraCallsMapper.Load()), 0)
+				th.ExpectLTE(t, int(extraCallsReducer.Load()), 0)
+				th.ExpectDrainedChan(t, in)
+			})
+
+			t.Run("unclosed", func(t *testing.T) {
+				th.ExpectLeak(t, func(t *testing.T) {
+					in := FromChan(th.FromRange(0, 1000), nil)
+					in = replaceWithError(in, 200, fmt.Errorf("err200"))
+					in = th.DontClose(in)
+
+					out, err := MapReduce(in,
+						nm, func(int) (string, int, error) {
+							return "", 0, nil
+						},
+						nr, func(int, int) (int, error) {
+							return 0, nil
+						},
+					)
+
+					th.ExpectError(t, err, "err200")
+					th.ExpectMap(t, out, nil)
+				})
+			})
+
+			th.RunSynctest(t, "settlement", func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 200), nil)
+
+				settled, opt := Settlement()
+
+				var stateMapper, stateReducer int64
+				out, err := MapReduce(in,
+					nm, func(x int) (string, int, error) {
+						atomic.AddInt64(&stateMapper, 1)
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
+					},
+					nr, func(x, y int) (int, error) {
+						atomic.AddInt64(&stateReducer, 1)
+						th.SimulateWork(10*time.Second, 20*time.Second)
+						return x + y, nil
+					},
+					opt,
+				)
+
+				th.ExpectNoError(t, err)
+				th.ExpectMap(t, out, map[string]int{
+					"1-digit": (0 + 9) * 10 / 2,
+					"2-digit": (10 + 99) * 90 / 2,
+					"3-digit": (100 + 199) * 100 / 2,
+				})
+				th.ExpectNoRace(stateMapper)
+				th.ExpectNoRace(stateReducer)
+				th.ExpectDrainedChan(t, in)
+
+				<-settled // should not leak
+			})
+
+			th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+				in := FromChan(th.FromRange(0, 1000), nil)
+				in = th.DelayEach(in, 1)
+
+				settled, opt := Settlement()
+
+				var stateMapper, stateReducer int64
+				out, err := MapReduce(in,
+					nm, func(x int) (string, int, error) {
+						atomic.AddInt64(&stateMapper, 1)
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
+					},
+					nr, func(x, y int) (int, error) {
+						c := atomic.AddInt64(&stateReducer, 1)
+						th.SimulateWork(10*time.Second, 20*time.Second)
+						if c == 200 {
+							return 0, fmt.Errorf("err200")
+						}
+						return x + y, nil
+					},
+					opt,
+				)
+
+				th.ExpectError(t, err, "err200")
+				th.ExpectMap(t, out, nil)
+				th.ExpectOpenChan(t, in)
+
+				<-settled
+
+				th.ExpectNoRace(stateMapper)
+				th.ExpectNoRace(stateReducer)
+				th.ExpectDrainedChan(t, in)
 			})
 
 			th.RunSynctest(t, "concurrency", func(t *testing.T) {
@@ -424,173 +657,6 @@ func TestMapReduce(t *testing.T) {
 
 				th.ExpectValue(t, mapGauge.Max(), nm)
 				th.ExpectValue(t, reduceGauge.Max(), nr)
-			})
-
-			th.RunSynctest(t, "error in input", func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
-				in = replaceWithError(in, 200, fmt.Errorf("err200"))
-				in = th.DelayEach(in, 1) // needed for inStillOpen assertion
-
-				var extraMapCalls, extraReduceCalls atomic.Int64
-				out, err := MapReduce(in,
-					nm, func(x int) (string, int, error) {
-						extraMapCalls.Add(1)
-						th.SimulateWork(1*time.Second, 2*time.Second)
-						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
-					},
-					nr, func(x, y int) (int, error) {
-						extraReduceCalls.Add(1)
-						th.SimulateWork(10*time.Second, 20*time.Second)
-						return x + y, nil
-					},
-				)
-				extraMapCalls.Store(0)
-				extraReduceCalls.Store(0)
-
-				th.ExpectError(t, err, "err200")
-				th.ExpectMap(t, out, nil)
-
-				_, inStillOpen := <-in
-				th.ExpectValue(t, inStillOpen, true)
-
-				th.WaitForInflightWork()
-				th.ExpectDrainedChan(t, in)
-
-				if nm == 1 && nr == 1 {
-					th.ExpectValue(t, extraMapCalls.Load(), 0)
-					th.ExpectValue(t, extraReduceCalls.Load(), 0)
-				} else {
-					th.ExpectBetween(t, extraMapCalls.Load(), 0, 50)
-					th.ExpectBetween(t, extraReduceCalls.Load(), 0, 50)
-				}
-			})
-
-			th.RunSynctest(t, "error in mapper", func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
-				in = th.DelayEach(in, 1) // needed for inStillOpen assertion
-
-				var extraMapCalls, extraReduceCalls atomic.Int64
-				var i atomic.Int64
-				out, err := MapReduce(in,
-					nm, func(x int) (string, int, error) {
-						extraMapCalls.Add(1)
-						th.SimulateWork(1*time.Second, 2*time.Second)
-						if i.Add(1) == 200 {
-							return "", 0, fmt.Errorf("err200")
-						}
-						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
-					},
-					nr, func(x, y int) (int, error) {
-						extraReduceCalls.Add(1)
-						th.SimulateWork(10*time.Second, 20*time.Second)
-						return x + y, nil
-					},
-				)
-				extraMapCalls.Store(0)
-				extraReduceCalls.Store(0)
-
-				th.ExpectError(t, err, "err200")
-				th.ExpectMap(t, out, nil)
-
-				_, inStillOpen := <-in
-				th.ExpectValue(t, inStillOpen, true)
-
-				th.WaitForInflightWork()
-				th.ExpectDrainedChan(t, in)
-
-				if nm == 1 && nr == 1 {
-					th.ExpectValue(t, extraMapCalls.Load(), 0)
-					th.ExpectValue(t, extraReduceCalls.Load(), 0)
-				} else {
-					th.ExpectBetween(t, extraMapCalls.Load(), 0, 50)
-					th.ExpectBetween(t, extraReduceCalls.Load(), 0, 50)
-				}
-			})
-
-			th.RunSynctest(t, "error in reducer", func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
-				in = th.DelayEach(in, 1) // needed for inStillOpen assertion
-
-				var extraMapCalls, extraReduceCalls atomic.Int64
-				var i atomic.Int64
-				out, err := MapReduce(in,
-					nm, func(x int) (string, int, error) {
-						extraMapCalls.Add(1)
-						th.SimulateWork(1*time.Second, 2*time.Second)
-						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
-					},
-					nr, func(x, y int) (int, error) {
-						extraReduceCalls.Add(1)
-						th.SimulateWork(10*time.Second, 20*time.Second)
-						if i.Add(1) == 200 {
-							return 0, fmt.Errorf("err200")
-						}
-						return x + y, nil
-					},
-				)
-				extraMapCalls.Store(0)
-				extraReduceCalls.Store(0)
-
-				th.ExpectError(t, err, "err200")
-				th.ExpectMap(t, out, nil)
-
-				_, inStillOpen := <-in
-				th.ExpectValue(t, inStillOpen, true)
-
-				th.WaitForInflightWork()
-				th.ExpectDrainedChan(t, in)
-
-				if nm == 1 && nr == 1 {
-					th.ExpectValue(t, extraMapCalls.Load(), 0)
-					th.ExpectValue(t, extraReduceCalls.Load(), 0)
-				} else {
-					th.ExpectBetween(t, extraMapCalls.Load(), 0, 50)
-					th.ExpectBetween(t, extraReduceCalls.Load(), 0, 50)
-				}
-			})
-
-			th.RunSynctest(t, "error in reducer (last)", func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 1000), nil)
-
-				var i atomic.Int64
-				out, err := MapReduce(in,
-					nm, func(x int) (string, int, error) {
-						th.SimulateWork(1*time.Second, 2*time.Second)
-						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
-					},
-					nr, func(x, y int) (int, error) {
-						th.SimulateWork(10*time.Second, 20*time.Second)
-						if i.Add(1) == 9+89+899 {
-							return 0, fmt.Errorf("err997")
-						}
-						return x + y, nil
-					},
-				)
-
-				th.ExpectDrainedChan(t, in)
-
-				th.ExpectError(t, err, "err997")
-				th.ExpectMap(t, out, nil)
-			})
-
-			t.Run("unclosed", func(t *testing.T) {
-				th.ExpectLeak(t, func(t *testing.T) {
-					in := FromChan(th.FromRange(0, 1000), nil)
-					in = replaceWithError(in, 200, fmt.Errorf("err200"))
-					in = th.DontClose(in)
-
-					out, err := MapReduce(in,
-						nm, func(int) (string, int, error) {
-							return "", 0, nil
-						},
-						nr, func(int, int) (int, error) {
-							return 0, nil
-						},
-					)
-
-					th.ExpectError(t, err, "err200")
-					th.ExpectMap(t, out, nil)
-				})
 			})
 
 			th.RunSynctest(t, "ordering", func(t *testing.T) {

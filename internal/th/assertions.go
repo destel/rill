@@ -25,13 +25,6 @@ func ExpectLTE[A cmp.Ordered](t *testing.T, actual A, max A) {
 	}
 }
 
-func ExpectBetween[A cmp.Ordered](t *testing.T, actual A, min A, max A) {
-	t.Helper()
-	if actual < min || actual > max {
-		t.Errorf("expected %v to be between %v and %v", actual, min, max)
-	}
-}
-
 func ExpectTrue(t *testing.T, actual bool) {
 	t.Helper()
 	if !actual {

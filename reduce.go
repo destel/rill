@@ -261,7 +261,7 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error), options ...
 // for the mapper and reducer functions respectively.
 //
 // See the package documentation for more information on blocking functions and error handling.
-func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error)) (map[K]V, error) {
+func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error), options ...SinkOption) (map[K]V, error) {
 	validateN(nm)
 	validateNilFunc(mapper == nil)
 	validateN(nr)
@@ -287,7 +287,7 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 			}
 			acc[k] = merged
 			return nil
-		})
+		}, options...)
 
 		if err != nil {
 			return nil, err
@@ -448,7 +448,8 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 		}
 	}
 
-	defer Discard(entries)
+	inputDrained, opt := Settlement()
+	defer Discard(entries, opt)
 
 	// Start the workers
 	var wg sync.WaitGroup
@@ -460,19 +461,28 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 	go func() {
 		wg.Wait()
 
-		if !errSeen.Load() {
-			// By construction, each list has converged to exactly one node
-			res := make(map[K]V, len(lists))
-			for k, l := range lists {
-				res[k] = l.Front().Value.value
-			}
-			out <- Try[map[K]V]{Value: res}
+		// The out channel propagates both the result and the settlement signal to First.
+		// We're only allowed to close it after the input is drained.
+
+		// Error path: items can remain in the input, so we wait for the drain
+		if errSeen.Load() {
+			<-inputDrained
+			close(out)
+			return
 		}
 
+		// Happy path: the workers exhausted the input, so there is nothing to
+		// drain. By construction, each map entry has converged to exactly one node.
+		res := make(map[K]V, len(lists))
+		for k, l := range lists {
+			res[k] = l.Front().Value.value
+		}
+
+		out <- Try[map[K]V]{Value: res}
 		close(out)
 	}()
 
-	res, _, err := First(out)
+	res, _, err := First(out, options...)
 	if err != nil {
 		return nil, err
 	}
