@@ -98,7 +98,7 @@ var errFound = errors.New("found")
 // When n = 1, items are processed sequentially in stream order.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
-func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
+func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...SinkOption) (bool, error) {
 	validateN(n)
 	validateNilFunc(f == nil)
 
@@ -111,7 +111,7 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 			return errFound
 		}
 		return nil
-	})
+	}, options...)
 
 	if err == errFound { //nolint:errorlint
 		return true, nil
@@ -127,7 +127,7 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 // When n = 1, items are processed sequentially in stream order.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
-func All[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
+func All[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...SinkOption) (bool, error) {
 	validateN(n)
 	validateNilFunc(f == nil)
 
@@ -140,7 +140,7 @@ func All[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 			return errFound
 		}
 		return nil
-	})
+	}, options...)
 
 	if err == errFound { //nolint:errorlint
 		return false, nil

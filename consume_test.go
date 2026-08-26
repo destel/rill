@@ -356,6 +356,7 @@ func TestAny(t *testing.T) {
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, res, false)
+			th.ExpectDrainedChan(t, in)
 		})
 
 		th.RunSynctest(t, "none satisfy", func(t *testing.T) {
@@ -367,11 +368,14 @@ func TestAny(t *testing.T) {
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, res, false)
+			th.ExpectDrainedChan(t, in)
 		})
 
 		th.RunSynctest(t, "match is first", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1)
 
+			// the match at 200 wins over the error at 500
 			res, err := Any(in, n, func(x int) (bool, error) {
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				if x == 200 {
@@ -385,14 +389,18 @@ func TestAny(t *testing.T) {
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, res, true)
+			th.ExpectOpenChan(t, in)
 
-			th.WaitForInflightWork()
+			time.Sleep(24 * time.Hour) // eventually drained
+
+			th.ExpectDrainedChan(t, in)
 		})
 
 		th.RunSynctest(t, "error is first", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1)
 
-			// the error at 200 wins over the would-be match at 500
+			// the error at 200 wins over the match at 500
 			res, err := Any(in, n, func(x int) (bool, error) {
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				if x == 200 {
@@ -406,14 +414,16 @@ func TestAny(t *testing.T) {
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, res, false)
+			th.ExpectOpenChan(t, in)
 
-			th.WaitForInflightWork()
+			time.Sleep(24 * time.Hour) // eventually drained
+
+			th.ExpectDrainedChan(t, in)
 		})
 
 		th.RunSynctest(t, "(true,err) tuple", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			res, err := Any(in, n, func(x int) (bool, error) {
-				th.SimulateWork(1*time.Second, 2*time.Second)
 				if x == 200 {
 					return true, fmt.Errorf("err200")
 				}
@@ -422,8 +432,44 @@ func TestAny(t *testing.T) {
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, res, false)
+		})
 
-			th.WaitForInflightWork()
+		th.RunSynctest(t, "settlement", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 100), nil)
+
+			settled, opt := Settlement()
+			res, err := Any(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				return false, nil
+			}, opt)
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, res, false)
+			th.ExpectDrainedChan(t, in)
+
+			<-settled // should not leak
+		})
+
+		th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1)
+
+			settled, opt := Settlement()
+			res, err := Any(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				if x == 200 {
+					return true, nil
+				}
+				return false, nil
+			}, opt)
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, res, true)
+			th.ExpectOpenChan(t, in)
+
+			<-settled
+
+			th.ExpectDrainedChan(t, in)
 		})
 	})
 }
@@ -433,13 +479,16 @@ func TestAll(t *testing.T) {
 	th.TestLevels(t, []int{1, 5}, func(t *testing.T, n int) {
 
 		th.RunSynctest(t, "empty", func(t *testing.T) {
+			in := FromSlice([]int{}, nil)
+
 			// vacuous truth: an empty stream satisfies All
-			res, err := All(FromSlice([]int{}, nil), n, func(int) (bool, error) {
+			res, err := All(in, n, func(int) (bool, error) {
 				return false, nil
 			})
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, res, true)
+			th.ExpectDrainedChan(t, in)
 		})
 
 		th.RunSynctest(t, "all satisfy", func(t *testing.T) {
@@ -451,10 +500,12 @@ func TestAll(t *testing.T) {
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, res, true)
+			th.ExpectDrainedChan(t, in)
 		})
 
 		th.RunSynctest(t, "counterexample is first", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1)
 
 			// the counterexample at 200 wins over the error at 500
 			res, err := All(in, n, func(x int) (bool, error) {
@@ -470,12 +521,16 @@ func TestAll(t *testing.T) {
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, res, false)
+			th.ExpectOpenChan(t, in)
 
-			th.WaitForInflightWork()
+			time.Sleep(24 * time.Hour) // eventually drained
+
+			th.ExpectDrainedChan(t, in)
 		})
 
 		th.RunSynctest(t, "error is first", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1)
 
 			// the error at 200 wins over the counterexample at 500
 			res, err := All(in, n, func(x int) (bool, error) {
@@ -491,14 +546,16 @@ func TestAll(t *testing.T) {
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, res, false)
+			th.ExpectOpenChan(t, in)
 
-			th.WaitForInflightWork()
+			time.Sleep(24 * time.Hour) // eventually drained
+
+			th.ExpectDrainedChan(t, in)
 		})
 
 		th.RunSynctest(t, "(true,err) tuple", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			res, err := All(in, n, func(x int) (bool, error) {
-				th.SimulateWork(1*time.Second, 2*time.Second)
 				if x == 200 {
 					return true, fmt.Errorf("err200")
 				}
@@ -507,8 +564,44 @@ func TestAll(t *testing.T) {
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, res, false)
+		})
 
-			th.WaitForInflightWork()
+		th.RunSynctest(t, "settlement", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 100), nil)
+
+			settled, opt := Settlement()
+			res, err := All(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				return true, nil
+			}, opt)
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, res, true)
+			th.ExpectDrainedChan(t, in)
+
+			<-settled // should not leak
+		})
+
+		th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1)
+
+			settled, opt := Settlement()
+			res, err := All(in, n, func(x int) (bool, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				if x == 200 {
+					return false, nil
+				}
+				return true, nil
+			}, opt)
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, res, false)
+			th.ExpectOpenChan(t, in)
+
+			<-settled
+
+			th.ExpectDrainedChan(t, in)
 		})
 	})
 }
