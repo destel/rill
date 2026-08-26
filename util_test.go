@@ -56,6 +56,19 @@ func TestDiscard(t *testing.T) {
 		th.ExpectDrainedChan(t, in)
 	})
 
+	th.RunSynctest(t, "two settlements", func(t *testing.T) {
+		in := th.FromRange(0, 100)
+		in = th.DelayEach(in, 1*time.Second)
+
+		settled1, opt1 := Settlement()
+		settled2, opt2 := Settlement()
+		Discard(in, opt1, opt2) // doesn't block
+
+		<-settled1
+		th.ExpectDrainedChan(t, in)
+		<-settled2
+	})
+
 	th.RunSynctest(t, "closed", func(t *testing.T) {
 		in := make(chan int)
 		close(in)

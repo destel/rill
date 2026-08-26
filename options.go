@@ -3,7 +3,13 @@ package rill
 import "sync/atomic"
 
 type sinkOptions struct {
-	settleChan chan struct{}
+	settleChans []chan struct{}
+}
+
+func (o sinkOptions) settle() {
+	for _, ch := range o.settleChans {
+		close(ch)
+	}
 }
 
 // A SinkOption is an optional argument accepted by every sink, such as the
@@ -49,7 +55,7 @@ func Settlement() (settled <-chan struct{}, opt SinkOption) {
 			panic("rill: settlement option must not be reused across sinks")
 		}
 
-		options.settleChan = ch
+		options.settleChans = append(options.settleChans, ch)
 	})
 	return
 }

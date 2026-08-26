@@ -23,9 +23,7 @@ func Discard[A any](in <-chan A, options ...SinkOption) {
 	select {
 	case _, ok := <-in:
 		if !ok {
-			if opts.settleChan != nil {
-				close(opts.settleChan)
-			}
+			opts.settle()
 			return
 		}
 	default:
@@ -34,9 +32,7 @@ func Discard[A any](in <-chan A, options ...SinkOption) {
 	// drain in background
 	go func() {
 		core.Drain(in)
-		if opts.settleChan != nil {
-			close(opts.settleChan)
-		}
+		opts.settle()
 	}()
 }
 
