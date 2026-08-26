@@ -466,6 +466,7 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 
 		// Error path: items can remain in the input, so we wait for the drain
 		if errSeen.Load() {
+			lists = nil // free memory while waiting for the drain
 			<-inputDrained
 			close(out)
 			return
