@@ -52,7 +52,7 @@ func Settlement() (settled <-chan struct{}, opt SinkOption) {
 
 	opt = sinkOptionFunc(func(options *sinkOptions) {
 		if cnt.Add(1) > 1 {
-			panic("rill: settlement option must not be reused across sinks")
+			panic("rill: the same settlement option used more than once")
 		}
 
 		options.settleChans = append(options.settleChans, ch)
