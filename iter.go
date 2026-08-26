@@ -54,8 +54,8 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 // If the caller stops iteration early using break or return, ToSeq2 drains the
 // remaining input in the background, like blocking functions such as [ForEach].
 //
-// The returned iterator must be ranged over, even if the loop breaks on the
-// first item. Otherwise the input is never drained.
+// The returned iterator is single-use. If it is never ranged, the input is
+// never drained.
 func ToSeq2[A any](in <-chan Try[A], options ...SinkOption) iter.Seq2[A, error] {
 	var once sync.Once
 

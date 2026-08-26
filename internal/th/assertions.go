@@ -25,13 +25,6 @@ func ExpectLTE[A cmp.Ordered](t *testing.T, actual A, max A) {
 	}
 }
 
-func ExpectTrue(t *testing.T, actual bool) {
-	t.Helper()
-	if !actual {
-		t.Errorf("expected true, got false")
-	}
-}
-
 func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 	t.Helper()
 	if len(expected) != len(actual) {

@@ -108,7 +108,7 @@ func TestToSeq2(t *testing.T) {
 		out := ToSeq2(in, opt)
 
 		var outSlice []int
-		for val, _ := range out {
+		for val := range out {
 			outSlice = append(outSlice, val)
 		}
 
@@ -126,7 +126,7 @@ func TestToSeq2(t *testing.T) {
 		out := ToSeq2(in, opt)
 
 		var outSlice []int
-		for val, _ := range out {
+		for val := range out {
 			if val == 5 {
 				break
 			}
