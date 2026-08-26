@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/destel/rill/internal/th"
 )
@@ -77,25 +78,26 @@ func TestToSlice(t *testing.T) {
 
 		outSlice, err := ToSlice(in)
 
-		synctest.Wait()
-		th.ExpectDrainedChan(t, in)
-
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
 		th.ExpectNoError(t, err)
+		th.ExpectDrainedChan(t, in)
 	})
 
 	th.RunSynctest(t, "errors", func(t *testing.T) {
 		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
 		in = replaceWithError(in, 5, fmt.Errorf("err005"))
 		in = replaceWithError(in, 7, fmt.Errorf("err007"))
+		in = th.DelayEach(in, 1)
 
 		outSlice, err := ToSlice(in)
 
-		synctest.Wait()
-		th.ExpectDrainedChan(t, in)
-
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
 		th.ExpectError(t, err, "err005")
+		th.ExpectOpenChan(t, in)
+
+		time.Sleep(24 * time.Hour) // eventually drained
+
+		th.ExpectDrainedChan(t, in)
 	})
 
 	t.Run("unclosed", func(t *testing.T) {
@@ -106,6 +108,37 @@ func TestToSlice(t *testing.T) {
 
 			_, _ = ToSlice(in)
 		})
+	})
+
+	th.RunSynctest(t, "settlement", func(t *testing.T) {
+		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+
+		settled, opt := Settlement()
+		outSlice, err := ToSlice(in, opt)
+
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+		th.ExpectNoError(t, err)
+		th.ExpectDrainedChan(t, in)
+
+		<-settled // should not leak
+	})
+
+	th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+		in = replaceWithError(in, 5, fmt.Errorf("err005"))
+		in = replaceWithError(in, 7, fmt.Errorf("err007"))
+		in = th.DelayEach(in, 1)
+
+		settled, opt := Settlement()
+		outSlice, err := ToSlice(in, opt)
+
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
+		th.ExpectError(t, err, "err005")
+		th.ExpectOpenChan(t, in)
+
+		<-settled
+
+		th.ExpectDrainedChan(t, in)
 	})
 }
 

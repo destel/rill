@@ -81,17 +81,16 @@ func FromSlice[A any](slice []A, err error) <-chan Try[A] {
 //
 // This is a blocking ordered function that processes items sequentially.
 // See the package documentation for more information on blocking ordered functions and error handling.
-func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
-	var res []A
+func ToSlice[A any](in <-chan Try[A], options ...SinkOption) ([]A, error) {
+	defer Discard(in, options...)
 
+	var res []A
 	for x := range in {
 		if err := x.Error; err != nil {
-			Discard(in)
 			return res, err
 		}
 		res = append(res, x.Value)
 	}
-
 	return res, nil
 }
 
