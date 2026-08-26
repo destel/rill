@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/destel/rill/internal/th"
 )
@@ -22,8 +23,7 @@ func TestToSeq2(t *testing.T) {
 		in = replaceWithError(in, 5, fmt.Errorf("err5"))
 		in = replaceWithError(in, 8, fmt.Errorf("err8"))
 
-		settled, opt := Settlement()
-		out := ToSeq2(in, opt)
+		out := ToSeq2(in)
 
 		var outSlice []Item[int]
 		for val, err := range out {
@@ -44,17 +44,14 @@ func TestToSeq2(t *testing.T) {
 		expectedSlice = appendVal(expectedSlice, 9)
 
 		th.ExpectSlice(t, outSlice, expectedSlice)
-
-		<-settled // asserts that settlement is reported
 	})
 
 	th.RunSynctest(t, "early exit", func(t *testing.T) {
 		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
-		in = th.DelayEach(in, 1)
 		in = replaceWithError(in, 8, fmt.Errorf("err8"))
+		in = th.DelayEach(in, 1)
 
-		settled, opt := Settlement()
-		out := ToSeq2(in, opt)
+		out := ToSeq2(in)
 
 		var outSlice []Item[int]
 		for val, err := range out {
@@ -75,8 +72,21 @@ func TestToSeq2(t *testing.T) {
 		th.ExpectSlice(t, outSlice, expectedSlice)
 		th.ExpectOpenChan(t, in)
 
-		<-settled
+		time.Sleep(24 * time.Hour) // eventually drained
+
 		th.ExpectDrainedChan(t, in)
+	})
+
+	t.Run("never ranged", func(t *testing.T) {
+		th.ExpectLeak(t, func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 20), nil)
+
+			_ = ToSeq2(in)
+
+			time.Sleep(24 * time.Hour) // not drained even eventually
+
+			th.ExpectOpenChan(t, in)
+		})
 	})
 
 	t.Run("unclosed", func(t *testing.T) {
@@ -91,7 +101,47 @@ func TestToSeq2(t *testing.T) {
 		})
 	})
 
-	th.RunSynctest(t, "double consumption does not panic", func(t *testing.T) {
+	th.RunSynctest(t, "settlement", func(t *testing.T) {
+		in := FromChan(th.FromRange(0, 10), nil)
+
+		settled, opt := Settlement()
+		out := ToSeq2(in, opt)
+
+		var outSlice []int
+		for val, _ := range out {
+			outSlice = append(outSlice, val)
+		}
+
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+		th.ExpectDrainedChan(t, in)
+
+		<-settled // should not leak
+	})
+
+	th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+		in := FromChan(th.FromRange(0, 10), nil)
+		in = th.DelayEach(in, 1)
+
+		settled, opt := Settlement()
+		out := ToSeq2(in, opt)
+
+		var outSlice []int
+		for val, _ := range out {
+			if val == 5 {
+				break
+			}
+			outSlice = append(outSlice, val)
+		}
+
+		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
+		th.ExpectOpenChan(t, in)
+
+		<-settled
+
+		th.ExpectDrainedChan(t, in)
+	})
+
+	th.RunSynctest(t, "settlement (double consumption does not panic)", func(t *testing.T) {
 		in := FromChan(th.FromRange(0, 20), nil)
 
 		settled, opt := Settlement()
@@ -104,17 +154,6 @@ func TestToSeq2(t *testing.T) {
 
 		<-settled // asserts that settlement is reported
 		th.ExpectDrainedChan(t, in)
-	})
-
-	t.Run("never ranged", func(t *testing.T) {
-		th.ExpectBlock(t, func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 20), nil)
-
-			settled, opt := Settlement()
-			_ = ToSeq2(in, opt)
-
-			<-settled // blocks forever
-		})
 	})
 }
 
