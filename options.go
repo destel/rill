@@ -28,6 +28,9 @@ func (f sinkOptionFunc) apply(options *sinkOptions) {
 func collectSinkOptions(options []SinkOption) sinkOptions {
 	var result sinkOptions
 	for _, option := range options {
+		if option == nil {
+			continue
+		}
 		option.apply(&result)
 	}
 	return result
