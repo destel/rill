@@ -229,6 +229,7 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error), options ...
 
 		// Error path: items can remain in the input, so we wait for the drain
 		if errSeen.Load() {
+			nodes = nil // free memory while waiting for the drain
 			<-inputDrained
 			close(out)
 			return
