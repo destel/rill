@@ -54,6 +54,10 @@ func Settlement() (settled <-chan struct{}, opt SinkOption) {
 	var cnt atomic.Int32
 
 	opt = sinkOptionFunc(func(options *sinkOptions) {
+		// This fires when the options are opened, i.e. at sink return rather
+		// than at the call site. Detecting reuse at sink entry would require
+		// re-plumbing every sink chain - too costly in the current architecture
+		// for what it buys.
 		if cnt.Add(1) > 1 {
 			panic("rill: the same settlement option used more than once")
 		}
