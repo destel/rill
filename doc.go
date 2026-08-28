@@ -1,22 +1,19 @@
-// Package rill provides composable primitives for streaming pipelines
-// over plain Go channels: functions that transform, filter, batch, reduce,
-// and consume data streams, with bounded concurrency per stage, optional order
-// preservation, and centralized error handling.
+// Package rill provides composable primitives for building streaming
+// pipelines over plain Go channels: functions that transform, filter, batch,
+// reduce, and consume data streams, with bounded concurrency per stage,
+// optional order preservation, centralized error handling, and minimal
+// boilerplate.
 //
-// The model follows the Go blog's "Pipelines and cancellation"
-// (https://go.dev/blog/pipelines). Rill ships stages, sinks, and sources as
-// generic functions, accepts hand-written ones of the same shape, and
-// standardizes two conventions across all of them. Errors travel through
-// the stream together with values, the way a Go function returns (value,
-// error). Cancellation is a single rule: the caller stops the source, and
-// the sink drains the rest.
+// The model is similar to the Go blog's "Pipelines and cancellation"
+// (https://go.dev/blog/pipelines), but it unifies error handling and
+// cancellation, by letting errors travel downstream along with values.
 //
 // # Streams
 //
-// In this package, a stream is a channel of [Try] structs. Such structs hold
-// either a value or an error: this simplifies error propagation when multiple
-// rill functions are composed together. Instances of [Try] are called items
-// in this documentation.
+// In this package, a stream is a plain channel of [Try] structs, each
+// holding either a value or an error. This is Go's (value, error) return
+// convention, carried over to channels. Such structs are often referred to
+// as items below.
 //
 // # Composition and Stages
 //
