@@ -5,24 +5,6 @@ func Drain[A any](in <-chan A) {
 	}
 }
 
-func Discard[A any](in <-chan A) {
-	if in == nil {
-		return
-	}
-
-	// do nothing if the channel is already closed
-	select {
-	case _, ok := <-in:
-		if !ok {
-			return
-		}
-	default:
-	}
-
-	// drain in background
-	go Drain(in)
-}
-
 func Buffer[A any](in <-chan A, size int) <-chan A {
 	if in == nil {
 		return nil

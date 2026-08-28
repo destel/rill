@@ -14,8 +14,28 @@ func Drain[A any](in <-chan A) {
 
 // Discard returns immediately, then consumes and discards all items of
 // the channel in the background.
-func Discard[A any](in <-chan A) {
-	core.Discard(in)
+func Discard[A any](in <-chan A, options ...SinkOption) {
+	opts := collectSinkOptions(options)
+
+	if in == nil {
+		return
+	}
+
+	// do nothing if the channel is already closed
+	select {
+	case _, ok := <-in:
+		if !ok {
+			opts.settle()
+			return
+		}
+	default:
+	}
+
+	// drain in background
+	go func() {
+		core.Drain(in)
+		opts.settle()
+	}()
 }
 
 // DrainNB is a non-blocking version of [Drain].
@@ -23,7 +43,7 @@ func Discard[A any](in <-chan A) {
 // Deprecated: use [Discard] instead, which is identical. DrainNB will
 // be removed in v1.0.
 func DrainNB[A any](in <-chan A) {
-	core.Discard(in)
+	Discard(in)
 }
 
 // Buffer forwards all input items to a new channel with a capacity of

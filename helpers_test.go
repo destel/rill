@@ -97,3 +97,11 @@ func replaceWithError[A comparable](in <-chan Try[A], value A, err error) <-chan
 
 	return out
 }
+
+// ternary operator to keep tests concise
+func when[A any](cond bool, trueVal A, falseVal A) A {
+	if cond {
+		return trueVal
+	}
+	return falseVal
+}

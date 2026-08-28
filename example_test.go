@@ -692,6 +692,55 @@ func ExampleReduce() {
 	fmt.Println("Error:", err)
 }
 
+// This example demonstrates how to wait until the pipeline has no callbacks left to run.
+// [ForEach] returns as soon as the error is known, while the source and the remaining
+// workers are still going. Settlement reports when all of them have stopped.
+func ExampleSettlement() {
+	// Canceling this context stops the source and all in-flight work
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Use Generate instead of FromSlice to make the source context-aware
+	// and infinite
+	ids := rill.Generate(func(send func(int), sendError func(error)) {
+		for i := 1; ctx.Err() == nil; i++ {
+			send(i)
+		}
+	})
+
+	// Callbacks write here, so it's unsafe to touch while any of them is still running
+	var mu sync.Mutex
+	var seen []int
+
+	settled, opt := rill.Settlement()
+
+	// Process ids until one of them turns out to be bad
+	// Concurrency = 3
+	err := rill.ForEach(ids, 3, func(id int) error {
+		simulateWork(500 * time.Millisecond)
+
+		mu.Lock()
+		seen = append(seen, id)
+		mu.Unlock()
+
+		fmt.Println("Seen:", id)
+
+		if id == 15 {
+			return fmt.Errorf("bad id (%d)", id)
+		}
+
+		return nil
+	}, opt)
+	fmt.Println("* Returned:", err)
+
+	cancel()  // stop the source and the callbacks that are still running
+	<-settled // wait until none of them can touch seen anymore
+	fmt.Println("* Settled")
+
+	// No callback can be running now, so this needs no mutex
+	fmt.Println("Total seen:", len(seen))
+}
+
 func ExampleTee() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)

@@ -83,17 +83,16 @@ func FromSlice[A any](slice []A, err error) <-chan Try[A] {
 // returns a slice of all values.
 //
 // See the package documentation for the behaviors that all sinks share.
-func ToSlice[A any](in <-chan Try[A]) ([]A, error) {
-	var res []A
+func ToSlice[A any](in <-chan Try[A], options ...SinkOption) ([]A, error) {
+	defer Discard(in, options...)
 
+	var res []A
 	for x := range in {
 		if err := x.Error; err != nil {
-			Discard(in)
 			return res, err
 		}
 		res = append(res, x.Value)
 	}
-
 	return res, nil
 }
 
