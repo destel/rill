@@ -15,29 +15,6 @@ func TestDrain(t *testing.T) {
 	})
 }
 
-func TestDiscard(t *testing.T) {
-	th.RunSynctest(t, "nil", func(t *testing.T) {
-		Discard[int](nil) // leak would be caught by the bubble
-	})
-
-	th.RunSynctest(t, "normal", func(t *testing.T) {
-		in := make(chan int)
-		Discard(in) // doesn't block
-
-		// able to write
-		in <- 1
-		in <- 2
-		close(in)
-	})
-
-	th.RunSynctest(t, "closed", func(t *testing.T) {
-		in := make(chan int)
-		close(in)
-		Discard(in)
-		th.ExpectDrainedChan(t, in)
-	})
-}
-
 func TestBuffer(t *testing.T) {
 	t.Run("nil", func(t *testing.T) {
 		th.ExpectValue(t, Buffer[string](nil, 2), nil)

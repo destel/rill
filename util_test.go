@@ -3,13 +3,12 @@ package rill
 import (
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/destel/rill/internal/th"
 )
 
-// Full behavior of these functions is tested in the internal/core package.
-// Tests below only pin the wrapper wiring: right core function, args forwarded.
-
+// Drain is a wrapper around the function from the core package. The full behavior test is there.
 func TestDrain(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		in := th.FromRange(0, 10)
@@ -19,19 +18,78 @@ func TestDrain(t *testing.T) {
 }
 
 func TestDiscard(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		in := make(chan int)
-		Discard(in)
+	th.RunSynctest(t, "nil", func(t *testing.T) {
+		Discard[int](nil)
+	})
 
-		in <- 1
-		in <- 2
+	t.Run("nil w settlement", func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
+			settled, opt := Settlement()
+			Discard[int](nil, opt)
+			<-settled
+		})
+	})
+
+	th.RunSynctest(t, "normal", func(t *testing.T) {
+		in := th.FromRange(0, 100)
+		in = th.DelayEach(in, 1*time.Second)
+		Discard(in) // doesn't block
+
+		time.Sleep(60 * time.Second)
+		th.ExpectOpenChan(t, in)
+
+		time.Sleep(60 * time.Second)
+		th.ExpectDrainedChan(t, in)
+	})
+
+	th.RunSynctest(t, "normal w settlement", func(t *testing.T) {
+		in := th.FromRange(0, 100)
+		in = th.DelayEach(in, 1*time.Second)
+
+		settled, opt := Settlement()
+		Discard(in, opt) // doesn't block
+
+		time.Sleep(60 * time.Second)
+		th.ExpectOpenChan(t, in)
+
+		<-settled
+		th.ExpectDrainedChan(t, in)
+	})
+
+	th.RunSynctest(t, "two settlements", func(t *testing.T) {
+		in := th.FromRange(0, 100)
+		in = th.DelayEach(in, 1*time.Second)
+
+		settled1, opt1 := Settlement()
+		settled2, opt2 := Settlement()
+		Discard(in, opt1, opt2) // doesn't block
+
+		<-settled1
+		th.ExpectDrainedChan(t, in)
+		<-settled2
+	})
+
+	th.RunSynctest(t, "closed", func(t *testing.T) {
+		in := make(chan int)
+		close(in)
+		Discard(in)
+		th.ExpectDrainedChan(t, in)
+	})
+
+	th.RunSynctest(t, "closed w settlement", func(t *testing.T) {
+		in := make(chan int)
 		close(in)
 
-		synctest.Wait()
+		settled, opt := Settlement()
+		Discard(in, opt)
+
 		th.ExpectDrainedChan(t, in)
+
+		<-settled // should not leak
 	})
 }
 
+// Buffer is a wrapper around the function from the core package. The full behavior test is there.
 func TestBuffer(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		in := make(chan int)

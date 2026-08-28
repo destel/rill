@@ -2,6 +2,7 @@ package rill
 
 import (
 	"iter"
+	"sync"
 )
 
 // FromSeq converts an iterator into a stream.
@@ -52,9 +53,15 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 //
 // If the caller stops iteration early using break or return, ToSeq2 drains the
 // remaining input in the background, like blocking functions such as [ForEach].
-func ToSeq2[A any](in <-chan Try[A]) iter.Seq2[A, error] {
+//
+// The returned iterator is single-use. If it is never ranged, the input is
+// never drained.
+func ToSeq2[A any](in <-chan Try[A], options ...SinkOption) iter.Seq2[A, error] {
+	var once sync.Once
+
 	return func(yield func(A, error) bool) {
-		defer Discard(in)
+		defer once.Do(func() { Discard(in, options...) })
+
 		for x := range in {
 			if !yield(x.Value, x.Error) {
 				return

@@ -18,10 +18,10 @@ func ExpectValue[A comparable](t *testing.T, actual A, expected A) {
 	}
 }
 
-func ExpectBetween[A cmp.Ordered](t *testing.T, actual A, min A, max A) {
+func ExpectLTE[A cmp.Ordered](t *testing.T, actual A, max A) {
 	t.Helper()
-	if actual < min || actual > max {
-		t.Errorf("expected %v to be between %v and %v", actual, min, max)
+	if actual > max {
+		t.Errorf("expected %v to be less than or equal to %v", actual, max)
 	}
 }
 
@@ -115,6 +115,16 @@ func ExpectDrainedChan[A any](t *testing.T, ch <-chan A) {
 		}
 	default:
 		t.Errorf("expected channel to be closed, but it's blocked")
+	}
+}
+
+// ExpectOpenChan consumes one item from the channel and asserts that the
+// channel was open. It blocks until an item arrives or the channel is closed.
+func ExpectOpenChan[A any](t *testing.T, ch <-chan A) {
+	t.Helper()
+	_, isOpen := <-ch
+	if !isOpen {
+		t.Errorf("expected channel to be open, but it's closed")
 	}
 }
 

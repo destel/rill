@@ -46,11 +46,34 @@ func DontClose[A any](in <-chan A) <-chan A {
 	return out
 }
 
+// ExpectNoRace is a semantic name for a bare unsynchronized read.
+// Tests sometimes need to do an unsynchronized access to a variable, to
+// have the race detector confirm that all writes in other goroutines
+// happen before this read. It's enough to do a no-op read:
+//
+//	_ = myVariable
+//
+// This works, but requires an explaining comment at every site.
+// ExpectNoRace is also a no-op, but makes the call site clearer:
+//
+//	th.ExpectNoRace(myVariable)
+//
+//go:noinline
+func ExpectNoRace[T any](value T) {
+	// This function does nothing and has a noinline pragma to make sure
+	// the compiler does not remove the variable access.
+}
+
 // DelayEach forwards items, sleeping for the given duration before each one.
-// Useful to make a stream slow. Under synctest even a minimal 1ns delay acts
-// as a freeze point: the stream cannot advance past this stage while any
-// goroutine in the bubble is runnable, because fake time only advances when
-// all goroutines are durably blocked.
+// Under synctest this makes it impossible to consume the channel in zero fake
+// time, hence one goroutine (main) can observe the intermediate state of another
+// goroutine (drain) consuming the stream. This function is usually
+// paired with [ExpectOpenChan].
+//
+// A sleep of 1ns - written as a bare 1 in the tests - is the minimum that
+// gives observability: the sleep completes only when every goroutine in the
+// bubble is durably blocked, so the stream cannot advance while any goroutine
+// is runnable.
 func DelayEach[A any](in <-chan A, delay time.Duration) <-chan A {
 	out := make(chan A)
 	go func() {
@@ -79,14 +102,6 @@ func DelayEach[A any](in <-chan A, delay time.Duration) <-chan A {
 func SimulateWork(min, max time.Duration) {
 	d := min + time.Duration(rand.Int63n(int64(max-min+1)))
 	time.Sleep(d)
-}
-
-// WaitForInflightWork is just a sleep with a semantic name.
-// It fast-forwards fake time far enough that any goroutines currently
-// simulating work have a chance to complete.
-// Mostly used with early-exit tests.
-func WaitForInflightWork() {
-	time.Sleep(1 * time.Hour)
 }
 
 func DoConcurrently(ff ...func()) {

@@ -14,7 +14,7 @@ import (
 // and all its effects are visible to the caller after ForEach returns.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
-func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
+func ForEach[A any](in <-chan Try[A], n int, f func(A) error, options ...SinkOption) error {
 	validateN(n)
 	validateNilFunc(f == nil)
 
@@ -25,7 +25,7 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 	//   - return only after the loop exits, so state captured by f is safe
 	//     to use after ForEach returns
 	if n == 1 {
-		defer Discard(in)
+		defer Discard(in, options...)
 
 		for a := range in {
 			err := a.Error
@@ -49,15 +49,15 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error) error {
 		return struct{}{}, false, f(a)
 	})
 
-	return Err(out)
+	return Err(out, options...)
 }
 
 // Err returns the first error encountered in the input stream or nil if there were no errors.
 //
 // This is a blocking ordered function that processes items sequentially.
 // See the package documentation for more information on blocking ordered functions and error handling.
-func Err[A any](in <-chan Try[A]) error {
-	defer Discard(in)
+func Err[A any](in <-chan Try[A], options ...SinkOption) error {
+	defer Discard(in, options...)
 
 	for a := range in {
 		if a.Error != nil {
@@ -74,8 +74,8 @@ func Err[A any](in <-chan Try[A]) error {
 //
 // This is a blocking ordered function that processes items sequentially.
 // See the package documentation for more information on blocking ordered functions and error handling.
-func First[A any](in <-chan Try[A]) (value A, found bool, err error) {
-	defer Discard(in)
+func First[A any](in <-chan Try[A], options ...SinkOption) (value A, found bool, err error) {
+	defer Discard(in, options...)
 
 	var zero A
 	a, ok := <-in
@@ -98,7 +98,7 @@ var errFound = errors.New("found")
 // When n = 1, items are processed sequentially in stream order.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
-func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
+func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...SinkOption) (bool, error) {
 	validateN(n)
 	validateNilFunc(f == nil)
 
@@ -111,7 +111,7 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 			return errFound
 		}
 		return nil
-	})
+	}, options...)
 
 	if err == errFound { //nolint:errorlint
 		return true, nil
@@ -127,7 +127,7 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 // When n = 1, items are processed sequentially in stream order.
 //
 // See the package documentation for more information on blocking unordered functions and error handling.
-func All[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) {
+func All[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...SinkOption) (bool, error) {
 	validateN(n)
 	validateNilFunc(f == nil)
 
@@ -140,7 +140,7 @@ func All[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (bool, error) 
 			return errFound
 		}
 		return nil
-	})
+	}, options...)
 
 	if err == errFound { //nolint:errorlint
 		return false, nil
