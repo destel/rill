@@ -1,11 +1,15 @@
-// Package rill provides composable, type-safe concurrency primitives for Go:
-// functions that transform, filter, batch, reduce, and consume channel-based
-// streams, with bounded concurrency and first-class error handling.
+// Package rill provides composable primitives for streaming pipelines
+// over plain Go channels: functions that transform, filter, batch, reduce,
+// and consume data streams, with bounded concurrency per stage, optional order
+// preservation, and centralized error handling.
 //
-// Rill operates on ordinary Go channels - no custom stream abstraction,
-// interfaces, or runtime. Its functions can be used standalone or composed
-// into multi-stage pipelines that integrate easily with existing
-// channel-based code.
+// The model follows the Go blog's "Pipelines and cancellation"
+// (https://go.dev/blog/pipelines). Rill ships stages, sinks, and sources as
+// generic functions, accepts hand-written ones of the same shape, and
+// standardizes two conventions across all of them. Errors travel through
+// the stream together with values, the way a Go function returns (value,
+// error). Cancellation is a single rule: the caller stops the source, and
+// the sink drains the rest.
 //
 // # Streams
 //
