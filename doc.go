@@ -1,12 +1,12 @@
 // Package rill provides composable primitives for building streaming
 // pipelines over plain Go channels: functions that transform, filter, batch,
 // reduce, and consume data streams, with bounded concurrency per stage,
-// optional order preservation, centralized error handling, and minimal
+// centralized error handling, optional order preservation, and minimal
 // boilerplate.
 //
 // The model is similar to the Go blog's "Pipelines and cancellation"
 // (https://go.dev/blog/pipelines), but it unifies error handling and
-// cancellation, by letting errors travel downstream along with values.
+// cancellation by letting errors travel downstream along with values.
 //
 // # Streams
 //
@@ -116,7 +116,30 @@
 //
 // When errors need to be handled mid-pipeline, use [Catch].
 //
-// # Context and cancellation
+// # Context, cancellation and settlement
+//
+// Rill is context-agnostic: none of its functions take a [context.Context].
+// No scope object owns the callbacks, and a stage knows nothing besides its
+// own input and output channels. The stopping mechanism is the caller's
+// choice - a context, a done channel, or any other signal the source and the
+// callbacks understand.
+//
+// Everything a stage has to say travels downstream, on the same path: values,
+// errors as ordinary items, and closure. A stage closes its output only when
+// it will do no more work: its input is consumed and every callback it
+// started has returned. Such a stage is called settled.
+//
+// Closure accumulates. A stage cannot settle before its input closes, so a
+// closed channel means that every stage feeding it has settled as well, and
+// a single signal at the end of a linear pipeline covers all of them. Sinks
+// are the exception: with no output channel, they have nothing to close.
+// [Settlement] gives them an equivalent signal.
+//
+// Nothing travels the other way. A sink cannot reach the stages feeding it,
+// so stopping the source is the caller's job, and settlement only reports
+// that the work has ended - it never ends it.
+//
+// # Context and cancellation (Old)
 //
 // Rill itself is context-agnostic: none of its functions take a
 // [context.Context]. The stopping mechanism is the user's choice - a
