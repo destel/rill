@@ -211,38 +211,37 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error), options ...
 		}
 	}
 
-	inputDrained, opt := Settlement()
-	defer Discard(in, opt)
-
 	// Start the workers
 	var wg sync.WaitGroup
 	for range n {
 		wg.Go(worker)
 	}
 
-	// Wait until all workers quit
+	// Collect the result once all workers have quit, then close out
 	go func() {
 		wg.Wait()
 
-		// The out channel propagates both the result and the settlement signal to First.
-		// We're only allowed to close it after the input is drained.
-
-		// Error path: items can remain in the input, so we wait for the drain
-		if errSeen.Load() {
-			nodes = nil // free memory while waiting for the drain
-			<-inputDrained
-			close(out)
-			return
+		if !errSeen.Load() {
+			// By construction, the list contains 0 or 1 nodes.
+			if first := nodes.Front(); first != nil {
+				out <- Try[A]{Value: first.Value.value}
+			}
 		}
 
-		// Happy path: the workers exhausted the input, so there is nothing to
-		// drain. By construction, the list contains 0 or 1 nodes.
-		if first := nodes.Front(); first != nil {
-			out <- Try[A]{Value: first.Value.value}
-		}
+		nodes = nil // free memory before the drain below
+
+		// This drain is needed for correctness:
+		// out chan carries settlement signal,
+		// don't close it until the input is drained.
+		Drain(in)
 
 		close(out)
 	}()
+
+	// This discard is needed for promptness:
+	// it starts earlier than the drain above - when the result is known.
+	// It takes no options: the settlement signal is carried by out, not in.
+	defer Discard(in)
 
 	return First(out, options...)
 }
@@ -449,40 +448,40 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 		}
 	}
 
-	inputDrained, opt := Settlement()
-	defer Discard(entries, opt)
-
 	// Start the workers
 	var wg sync.WaitGroup
 	for range nr {
 		wg.Go(worker)
 	}
 
-	// Wait until all workers quit, then harvest the final map
+	// Collect the result once all workers have quit, then close out
 	go func() {
 		wg.Wait()
 
-		// The out channel propagates both the result and the settlement signal to First.
-		// We're only allowed to close it after the input is drained.
+		if !errSeen.Load() {
+			// By construction, each map entry has converged to exactly one node.
+			res := make(map[K]V, len(lists))
+			for k, l := range lists {
+				res[k] = l.Front().Value.value
+			}
 
-		// Error path: items can remain in the input, so we wait for the drain
-		if errSeen.Load() {
-			lists = nil // free memory while waiting for the drain
-			<-inputDrained
-			close(out)
-			return
+			out <- Try[map[K]V]{Value: res}
 		}
 
-		// Happy path: the workers exhausted the input, so there is nothing to
-		// drain. By construction, each map entry has converged to exactly one node.
-		res := make(map[K]V, len(lists))
-		for k, l := range lists {
-			res[k] = l.Front().Value.value
-		}
+		lists = nil // help the GC
 
-		out <- Try[map[K]V]{Value: res}
+		// This drain is needed for correctness:
+		// out chan carries settlement signal,
+		// don't close it until the input is drained.
+		Drain(entries)
+
 		close(out)
 	}()
+
+	// This discard is needed for promptness:
+	// it starts earlier than the drain above - when the result is known.
+	// It takes no options: the settlement signal is carried by out, not entries.
+	defer Discard(entries)
 
 	res, _, err := First(out, options...)
 	if err != nil {
