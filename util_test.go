@@ -22,11 +22,13 @@ func TestDiscard(t *testing.T) {
 		Discard[int](nil)
 	})
 
-	t.Run("nil w settlement", func(t *testing.T) {
+	t.Run("nil w context", func(t *testing.T) {
 		th.ExpectBlock(t, func(t *testing.T) {
-			settled, opt := Settlement()
-			Discard[int](nil, opt)
-			<-settled
+			_, scope := WithContext(t.Context())
+			defer scope.Cancel()
+
+			Discard[int](nil, scope)
+			scope.Wait()
 		})
 	})
 
@@ -42,31 +44,48 @@ func TestDiscard(t *testing.T) {
 		th.ExpectDrainedChan(t, in)
 	})
 
-	th.RunSynctest(t, "normal w settlement", func(t *testing.T) {
+	th.RunSynctest(t, "normal w context", func(t *testing.T) {
+		ctx, scope := WithContext(t.Context())
+		defer scope.Cancel()
+
 		in := th.FromRange(0, 100)
 		in = th.DelayEach(in, 1*time.Second)
 
-		settled, opt := Settlement()
-		Discard(in, opt) // doesn't block
+		Discard(in, scope) // doesn't block
 
 		time.Sleep(60 * time.Second)
-		th.ExpectOpenChan(t, in)
 
-		<-settled
+		th.ExpectOpenChan(t, in)
+		th.ExpectActiveContext(t, ctx)
+
+		scope.Wait()
+
 		th.ExpectDrainedChan(t, in)
+		th.ExpectCanceledContext(t, ctx)
 	})
 
-	th.RunSynctest(t, "two settlements", func(t *testing.T) {
+	th.RunSynctest(t, "two scopes", func(t *testing.T) {
 		in := th.FromRange(0, 100)
 		in = th.DelayEach(in, 1*time.Second)
 
-		settled1, opt1 := Settlement()
-		settled2, opt2 := Settlement()
-		Discard(in, opt1, opt2) // doesn't block
+		ctx1, scope1 := WithContext(t.Context())
+		defer scope1.Cancel()
+		ctx2, scope2 := WithContext(t.Context())
+		defer scope2.Cancel()
 
-		<-settled1
+		Discard(in, scope1, scope2) // doesn't block
+
+		th.ExpectActiveContext(t, ctx1)
+		th.ExpectActiveContext(t, ctx2)
+
+		scope1.Wait()
+
 		th.ExpectDrainedChan(t, in)
-		<-settled2
+		th.ExpectCanceledContext(t, ctx1)
+		th.ExpectActiveContext(t, ctx2)
+
+		scope2.Wait()
+		th.ExpectCanceledContext(t, ctx2)
 	})
 
 	th.RunSynctest(t, "closed", func(t *testing.T) {
@@ -76,16 +95,21 @@ func TestDiscard(t *testing.T) {
 		th.ExpectDrainedChan(t, in)
 	})
 
-	th.RunSynctest(t, "closed w settlement", func(t *testing.T) {
+	th.RunSynctest(t, "closed w context", func(t *testing.T) {
+		ctx, scope := WithContext(t.Context())
+		defer scope.Cancel()
+
 		in := make(chan int)
 		close(in)
 
-		settled, opt := Settlement()
-		Discard(in, opt)
+		Discard(in, scope)
 
 		th.ExpectDrainedChan(t, in)
+		th.ExpectActiveContext(t, ctx)
 
-		<-settled // should not leak
+		scope.Wait() // should not leak
+
+		th.ExpectCanceledContext(t, ctx)
 	})
 }
 
