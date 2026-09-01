@@ -1,6 +1,7 @@
 package rill
 
 import (
+	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -282,31 +283,35 @@ func TestForEach(t *testing.T) {
 			})
 		})
 
-		th.RunSynctest(t, "settlement", func(t *testing.T) {
+		th.RunSynctest(t, "context", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 20), nil)
 
-			settled, opt := Settlement()
+			ctx, scope := WithContext(context.Background())
+			defer scope.Cancel()
 
 			var state int64
 			err := ForEach(in, n, func(x int) error {
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				atomic.AddInt64(&state, 1)
 				return nil
-			}, opt)
+			}, scope)
 
 			th.ExpectNoError(t, err)
 
 			th.ExpectNoRace(state)
 			th.ExpectDrainedChan(t, in)
+			th.ExpectActiveContext(t, ctx)
 
-			<-settled // should not leak
+			scope.Wait()
+			th.ExpectCanceledContext(t, ctx)
 		})
 
-		th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+		th.RunSynctest(t, "context (early return)", func(t *testing.T) {
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = th.DelayEach(in, 1)
 
-			settled, opt := Settlement()
+			ctx, scope := WithContext(context.Background())
+			defer scope.Cancel()
 
 			var state int64
 			err := ForEach(in, n, func(x int) error {
@@ -316,15 +321,17 @@ func TestForEach(t *testing.T) {
 				}
 				atomic.AddInt64(&state, 1)
 				return nil
-			}, opt)
+			}, scope)
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectOpenChan(t, in)
+			th.ExpectActiveContext(t, ctx)
 
-			<-settled
+			scope.Wait()
 
 			th.ExpectNoRace(state)
 			th.ExpectDrainedChan(t, in)
+			th.ExpectCanceledContext(t, ctx)
 		})
 
 	})

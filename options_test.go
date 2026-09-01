@@ -11,7 +11,7 @@ func TestSinkOption(t *testing.T) {
 		_, opt := Settlement()
 
 		opts := collectSinkOptions([]SinkOption{nil, opt, nil})
-		th.ExpectValue(t, len(opts.settleChans), 1)
+		th.ExpectValue(t, len(opts.settleFuncs), 1)
 	})
 
 	t.Run("settlement can't be reused", func(t *testing.T) {
