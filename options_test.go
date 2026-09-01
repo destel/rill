@@ -8,22 +8,10 @@ import (
 
 func TestSinkOption(t *testing.T) {
 	t.Run("nil options are ignored", func(t *testing.T) {
-		_, opt := Settlement()
+		_, scope := WithContext(t.Context())
+		defer scope.Cancel()
 
-		opts := collectSinkOptions([]SinkOption{nil, opt, nil})
+		opts := collectSinkOptions([]SinkOption{nil, scope, nil})
 		th.ExpectValue(t, len(opts.settleFuncs), 1)
-	})
-
-	t.Run("settlement can't be reused", func(t *testing.T) {
-		_, opt := Settlement()
-		_, _, _ = First(FromSlice([]int{}, nil), opt)
-
-		defer func() {
-			if recover() == nil {
-				t.Fatal("expected panic")
-			}
-		}()
-
-		_, _, _ = First(FromSlice([]int{}, nil), opt)
 	})
 }
