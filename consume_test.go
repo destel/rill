@@ -1,7 +1,6 @@
 package rill
 
 import (
-	"context"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -61,32 +60,41 @@ func TestErr(t *testing.T) {
 		})
 	})
 
-	th.RunSynctest(t, "settlement", func(t *testing.T) {
+	th.RunSynctest(t, "context", func(t *testing.T) {
+		ctx, scope := WithContext(t.Context())
+		defer scope.Cancel()
+
 		in := FromChan(th.FromRange(0, 20), nil)
 
-		settled, opt := Settlement()
-		err := Err(in, opt)
+		err := Err(in, scope)
 
 		th.ExpectNoError(t, err)
 		th.ExpectDrainedChan(t, in)
+		th.ExpectActiveContext(t, ctx)
 
-		<-settled // should not leak
+		scope.Wait()
+
+		th.ExpectCanceledContext(t, ctx)
 	})
 
-	th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+	th.RunSynctest(t, "context (early return)", func(t *testing.T) {
+		ctx, scope := WithContext(t.Context())
+		defer scope.Cancel()
+
 		in := FromChan(th.FromRange(0, 20), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
 		in = th.DelayEach(in, 1)
 
-		settled, opt := Settlement()
-		err := Err(in, opt)
+		err := Err(in, scope)
 
 		th.ExpectError(t, err, "err010")
 		th.ExpectOpenChan(t, in)
+		th.ExpectActiveContext(t, ctx)
 
-		<-settled
+		scope.Wait()
 
 		th.ExpectDrainedChan(t, in)
+		th.ExpectCanceledContext(t, ctx)
 	})
 }
 
@@ -167,35 +175,44 @@ func TestFirst(t *testing.T) {
 		})
 	})
 
-	th.RunSynctest(t, "settlement", func(t *testing.T) {
+	th.RunSynctest(t, "context", func(t *testing.T) {
+		ctx, scope := WithContext(t.Context())
+		defer scope.Cancel()
+
 		in := FromSlice([]int{}, nil)
 
-		settled, opt := Settlement()
-		x, ok, err := First(in, opt)
+		x, ok, err := First(in, scope)
 
 		th.ExpectNoError(t, err)
 		th.ExpectValue(t, ok, false)
 		th.ExpectValue(t, x, 0)
 		th.ExpectDrainedChan(t, in)
+		th.ExpectActiveContext(t, ctx)
 
-		<-settled // should not leak
+		scope.Wait()
+
+		th.ExpectCanceledContext(t, ctx)
 	})
 
-	th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+	th.RunSynctest(t, "context (early return)", func(t *testing.T) {
+		ctx, scope := WithContext(t.Context())
+		defer scope.Cancel()
+
 		in := FromChan(th.FromRange(0, 20), nil)
 		in = th.DelayEach(in, 1)
 
-		settled, opt := Settlement()
-		x, ok, err := First(in, opt)
+		x, ok, err := First(in, scope)
 
 		th.ExpectNoError(t, err)
 		th.ExpectValue(t, ok, true)
 		th.ExpectValue(t, x, 0)
 		th.ExpectOpenChan(t, in)
+		th.ExpectActiveContext(t, ctx)
 
-		<-settled
+		scope.Wait()
 
 		th.ExpectDrainedChan(t, in)
+		th.ExpectCanceledContext(t, ctx)
 	})
 }
 
@@ -284,10 +301,10 @@ func TestForEach(t *testing.T) {
 		})
 
 		th.RunSynctest(t, "context", func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 20), nil)
-
-			ctx, scope := WithContext(context.Background())
+			ctx, scope := WithContext(t.Context())
 			defer scope.Cancel()
+
+			in := FromChan(th.FromRange(0, 20), nil)
 
 			var state int64
 			err := ForEach(in, n, func(x int) error {
@@ -303,15 +320,16 @@ func TestForEach(t *testing.T) {
 			th.ExpectActiveContext(t, ctx)
 
 			scope.Wait()
+
 			th.ExpectCanceledContext(t, ctx)
 		})
 
 		th.RunSynctest(t, "context (early return)", func(t *testing.T) {
+			ctx, scope := WithContext(t.Context())
+			defer scope.Cancel()
+
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = th.DelayEach(in, 1)
-
-			ctx, scope := WithContext(context.Background())
-			defer scope.Cancel()
 
 			var state int64
 			err := ForEach(in, n, func(x int) error {
@@ -441,42 +459,51 @@ func TestAny(t *testing.T) {
 			th.ExpectValue(t, res, false)
 		})
 
-		th.RunSynctest(t, "settlement", func(t *testing.T) {
+		th.RunSynctest(t, "context", func(t *testing.T) {
+			ctx, scope := WithContext(t.Context())
+			defer scope.Cancel()
+
 			in := FromChan(th.FromRange(0, 100), nil)
 
-			settled, opt := Settlement()
 			res, err := Any(in, n, func(x int) (bool, error) {
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				return false, nil
-			}, opt)
+			}, scope)
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, res, false)
 			th.ExpectDrainedChan(t, in)
+			th.ExpectActiveContext(t, ctx)
 
-			<-settled // should not leak
+			scope.Wait()
+
+			th.ExpectCanceledContext(t, ctx)
 		})
 
-		th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+		th.RunSynctest(t, "context (early return)", func(t *testing.T) {
+			ctx, scope := WithContext(t.Context())
+			defer scope.Cancel()
+
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = th.DelayEach(in, 1)
 
-			settled, opt := Settlement()
 			res, err := Any(in, n, func(x int) (bool, error) {
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				if x == 200 {
 					return true, nil
 				}
 				return false, nil
-			}, opt)
+			}, scope)
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, res, true)
 			th.ExpectOpenChan(t, in)
+			th.ExpectActiveContext(t, ctx)
 
-			<-settled
+			scope.Wait()
 
 			th.ExpectDrainedChan(t, in)
+			th.ExpectCanceledContext(t, ctx)
 		})
 	})
 }
@@ -573,42 +600,51 @@ func TestAll(t *testing.T) {
 			th.ExpectValue(t, res, false)
 		})
 
-		th.RunSynctest(t, "settlement", func(t *testing.T) {
+		th.RunSynctest(t, "context", func(t *testing.T) {
+			ctx, scope := WithContext(t.Context())
+			defer scope.Cancel()
+
 			in := FromChan(th.FromRange(0, 100), nil)
 
-			settled, opt := Settlement()
 			res, err := All(in, n, func(x int) (bool, error) {
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				return true, nil
-			}, opt)
+			}, scope)
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, res, true)
 			th.ExpectDrainedChan(t, in)
+			th.ExpectActiveContext(t, ctx)
 
-			<-settled // should not leak
+			scope.Wait()
+
+			th.ExpectCanceledContext(t, ctx)
 		})
 
-		th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+		th.RunSynctest(t, "context (early return)", func(t *testing.T) {
+			ctx, scope := WithContext(t.Context())
+			defer scope.Cancel()
+
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = th.DelayEach(in, 1)
 
-			settled, opt := Settlement()
 			res, err := All(in, n, func(x int) (bool, error) {
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				if x == 200 {
 					return false, nil
 				}
 				return true, nil
-			}, opt)
+			}, scope)
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, res, false)
 			th.ExpectOpenChan(t, in)
+			th.ExpectActiveContext(t, ctx)
 
-			<-settled
+			scope.Wait()
 
 			th.ExpectDrainedChan(t, in)
+			th.ExpectCanceledContext(t, ctx)
 		})
 	})
 }

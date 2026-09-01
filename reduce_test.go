@@ -184,33 +184,37 @@ func TestReduce(t *testing.T) {
 			})
 		})
 
-		th.RunSynctest(t, "settlement", func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 100), nil)
+		th.RunSynctest(t, "context", func(t *testing.T) {
+			ctx, scope := WithContext(t.Context())
+			defer scope.Cancel()
 
-			settled, opt := Settlement()
+			in := FromChan(th.FromRange(0, 100), nil)
 
 			var state int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				atomic.AddInt64(&state, 1)
 				return x + y, nil
-			}, opt)
+			}, scope)
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, out, 99*100/2)
 			th.ExpectValue(t, ok, true)
-
 			th.ExpectNoRace(state)
 			th.ExpectDrainedChan(t, in)
+			th.ExpectActiveContext(t, ctx)
 
-			<-settled // should not leak
+			scope.Wait()
+
+			th.ExpectCanceledContext(t, ctx)
 		})
 
-		th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+		th.RunSynctest(t, "context (early return)", func(t *testing.T) {
+			ctx, scope := WithContext(t.Context())
+			defer scope.Cancel()
+
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = th.DelayEach(in, 1)
-
-			settled, opt := Settlement()
 
 			var state int64
 			x, ok, err := Reduce(in, n, func(x, y int) (int, error) {
@@ -219,17 +223,19 @@ func TestReduce(t *testing.T) {
 					return 0, fmt.Errorf("err200")
 				}
 				return x + y, nil
-			}, opt)
+			}, scope)
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, x, 0)
 			th.ExpectValue(t, ok, false)
 			th.ExpectOpenChan(t, in)
+			th.ExpectActiveContext(t, ctx)
 
-			<-settled
+			scope.Wait()
 
 			th.ExpectNoRace(state)
 			th.ExpectDrainedChan(t, in)
+			th.ExpectCanceledContext(t, ctx)
 		})
 
 		th.RunSynctest(t, "concurrency", func(t *testing.T) {
@@ -561,10 +567,11 @@ func TestMapReduce(t *testing.T) {
 				})
 			})
 
-			th.RunSynctest(t, "settlement", func(t *testing.T) {
-				in := FromChan(th.FromRange(0, 200), nil)
+			th.RunSynctest(t, "context", func(t *testing.T) {
+				ctx, scope := WithContext(t.Context())
+				defer scope.Cancel()
 
-				settled, opt := Settlement()
+				in := FromChan(th.FromRange(0, 200), nil)
 
 				var stateMapper, stateReducer int64
 				out, err := MapReduce(in,
@@ -578,7 +585,7 @@ func TestMapReduce(t *testing.T) {
 						th.SimulateWork(10*time.Second, 20*time.Second)
 						return x + y, nil
 					},
-					opt,
+					scope,
 				)
 
 				th.ExpectNoError(t, err)
@@ -590,15 +597,19 @@ func TestMapReduce(t *testing.T) {
 				th.ExpectNoRace(stateMapper)
 				th.ExpectNoRace(stateReducer)
 				th.ExpectDrainedChan(t, in)
+				th.ExpectActiveContext(t, ctx)
 
-				<-settled // should not leak
+				scope.Wait()
+
+				th.ExpectCanceledContext(t, ctx)
 			})
 
-			th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+			th.RunSynctest(t, "context (early return)", func(t *testing.T) {
+				ctx, scope := WithContext(t.Context())
+				defer scope.Cancel()
+
 				in := FromChan(th.FromRange(0, 1000), nil)
 				in = th.DelayEach(in, 1)
-
-				settled, opt := Settlement()
 
 				var stateMapper, stateReducer int64
 				out, err := MapReduce(in,
@@ -615,18 +626,20 @@ func TestMapReduce(t *testing.T) {
 						}
 						return x + y, nil
 					},
-					opt,
+					scope,
 				)
 
 				th.ExpectError(t, err, "err200")
 				th.ExpectMap(t, out, nil)
 				th.ExpectOpenChan(t, in)
+				th.ExpectActiveContext(t, ctx)
 
-				<-settled
+				scope.Wait()
 
 				th.ExpectNoRace(stateMapper)
 				th.ExpectNoRace(stateReducer)
 				th.ExpectDrainedChan(t, in)
+				th.ExpectCanceledContext(t, ctx)
 			})
 
 			th.RunSynctest(t, "concurrency", func(t *testing.T) {
