@@ -52,20 +52,37 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 // handle them inside the loop.
 //
 // If the caller stops iteration early using break or return, ToSeq2 drains the
-// remaining input in the background, like blocking functions such as [ForEach].
-//
-// The returned iterator is single-use. If it is never ranged, the input is
-// never drained.
+// remaining input in the background to settle the pipeline.
 func ToSeq2[A any](in <-chan Try[A], options ...SinkOption) iter.Seq2[A, error] {
+	// Unlike other sinks, ToSeq2 opens the options at the call site: its work
+	// happens while the iterator is ranged, which can be arbitrarily far from
+	// here.
+	opts := collectSinkOptions(options)
+
+	// The options are opened once, so they must also be settled once.
 	var once sync.Once
 
 	return func(yield func(A, error) bool) {
-		defer once.Do(func() { Discard(in, options...) })
+		endReached := false
+
+		defer once.Do(func() {
+			if endReached {
+				opts.settle()
+				return
+			}
+
+			go func() {
+				Drain(in)
+				opts.settle()
+			}()
+		})
 
 		for x := range in {
 			if !yield(x.Value, x.Error) {
 				return
 			}
 		}
+
+		endReached = true
 	}
 }

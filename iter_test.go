@@ -101,11 +101,13 @@ func TestToSeq2(t *testing.T) {
 		})
 	})
 
-	th.RunSynctest(t, "settlement", func(t *testing.T) {
+	th.RunSynctest(t, "context", func(t *testing.T) {
+		ctx, scope := WithContext(t.Context())
+		defer scope.Cancel()
+
 		in := FromChan(th.FromRange(0, 10), nil)
 
-		settled, opt := Settlement()
-		out := ToSeq2(in, opt)
+		out := ToSeq2(in, scope)
 
 		var outSlice []int
 		for val := range out {
@@ -114,16 +116,21 @@ func TestToSeq2(t *testing.T) {
 
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
 		th.ExpectDrainedChan(t, in)
+		th.ExpectActiveContext(t, ctx)
 
-		<-settled // should not leak
+		scope.Wait()
+
+		th.ExpectCanceledContext(t, ctx)
 	})
 
-	th.RunSynctest(t, "settlement (early return)", func(t *testing.T) {
+	th.RunSynctest(t, "context (early return)", func(t *testing.T) {
+		ctx, scope := WithContext(t.Context())
+		defer scope.Cancel()
+
 		in := FromChan(th.FromRange(0, 10), nil)
 		in = th.DelayEach(in, 1)
 
-		settled, opt := Settlement()
-		out := ToSeq2(in, opt)
+		out := ToSeq2(in, scope)
 
 		var outSlice []int
 		for val := range out {
@@ -135,25 +142,41 @@ func TestToSeq2(t *testing.T) {
 
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
 		th.ExpectOpenChan(t, in)
+		th.ExpectActiveContext(t, ctx)
 
-		<-settled
+		scope.Wait()
 
+		th.ExpectDrainedChan(t, in)
+		th.ExpectCanceledContext(t, ctx)
+	})
+
+	th.RunSynctest(t, "context (double consumption)", func(t *testing.T) {
+		_, scope := WithContext(t.Context())
+		defer scope.Cancel()
+
+		in := FromChan(th.FromRange(0, 20), nil)
+
+		out := ToSeq2(in, scope)
+
+		for range out {
+		}
+		for range out {
+		}
+
+		scope.Wait()
 		th.ExpectDrainedChan(t, in)
 	})
 
-	th.RunSynctest(t, "settlement (double consumption does not panic)", func(t *testing.T) {
-		in := FromChan(th.FromRange(0, 20), nil)
+	t.Run("context (never ranged)", func(t *testing.T) {
+		th.ExpectBlock(t, func(t *testing.T) {
+			_, scope := WithContext(t.Context())
+			defer scope.Cancel()
 
-		settled, opt := Settlement()
-		out := ToSeq2(in, opt)
+			in := FromChan(th.FromRange(0, 20), nil)
+			_ = ToSeq2(in, scope) // ignore the iterator
 
-		for range out {
-		}
-		for range out {
-		}
-
-		<-settled // asserts that settlement is reported
-		th.ExpectDrainedChan(t, in)
+			scope.Wait() // this blocks forever
+		})
 	})
 }
 
