@@ -132,6 +132,23 @@ func TestScope(t *testing.T) {
 		})
 	})
 
+	t.Run("more settles than attaches", func(t *testing.T) {
+		_, s := WithContext(t.Context())
+
+		defer func() {
+			if recover() == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		impl, ok := s.(*scope)
+		if !ok {
+			t.Fatal("unexpected Scope implementation")
+		}
+
+		impl.release()
+	})
+
 	t.Run("cancel", func(t *testing.T) {
 		ctx, scope := WithContext(t.Context())
 		scope.Cancel()

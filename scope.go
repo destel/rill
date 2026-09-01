@@ -57,7 +57,12 @@ func (s *scope) apply(options *sinkOptions) {
 func (s *scope) release() {
 	s.mu.Lock()
 	s.cnt--
+	negative := s.cnt < 0
 	s.mu.Unlock()
+
+	if negative {
+		panic("rill: internal error: negative scope counter")
+	}
 
 	s.cond.Broadcast()
 }
