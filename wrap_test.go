@@ -111,7 +111,7 @@ func TestToSlice(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "context", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
@@ -129,7 +129,7 @@ func TestToSlice(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)

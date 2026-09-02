@@ -56,7 +56,7 @@ func TestPipelines(t *testing.T) {
 
 	// Find the first palindromic number greater than 123456.
 	th.RunSynctest(t, "context", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		// shared state, mutated with atomics by the stages

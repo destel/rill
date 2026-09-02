@@ -8,7 +8,7 @@ import (
 
 func TestSinkOption(t *testing.T) {
 	t.Run("nil options are ignored", func(t *testing.T) {
-		_, scope := WithContext(t.Context())
+		scope, _ := NewScope(t.Context())
 		defer scope.Cancel()
 
 		opts := collectSinkOptions([]SinkOption{nil, scope, nil})

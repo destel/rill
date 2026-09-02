@@ -102,7 +102,7 @@ func TestToSeq2(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "context", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		in := FromChan(th.FromRange(0, 10), nil)
@@ -124,7 +124,7 @@ func TestToSeq2(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		in := FromChan(th.FromRange(0, 10), nil)
@@ -151,7 +151,7 @@ func TestToSeq2(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "context (double consumption)", func(t *testing.T) {
-		_, scope := WithContext(t.Context())
+		scope, _ := NewScope(t.Context())
 		defer scope.Cancel()
 
 		in := FromChan(th.FromRange(0, 20), nil)
@@ -169,7 +169,7 @@ func TestToSeq2(t *testing.T) {
 
 	t.Run("context (never ranged)", func(t *testing.T) {
 		th.ExpectBlock(t, func(t *testing.T) {
-			_, scope := WithContext(t.Context())
+			scope, _ := NewScope(t.Context())
 			defer scope.Cancel()
 
 			in := FromChan(th.FromRange(0, 20), nil)

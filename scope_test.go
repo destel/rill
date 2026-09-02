@@ -11,7 +11,7 @@ import (
 
 func TestScope(t *testing.T) {
 	th.RunSynctest(t, "one branch discarded", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		var state int64
@@ -49,7 +49,7 @@ func TestScope(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "two sinks", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		var state int64
@@ -104,7 +104,7 @@ func TestScope(t *testing.T) {
 				}
 			}
 
-			_, scope := WithContext(t.Context())
+			scope, _ := NewScope(t.Context())
 			defer scope.Cancel()
 
 			in := FromChan(th.FromRange(0, 100), nil)
@@ -133,7 +133,7 @@ func TestScope(t *testing.T) {
 	})
 
 	t.Run("more settles than attaches", func(t *testing.T) {
-		_, s := WithContext(t.Context())
+		s, _ := NewScope(t.Context())
 
 		defer func() {
 			if recover() == nil {
@@ -150,14 +150,14 @@ func TestScope(t *testing.T) {
 	})
 
 	t.Run("cancel", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		scope.Cancel()
 
 		th.ExpectCanceledContext(t, ctx)
 	})
 
 	th.RunSynctest(t, "multiple waiters", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		in := FromChan(th.FromRange(0, 100), nil)

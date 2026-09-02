@@ -24,7 +24,7 @@ import (
 // Both operations are performed concurrently.
 // [ForEach] returns on the first error, and context cancellation via defer stops all remaining fetches.
 func Example() {
-	ctx, scope := rill.WithContext(context.Background())
+	scope, ctx := rill.NewScope(context.Background())
 	defer scope.Cancel()
 
 	// Convert a slice of user IDs into a stream
@@ -62,7 +62,7 @@ func Example() {
 // and updates their status to active and saves them back.
 // Users are fetched concurrently and in batches to reduce the number of API calls.
 func Example_batching() {
-	ctx, scope := rill.WithContext(context.Background())
+	scope, ctx := rill.NewScope(context.Background())
 	defer scope.Cancel()
 
 	// Convert a slice of user IDs into a stream
@@ -172,7 +172,7 @@ func updateUserTimestampWorker() {
 // [First] returns on the first match, this triggers the context cancellation via defer,
 // stopping URL generation and file downloads.
 func Example_orderingAndContext() {
-	ctx, scope := rill.WithContext(context.Background())
+	scope, ctx := rill.NewScope(context.Background())
 	defer scope.Cancel() // cancel all the remaining requests after the first match or error
 
 	// The string to search for in the downloaded files
@@ -219,7 +219,7 @@ func Example_orderingAndContext() {
 // This example demonstrates using [FlatMap] to fetch users from multiple departments concurrently.
 // Additionally, it demonstrates how to write a reusable streaming wrapper over paginated API calls - the StreamUsers function
 func Example_flatMap() {
-	ctx, scope := rill.WithContext(context.Background())
+	scope, ctx := rill.NewScope(context.Background())
 	defer scope.Cancel()
 
 	// Start with a stream of department names
@@ -282,7 +282,7 @@ func Example_context() {
 
 // CheckAllUsersExist uses several concurrent workers to check if all users with given IDs exist.
 func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
-	ctx, scope := rill.WithContext(ctx)
+	scope, ctx := rill.NewScope(ctx)
 	defer scope.Cancel() // cancel the remaining requests after the first error
 
 	// Convert the slice into a stream
@@ -817,8 +817,8 @@ func ExampleToSeq2() {
 // [ForEach] returns as soon as the error is known, while the source and the remaining
 // workers are still going. [Scope.Wait] cancels the scope's Context and blocks
 // until all of them have stopped.
-func ExampleWithContext() {
-	ctx, scope := rill.WithContext(context.Background())
+func ExampleNewScope() {
+	scope, ctx := rill.NewScope(context.Background())
 	defer scope.Cancel() // extra cancel to make sure the context doesn't leak
 
 	// Use Generate instead of FromSlice to make the source context-aware

@@ -24,7 +24,7 @@ func TestDiscard(t *testing.T) {
 
 	t.Run("nil w context", func(t *testing.T) {
 		th.ExpectBlock(t, func(t *testing.T) {
-			_, scope := WithContext(t.Context())
+			scope, _ := NewScope(t.Context())
 			defer scope.Cancel()
 
 			Discard[int](nil, scope)
@@ -45,7 +45,7 @@ func TestDiscard(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "normal w context", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		in := th.FromRange(0, 100)
@@ -68,9 +68,9 @@ func TestDiscard(t *testing.T) {
 		in := th.FromRange(0, 100)
 		in = th.DelayEach(in, 1*time.Second)
 
-		ctx1, scope1 := WithContext(t.Context())
+		scope1, ctx1 := NewScope(t.Context())
 		defer scope1.Cancel()
-		ctx2, scope2 := WithContext(t.Context())
+		scope2, ctx2 := NewScope(t.Context())
 		defer scope2.Cancel()
 
 		Discard(in, scope1, scope2) // doesn't block
@@ -96,7 +96,7 @@ func TestDiscard(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "closed w context", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		in := make(chan int)

@@ -61,7 +61,7 @@ func TestErr(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "context", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		in := FromChan(th.FromRange(0, 20), nil)
@@ -78,7 +78,7 @@ func TestErr(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		in := FromChan(th.FromRange(0, 20), nil)
@@ -176,7 +176,7 @@ func TestFirst(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "context", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		in := FromSlice([]int{}, nil)
@@ -195,7 +195,7 @@ func TestFirst(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-		ctx, scope := WithContext(t.Context())
+		scope, ctx := NewScope(t.Context())
 		defer scope.Cancel()
 
 		in := FromChan(th.FromRange(0, 20), nil)
@@ -301,7 +301,7 @@ func TestForEach(t *testing.T) {
 		})
 
 		th.RunSynctest(t, "context", func(t *testing.T) {
-			ctx, scope := WithContext(t.Context())
+			scope, ctx := NewScope(t.Context())
 			defer scope.Cancel()
 
 			in := FromChan(th.FromRange(0, 20), nil)
@@ -325,7 +325,7 @@ func TestForEach(t *testing.T) {
 		})
 
 		th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-			ctx, scope := WithContext(t.Context())
+			scope, ctx := NewScope(t.Context())
 			defer scope.Cancel()
 
 			in := FromChan(th.FromRange(0, 1000), nil)
@@ -460,7 +460,7 @@ func TestAny(t *testing.T) {
 		})
 
 		th.RunSynctest(t, "context", func(t *testing.T) {
-			ctx, scope := WithContext(t.Context())
+			scope, ctx := NewScope(t.Context())
 			defer scope.Cancel()
 
 			in := FromChan(th.FromRange(0, 100), nil)
@@ -481,7 +481,7 @@ func TestAny(t *testing.T) {
 		})
 
 		th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-			ctx, scope := WithContext(t.Context())
+			scope, ctx := NewScope(t.Context())
 			defer scope.Cancel()
 
 			in := FromChan(th.FromRange(0, 1000), nil)
@@ -601,7 +601,7 @@ func TestAll(t *testing.T) {
 		})
 
 		th.RunSynctest(t, "context", func(t *testing.T) {
-			ctx, scope := WithContext(t.Context())
+			scope, ctx := NewScope(t.Context())
 			defer scope.Cancel()
 
 			in := FromChan(th.FromRange(0, 100), nil)
@@ -622,7 +622,7 @@ func TestAll(t *testing.T) {
 		})
 
 		th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-			ctx, scope := WithContext(t.Context())
+			scope, ctx := NewScope(t.Context())
 			defer scope.Cancel()
 
 			in := FromChan(th.FromRange(0, 1000), nil)

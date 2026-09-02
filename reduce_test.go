@@ -185,7 +185,7 @@ func TestReduce(t *testing.T) {
 		})
 
 		th.RunSynctest(t, "context", func(t *testing.T) {
-			ctx, scope := WithContext(t.Context())
+			scope, ctx := NewScope(t.Context())
 			defer scope.Cancel()
 
 			in := FromChan(th.FromRange(0, 100), nil)
@@ -210,7 +210,7 @@ func TestReduce(t *testing.T) {
 		})
 
 		th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-			ctx, scope := WithContext(t.Context())
+			scope, ctx := NewScope(t.Context())
 			defer scope.Cancel()
 
 			in := FromChan(th.FromRange(0, 1000), nil)
@@ -568,7 +568,7 @@ func TestMapReduce(t *testing.T) {
 			})
 
 			th.RunSynctest(t, "context", func(t *testing.T) {
-				ctx, scope := WithContext(t.Context())
+				scope, ctx := NewScope(t.Context())
 				defer scope.Cancel()
 
 				in := FromChan(th.FromRange(0, 200), nil)
@@ -605,7 +605,7 @@ func TestMapReduce(t *testing.T) {
 			})
 
 			th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-				ctx, scope := WithContext(t.Context())
+				scope, ctx := NewScope(t.Context())
 				defer scope.Cancel()
 
 				in := FromChan(th.FromRange(0, 1000), nil)

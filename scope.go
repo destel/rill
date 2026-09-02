@@ -83,16 +83,16 @@ func (s *scope) Wait() {
 	}
 }
 
-// WithContext creates a new [Scope] and an associated Context derived from ctx.
+// NewScope creates a new [Scope] and an associated Context derived from ctx.
 //
 // The Context is canceled by [Scope.Cancel] or [Scope.Wait]. At least one
 // of them must be called, typically via defer, to prevent the Context from
 // leaking.
-func WithContext(ctx context.Context) (context.Context, Scope) {
+func NewScope(ctx context.Context) (Scope, context.Context) {
 	ctx, cancel := context.WithCancel(ctx)
 
 	s := &scope{cancelFunc: cancel}
 	s.cond.L = &s.mu
 
-	return ctx, s
+	return s, ctx
 }
