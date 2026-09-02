@@ -21,9 +21,9 @@ type Scope interface {
 	// to finish.
 	Cancel()
 
-	// Wait is called after the sink has returned. It cancels the scope's
-	// Context and blocks until the pipeline has settled: every user callback
-	// has returned and any other remaining work is finished.
+	// Wait cancels the scope's Context and blocks until the pipeline has
+	// settled: every user callback has returned and any other remaining
+	// work is finished.
 	//
 	// Wait can be called any number of times and from multiple goroutines,
 	// but only after every sink attached to the scope has returned.
