@@ -51,8 +51,9 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 // Errors are yielded as ordinary pairs and do not stop the iteration;
 // handle them inside the loop.
 //
-// If the caller stops iteration early using break or return, ToSeq2 drains the
-// remaining input in the background to settle the pipeline.
+// The returned iterator is single-use. If the caller stops iteration early
+// using break or return, ToSeq2 drains the remaining input in the background
+// to settle the pipeline.
 func ToSeq2[A any](in <-chan Try[A], options ...SinkOption) iter.Seq2[A, error] {
 	// Unlike other sinks, ToSeq2 opens the options at the call site: its work
 	// happens while the iterator is ranged, which can be arbitrarily far from
