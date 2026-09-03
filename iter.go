@@ -57,11 +57,9 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 // stream is exhausted or the loop exits with break or return. Error
 // items do not stop the iteration: they are yielded as ordinary pairs.
 //
-// On an early exit, ToSeq2 discards the rest of the stream in the
-// background, the same way sinks do.
-//
 // The returned iterator is single-use and must be ranged for the
-// pipeline to settle. If it is never ranged, the input is never drained.
+// pipeline to settle. If the loop exits early with break or return,
+// ToSeq2 drains the input in the background before reporting settlement.
 func ToSeq2[A any](in <-chan Try[A], options ...SinkOption) iter.Seq2[A, error] {
 	// Unlike other sinks, ToSeq2 opens the options at the call site: its work
 	// happens while the iterator is ranged, which can be arbitrarily far from
