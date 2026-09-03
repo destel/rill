@@ -171,9 +171,9 @@ func updateUserTimestampWorker() {
 // while downloading and holding in memory at most 5 files at the same time.
 // [First] returns on the first match, this triggers the context cancellation via defer,
 // stopping URL generation and file downloads.
-func Example_ordering() {
+func Example_orderingAndContext() {
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer cancel() // cancel all the remaining requests after the first match or error
 
 	// The string to search for in the downloaded files
 	needle := []byte("26")
@@ -282,20 +282,12 @@ func Example_context() {
 
 // CheckAllUsersExist uses several concurrent workers to check if all users with given IDs exist.
 func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
-	// Create new context that will be canceled when this function returns
 	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	defer cancel() // cancel the remaining requests after the first error
 
 	// Convert the slice into a stream
-	// Use Generate instead of FromSlice to make the first stage context-aware
-	idsStream := rill.Generate(func(send func(int), sendError func(error)) {
-		for _, id := range ids {
-			if ctx.Err() != nil {
-				return
-			}
-			send(id)
-		}
-	})
+	// (alternatively, use Generate instead of FromSlice to make the source context-aware)
+	idsStream := rill.FromSlice(ids, nil)
 
 	// Fetch users concurrently.
 	users := rill.Map(idsStream, concurrency, func(id int) (*mockapi.User, error) {
@@ -308,7 +300,7 @@ func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 		return u, nil
 	})
 
-	// Return the first error (if any) and cancel remaining fetches via context
+	// Return the first error (if any)
 	return rill.Err(users)
 }
 
@@ -692,55 +684,6 @@ func ExampleReduce() {
 	fmt.Println("Error:", err)
 }
 
-// This example demonstrates how to wait until the pipeline has no callbacks left to run.
-// [ForEach] returns as soon as the error is known, while the source and the remaining
-// workers are still going. Settlement reports when all of them have stopped.
-func ExampleSettlement() {
-	// Canceling this context stops the source and all in-flight work
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Use Generate instead of FromSlice to make the source context-aware
-	// and infinite
-	ids := rill.Generate(func(send func(int), sendError func(error)) {
-		for i := 1; ctx.Err() == nil; i++ {
-			send(i)
-		}
-	})
-
-	// Callbacks write here, so it's unsafe to touch while any of them is still running
-	var mu sync.Mutex
-	var seen []int
-
-	settled, opt := rill.Settlement()
-
-	// Process ids until one of them turns out to be bad
-	// Concurrency = 3
-	err := rill.ForEach(ids, 3, func(id int) error {
-		simulateWork(500 * time.Millisecond)
-
-		mu.Lock()
-		seen = append(seen, id)
-		mu.Unlock()
-
-		fmt.Println("Seen:", id)
-
-		if id == 15 {
-			return fmt.Errorf("bad id (%d)", id)
-		}
-
-		return nil
-	}, opt)
-	fmt.Println("* Returned:", err)
-
-	cancel()  // stop the source and the callbacks that are still running
-	<-settled // wait until none of them can touch seen anymore
-	fmt.Println("* Settled")
-
-	// No callback can be running now, so this needs no mutex
-	fmt.Println("Total seen:", len(seen))
-}
-
 func ExampleTee() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
@@ -868,6 +811,59 @@ func ExampleToSeq2() {
 		}
 		fmt.Printf("%+v\n", val)
 	}
+}
+
+// This example demonstrates how to wait until the pipeline has no callbacks left to run.
+// [ForEach] returns as soon as the error is known, while the source and the remaining
+// workers are still going. [Scope.Wait] cancels the scope's Context and blocks
+// until all of them have stopped.
+func ExampleNewScope() {
+	scope, ctx := rill.NewScope(context.Background())
+	defer scope.Cancel() // extra cancel to make sure the context doesn't leak
+
+	// Use Generate instead of FromSlice to make the source context-aware
+	// and infinite
+	ids := rill.Generate(func(send func(int), sendError func(error)) {
+		for i := 1; ctx.Err() == nil; i++ {
+			send(i)
+		}
+	})
+
+	// Callbacks write here, so it's unsafe to touch while any of them is still running
+	var mu sync.Mutex
+	var seen []int
+
+	// Process ids until one of them turns out to be bad.
+	// Callbacks have a side effect: they write to the `seen` slice.
+	// Concurrency = 3
+	err := rill.ForEach(ids, 3, func(id int) error {
+		simulateWork(500 * time.Millisecond)
+
+		mu.Lock()
+		seen = append(seen, id)
+		mu.Unlock()
+
+		fmt.Println("Seen:", id)
+
+		if id == 15 {
+			return fmt.Errorf("bad id (%d)", id)
+		}
+
+		return nil
+	}, scope)
+	fmt.Println("* Returned:", err)
+
+	// Wait until the pipeline is settled:
+	// source is stopped and all remaining callbacks are finished.
+	//
+	// If we don't need to access side effects created by the pipeline,
+	// we can just return here and let `defer scope.Cancel()` handle the cleanup.
+	scope.Wait()
+	fmt.Println("* Settled")
+
+	// No callback can be running now, the `seen` slice is now
+	// stable and safe-to-read w/o the mutex.
+	fmt.Println("Total seen:", len(seen))
 }
 
 // --- Helpers ---

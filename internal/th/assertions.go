@@ -3,6 +3,7 @@ package th
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -118,13 +119,27 @@ func ExpectDrainedChan[A any](t *testing.T, ch <-chan A) {
 	}
 }
 
-// ExpectOpenChan consumes one item from the channel and asserts that the
-// channel was open. It blocks until an item arrives or the channel is closed.
+// ExpectOpenChan checks that the channel emits another item rather than closing.
+// The operation is destructive and blocks until either an item arrives or the channel is closed.
 func ExpectOpenChan[A any](t *testing.T, ch <-chan A) {
 	t.Helper()
 	_, isOpen := <-ch
 	if !isOpen {
 		t.Errorf("expected channel to be open, but it's closed")
+	}
+}
+
+func ExpectCanceledContext(t *testing.T, ctx context.Context) {
+	t.Helper()
+	if err := ctx.Err(); err == nil {
+		t.Errorf("expected context to be canceled")
+	}
+}
+
+func ExpectActiveContext(t *testing.T, ctx context.Context) {
+	t.Helper()
+	if err := ctx.Err(); err != nil {
+		t.Errorf("expected context to be active, but it's canceled")
 	}
 }
 

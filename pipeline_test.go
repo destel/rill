@@ -1,7 +1,6 @@
 package rill
 
 import (
-	"context"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -56,9 +55,9 @@ func TestPipelines(t *testing.T) {
 	})
 
 	// Find the first palindromic number greater than 123456.
-	th.RunSynctest(t, "settlement", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+	th.RunSynctest(t, "context", func(t *testing.T) {
+		scope, ctx := NewScope(t.Context())
+		defer scope.Cancel()
 
 		// shared state, mutated with atomics by the stages
 		var totalCalls int64
@@ -80,17 +79,13 @@ func TestPipelines(t *testing.T) {
 			return isPalindrome(x), nil
 		})
 
-		settled, opt := Settlement()
-		res, _, err := First(palindromes, opt)
-
-		// stop the source from generating more numbers
-		cancel()
+		res, _, err := First(palindromes, scope)
 
 		th.ExpectNoError(t, err)
 		th.ExpectValue(t, res, "124421")
 
-		// wait for the pipeline to settle (no more callbacks)
-		<-settled
+		// stop the source and wait for the pipeline to settle (no more callbacks)
+		scope.Wait()
 
 		// shared state is now safe to read without atomics
 		th.ExpectNoRace(totalCalls)
