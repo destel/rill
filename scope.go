@@ -27,7 +27,7 @@ type Scope interface {
 	//
 	// Wait can be called any number of times and from multiple goroutines,
 	// but only after every sink attached to the scope has returned.
-	// Attaching a new sink to the scope after Wait has been called panics.
+	// Once Wait has been called, attaching a new sink to the scope panics.
 	Wait()
 }
 
