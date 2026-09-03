@@ -24,8 +24,8 @@ import (
 // Both operations are performed concurrently.
 // [ForEach] returns on the first error, and context cancellation via defer stops all remaining fetches.
 func Example() {
-	scope, ctx := rill.NewScope(context.Background())
-	defer scope.Cancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Convert a slice of user IDs into a stream
 	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
@@ -62,8 +62,8 @@ func Example() {
 // and updates their status to active and saves them back.
 // Users are fetched concurrently and in batches to reduce the number of API calls.
 func Example_batching() {
-	scope, ctx := rill.NewScope(context.Background())
-	defer scope.Cancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Convert a slice of user IDs into a stream
 	ids := rill.FromSlice([]int{
@@ -172,8 +172,8 @@ func updateUserTimestampWorker() {
 // [First] returns on the first match, this triggers the context cancellation via defer,
 // stopping URL generation and file downloads.
 func Example_orderingAndContext() {
-	scope, ctx := rill.NewScope(context.Background())
-	defer scope.Cancel() // cancel all the remaining requests after the first match or error
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // cancel all the remaining requests after the first match or error
 
 	// The string to search for in the downloaded files
 	needle := []byte("26")
@@ -219,8 +219,8 @@ func Example_orderingAndContext() {
 // This example demonstrates using [FlatMap] to fetch users from multiple departments concurrently.
 // Additionally, it demonstrates how to write a reusable streaming wrapper over paginated API calls - the StreamUsers function
 func Example_flatMap() {
-	scope, ctx := rill.NewScope(context.Background())
-	defer scope.Cancel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Start with a stream of department names
 	departments := rill.FromSlice([]string{"IT", "Finance", "Marketing", "Support", "Engineering"}, nil)
@@ -282,8 +282,8 @@ func Example_context() {
 
 // CheckAllUsersExist uses several concurrent workers to check if all users with given IDs exist.
 func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
-	scope, ctx := rill.NewScope(ctx)
-	defer scope.Cancel() // cancel the remaining requests after the first error
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel() // cancel the remaining requests after the first error
 
 	// Convert the slice into a stream
 	// (alternatively, use Generate instead of FromSlice to make the source context-aware)
