@@ -8,11 +8,11 @@ import (
 // type B, using f to transform each. When f returns an error, it's written
 // to the output instead of a value.
 //
-// The argument n bounds the number of concurrent calls to f. Results are
-// written to the output as they become ready, so their order can differ
-// from the input order when n > 1. Use [OrderedMap] to preserve the order.
+// The argument n bounds the number of concurrent calls to f.
+// Results and errors are written to the output in completion order.
+// Use [OrderedMap] to preserve the input order.
 //
-// See the package documentation for the behaviors that all stages share.
+// See the [rill] package documentation for the full contract shared by all stages.
 func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -31,8 +31,8 @@ func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] 
 	})
 }
 
-// OrderedMap is the ordered version of [Map]: the output preserves the
-// input order, for values and errors alike.
+// OrderedMap is the ordered version of [Map]:
+// it writes results and errors in input order rather than completion order.
 func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -54,13 +54,13 @@ func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan 
 // Filter takes a stream of values and returns a new stream, keeping
 // only the values that match the condition f. When f returns an error,
 // it's written to the output instead of the value.
+// Errors are never filtered out.
 //
-// The argument n bounds the number of concurrent calls to f. Results are
-// written to the output as they become ready, so their order can differ
-// from the input order when n > 1. Use [OrderedFilter] to preserve the
-// order.
+// The argument n bounds the number of concurrent calls to f.
+// Results and errors are written to the output in completion order.
+// Use [OrderedFilter] to preserve the input order.
 //
-// See the package documentation for the behaviors that all stages share.
+// See the [rill] package documentation for the full contract shared by all stages.
 func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -79,8 +79,8 @@ func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[
 	})
 }
 
-// OrderedFilter is the ordered version of [Filter]: the output preserves
-// the input order, for values and errors alike.
+// OrderedFilter is the ordered version of [Filter]:
+// it writes results and errors in input order rather than completion order.
 func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -102,14 +102,13 @@ func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-ch
 // FilterMap takes a stream of values of type A and returns a stream of
 // values of type B, using f to transform each value and decide whether
 // to keep the result. When f returns an error, it's written to the
-// output instead of a value.
+// output instead of a value. Errors are never filtered out.
 //
-// The argument n bounds the number of concurrent calls to f. Results are
-// written to the output as they become ready, so their order can differ
-// from the input order when n > 1. Use [OrderedFilterMap] to preserve
-// the order.
+// The argument n bounds the number of concurrent calls to f.
+// Results and errors are written to the output in completion order.
+// Use [OrderedFilterMap] to preserve the input order.
 //
-// See the package documentation for the behaviors that all stages share.
+// See the [rill] package documentation for the full contract shared by all stages.
 func FilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -128,8 +127,8 @@ func FilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-
 	})
 }
 
-// OrderedFilterMap is the ordered version of [FilterMap]: the output
-// preserves the input order, for values and errors alike.
+// OrderedFilterMap is the ordered version of [FilterMap]:
+// it writes results and errors in input order rather than completion order.
 func OrderedFilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -159,7 +158,7 @@ func OrderedFilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, err
 // output. Use [OrderedFlatMap] to concatenate the sub-streams in the
 // input order.
 //
-// See the package documentation for the behaviors that all stages share.
+// See the [rill] package documentation for the full contract shared by all stages.
 func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -220,8 +219,6 @@ func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan 
 // The two examples do the same thing: they buffer the lines, with or
 // without a bound. Without any buffering, the downloads would run one
 // at a time, and the stage would turn sequential.
-//
-// See the package documentation for the behaviors that all stages share.
 func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -254,12 +251,11 @@ func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) 
 // to drop it from the stream, the same error to keep it, or a different
 // one to replace it. Values never reach f and are passed through as-is.
 //
-// The argument n bounds the number of concurrent calls to f. Items are
-// written to the output as they become ready, so their order can differ
-// from the input order when n > 1. Use [OrderedCatch] to preserve the
-// order.
+// The argument n bounds the number of concurrent calls to f.
+// Items are written to the output in completion order.
+// Use [OrderedCatch] to preserve the input order.
 //
-// See the package documentation for the behaviors that all stages share.
+// See the [rill] package documentation for the full contract shared by all stages.
 func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -278,8 +274,8 @@ func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	})
 }
 
-// OrderedCatch is the ordered version of [Catch]: the output preserves
-// the input order, for values and errors alike.
+// OrderedCatch is the ordered version of [Catch]:
+// it writes items in input order rather than completion order.
 func OrderedCatch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)

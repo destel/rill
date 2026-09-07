@@ -82,7 +82,7 @@ func FromSlice[A any](slice []A, err error) <-chan Try[A] {
 // partial slice. Otherwise, it consumes the stream to the end and
 // returns a slice of all values.
 //
-// See the package documentation for the behaviors that all sinks share.
+// See the [rill] package documentation for the full contract shared by all sinks.
 func ToSlice[A any](in <-chan Try[A], options ...SinkOption) ([]A, error) {
 	defer Discard(in, options...)
 

@@ -25,7 +25,7 @@ import (
 //
 // The argument n bounds the number of concurrent calls to f.
 //
-// See the package documentation for the behaviors that all sinks share.
+// See the [rill] package documentation for the full contract shared by all sinks.
 func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error), options ...SinkOption) (result A, hasResult bool, err error) {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -265,7 +265,7 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error), options ...
 // The arguments nm and nr bound the number of concurrent calls to
 // mapper and reducer, respectively.
 //
-// See the package documentation for the behaviors that all sinks share.
+// See the [rill] package documentation for the full contract shared by all sinks.
 func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error), options ...SinkOption) (map[K]V, error) {
 	validateN(nm)
 	validateNilFunc(mapper == nil)

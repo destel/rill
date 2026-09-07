@@ -66,20 +66,19 @@
 //
 // # Ordered stages
 //
-// By default, results and errors are written to the output stream as soon
-// as they are ready, so their order depends on how the Go runtime schedules
-// the goroutines in the stage's worker pool, and how much time each individual
-// item takes to process.
+// By default, results and errors are written to the output as soon as they
+// are ready, in completion order. That order depends on how the Go runtime
+// schedules the goroutines in the stage's worker pool, and on how much time
+// each individual item takes to process.
 //
-// This is the normal behavior of a worker pool. For cases where
-// the order of outputs matters, rill provides ordered functions,
+// For cases where the input order must be preserved, rill provides ordered functions,
 // such as [OrderedMap] or [OrderedFilter]. They stay concurrent,
 // but each worker holds its result until all earlier results are sent,
 // so the output order matches the input order at the cost
 // of some latency. This ordering guarantee holds for both values and errors.
 //
-// Some stages, such as [Batch] or [Unbatch], process items sequentially and
-// are naturally ordered.
+// Some stages, such as [Batch] or [Unbatch], process items sequentially, so
+// they are naturally ordered.
 //
 // # Error handling
 //
