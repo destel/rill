@@ -11,13 +11,13 @@
 // # Streams
 //
 // In this package, a stream is a plain channel that carries both values and errors.
-// Each strream item is an instance of a [Try] struct that represents either a value or an error.
+// Each stream item is an instance of a [Try] struct that represents either a value or an error.
 // This is Go's (value, error) return convention, carried over to channels.
 //
 // # Stages, composition and pipelines
 //
-// Most functions in this package, such as [Map] or [Filter], take a
-// stream as input and return a new stream as output. These functions are called stages and they:
+// Many functions in this package take a stream as input and return a new stream as output.
+// [Map], [Filter], and other such functions are called stages. They:
 //
 //   - do not block, and return the output stream immediately
 //   - process input values as they arrive
@@ -26,9 +26,9 @@
 //   - write processing errors to the output as they occur
 //   - close the output stream after the input is fully consumed and processed
 //
-// Such functions, along with sources and sinks described below, are generic and can
+// Stages (along with sources and sinks described below) are generic and can
 // be used either standalone or composed into multi-stage pipelines,
-// where the output of one stage is the input to the next.
+// where the output of one function becomes the input to the next.
 //
 //	ids := rill.FromSlice(userIDs)
 //	filtered := rill.Filter(input, ...)
@@ -45,12 +45,11 @@
 //
 // # Sinks
 //
-// A sink is function that takes a stream as input, but returns
-// a a regular Go value and/or an error. Sinks, such as [ForEach]
-// or [MapReduce], are usually the final stage of a pipeline.
+// Every pipeline ends with a function called a sink. Sinks, such as [ForEach] or [MapReduce],
+// take a stream as input but return a regular Go value and/or an error. Such functions:
 //
 //   - block, until the final outcome (successful or not) is known
-//   - return early (before the input is fully consumed) on the first observed error, regardless of where it came from - upstream or the sink iteself
+//   - return early (before the input is fully consumed) on the first observed error, regardless of where it came from - upstream or the sink itself
 //   - can return early because of the sink's internal logic, for example [Any] returns as soon as it finds a match
 //   - on early return keep consuming and discarding the remaining input items (including
 //     late errors) in the background, so upstream stages do not block and leak their goroutines
