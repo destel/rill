@@ -195,6 +195,8 @@
 // pipeline blocks the previous stage, and it in turn blocks the stage before that,
 // and so on, until the slow stage catches up.
 //
+// When this is not desirable, use [Buffer] to add slack between stages.
+//
 // # Nil handling
 //
 // Nil channels are valid in Go. They never emit values and are never closed.
