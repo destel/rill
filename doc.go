@@ -30,8 +30,8 @@
 // be used either standalone or composed into multi-stage pipelines,
 // where the output of one function becomes the input to the next.
 //
-//	ids := rill.FromSlice(userIDs)
-//	filtered := rill.Filter(input, ...)
+//	ids := rill.FromSlice(userIDs, nil)
+//	filtered := rill.Filter(ids, ...)
 //	batches := rill.Batch(filtered, ...)
 //	err := rill.ForEach(batches, ...)
 //
