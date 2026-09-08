@@ -97,39 +97,44 @@
 //		return fmt.Errorf("%w: %w", errSource, err)
 //	})
 //
-// # Context, cancellation and pipeline lifecycle
+// # Pipeline lifecycle
 //
-// Rill's lifecycle and cancellation model follows from two design decisions:
+// Rill's lifecycle model follows from two design decisions:
 //
-//   - don't become a framework: pipelines are not first class objects, but
+//   - don't become a framework: pipelines are not first-class objects, but
 //     compositions of simpler functions that know nothing about each other
 //   - streams are plain channels: data and errors can only travel downstream
 //
-// Together these force background draining: nothing travels upstream, so a sink
-// that returns early cannot stop the stages feeding it, and abandoning them
-// would block their sends forever.
+// Together these force three things. A sink cannot stop or cancel the stages
+// feeding it, only the caller can. A sink must pass control back to the caller
+// as soon as the outcome is known, which can happen before the input
+// is fully consumed. A sink must then drain the remaining input in the background, so
+// upstream stages don't block forever and their callbacks can observe cancellation.
 //
-// A pipeline goes through the following lifecycle phases:
+// A pipeline goes through three phases on its own. The caller can add two
+// optional steps:
 //
-//   - active: processing is in progress, sink is blocked
-//   - result known: sink returned result to the caller; upstream stages might still be working, but sink drains and discards their results in the background
-//   - cancelled: caller can optionally cancel a context to stop the source from producing more work and stages from doing it
-//   - settled: all work is done, all user callbacks across the pipeline have returned
+//   - active: processing is in progress, the sink is blocked
+//   - result known: the sink has returned; upstream stages may
+//     still be working, but the sink drains and discards their results in
+//     the background
+//   - cancelled (optional): the caller cancels a context; the source
+//     stops producing new work, and the stages stop doing it
+//   - settled: no work remains; every user callback across the pipeline has
+//     returned
+//   - joined (optional): the caller has waited for settlement, and can now
+//     do what would otherwise conflict with callbacks in flight: release
+//     resources they used or read state they wrote
 //
-// If you do not need to wait for settlement, the cancellation model often
-// collapses to nothing. Heavy network and database calls are context-aware
-// by design; the sink immediately returns the first observed error to the caller;
-// the caller passes that error up the stack until something handles it and
-// cancels the context. That stops the remaining network calls, and the
-// pipeline settles on its own in the background.
+// In computation-only pipelines where nothing ever fails or short-circuits,
+// the pipeline is already settled by the time the sink returns.
 //
-// When the caller must wait for settlement, use a [Scope]. It has an
-// errgroup-like shape, applied to pipelines: [NewScope] derives a context,
-// and [Scope.Wait] cancels it and blocks until the pipeline has settled.
-// Cancellation is cooperative: rill cancels the context, and callbacks that
-// captured it stop the heavy work currently in progress. [Scope.Wait]
-// returns even when the source is infinite, as long as the source watches
-// the context too.
+// To wait for settlement in pipelines that can return early (because of an
+// error or any other reason), rill provides the [Scope] API that has a
+// shape similar to errgroup. This API derives a context, manages its cancellation,
+// and allows the caller to wait for settlement. And the same way as in errgroup,
+// the already-submitted work can't be withdrawn, only cooperatively cancelled:
+// heavy user callbacks must capture the derived context and respect its cancellation.
 //
 //	scope, ctx := rill.NewScope(ctx)
 //	defer scope.Cancel()
@@ -142,29 +147,26 @@
 //
 //	// result known
 //
-//	scope.Wait() // cancel and wait for settlement
+//	scope.Wait() // cancel context and wait for settlement
 //
-// Scope API can also be used for cancellation only, without calling [Scope.Wait] and waiting for settlement.
-// In this case it becomes equivalent to [context.WithCancel].
+//	// joined
 //
-// When the sink consumes its input to the end - no errors across the pipeline,
-// no short-circuit - the pipeline is already settled by the time the sink
-// returns. This property makes both [Scope] and the context redundant for computation-only pipelines that can never fail.
+// When joining is not needed, it's possible to use [Scope]
+// in cancellation-only mode, or just use a regular [context.WithCancel].
+// Even that might not be necessary if the call site already has a cancellable context
+// (which is often the case when heavy network calls are involved), so all context
+// plumbing goes away:
 //
-// In one special case the cost of not cancelling is bounded: a pipeline where
-// all the heavy work lives in the sink's callback. Once the sink returns and
-// switches to background draining, it quickly stops calling its own callback.
-// This is not settlement - O(concurrency) calls may still happen, but that
-// number does not depend on the remaining input size.
+//	// source and other pipeline stages go here
 //
-//	ids := rill.FromSlice(userIDs, nil)
-//	exists, err := rill.Any(ids, 5, func(id int) (bool, error) {
-//		user, err := getUser(ctx, id)
-//		if err != nil {
-//			return false, err
-//		}
-//		return user.Age > 35, nil
+//	err := rill.ForEach(stream, 5, func(x int) error {
+//		return process(ctx, x)
 //	})
+//
+//	if err != nil {
+//		// just return, the context will be cancelled up in the call stack
+//		return err
+//	}
 //
 // # Extending rill
 //
