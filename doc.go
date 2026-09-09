@@ -27,42 +27,43 @@
 // are called the source and the sink, respectively.
 //
 //	ids := rill.FromSlice(userIDs, nil)      // source
-//	filtered := rill.Filter(ids, 5, ...)     // stage, 5 goroutines
-//	batches := rill.Batch(filtered, ...)     // stage, 1 goroutine
-//	transformed := rill.Map(batches, 3, ...) // stage, 3 goroutines
-//	err := rill.ForEach(transformed, 2, ...) // sink, 2 goroutines
+//	filtered := rill.Filter(ids, 5, ...)     // stage, cconcurrency=5
+//	batches := rill.Batch(filtered, ...)     // stage
+//	transformed := rill.Map(batches, 3, ...) // stage, concurrency=3
+//	err := rill.ForEach(transformed, 2, ...) // sink, concurrency=2
 //
 // The source and intermediate stages do not block: they spawn goroutines then immediately return their output stream.
 // Those goroutines keep working until all input streams are fully consumed and processed. When all work is done,
 // the output stream is closed.
 //
-// Sinks are different, they block, then return as soon as pipeline's outcome is known, which
-// can happen before the input is fully consumed and all work across the pipeline is done. In particular,
-// a sinks return early when:
+// Sinks are different, they block until the pipeline's outcome is known, which
+// can happen before the input is fully consumed and all work across the pipeline is done.
+// What "outcome known" means depends on the sink, for example:
 //
-//   - it observes an error, whether it came from upstream or from the sink itself
-//   - its internal short-circuit condition is met, for example [Any] returns as soon as it finds a match, and [First] returns after
-//     consuming a single item from its input stream
+//   - [ForEach] immediately returns the first error it observes, otherwise fully consumes the input
+//   - [Any] can additionally short-circuit on the first match it finds
+//   - [First] never consumes more than one item from its input
+//
+// On early return, a sink drains and discards the remaining input in the
+// background, so upstream stages don't block forever and leak their goroutines.
 //
 // # Context, cancellation and settlement
 //
-// When sink returns early it keeps draining and discarding the remaining input in the background to prevent upstream
-// stages from blocking forever and leaking their goroutines. Expensive cancellable work is usually context aware, so
-// caller can cancel anything that remains after the sink's early return:
+// That drain still pays for whatever work is already in flight upstream;
+// only the caller can bound it further, since a sink can't reach the
+// stages feeding it. Expensive cancellable work is usually context aware,
+// so the caller can cancel anything that remains after the sink's early
+// return:
 //
 //	ctx, cancel := context.WithCancel(ctx)
 //	defer cancel()
 //
-//	// source and other pipeline stages go here;
-//	// they might be context aware
+//	// source and other pipeline stages go here
 //
-//	err := rill.ForEach(stream, 5, func(x int) error {
+//	err := rill.ForEach(transformed, 5, func(x int) error {
 //		return process(ctx, x)
 //	})
-//
-//	// result known, cancel the context
-//	// or rely on the deferred call above
-//	cancel()
+//	// result known; the deferred cancel stops the rest
 //
 // When the caller wants not only to request cancellation but also to wait
 // for the pipeline to settle (no work remains, every user callback has
@@ -71,16 +72,18 @@
 //	scope, ctx := rill.NewScope(ctx)
 //	defer scope.Cancel()
 //
-//	// source and other pipeline stages go here;
-//	// they might be context aware
+//	// source and other pipeline stages go here; the source must also
+//	// watch ctx, or Wait below never returns (see [NewScope]'s example)
 //
-//	err := rill.ForEach(stream, 5, func(x int) error {
+//	err := rill.ForEach(transformed, 5, func(x int) error {
 //		return process(ctx, x)
 //	}, scope)
-//
 //	// result known
 //
-//	scope.Wait() // cancel context and wait for settlement
+//	scope.Wait() // cancel and wait for settlement
+//
+// In computation-only pipelines that never fail or short-circuit, everything
+// settles by the time the sink returns, so [Scope] is not needed.
 //
 // ------ the end so far ------
 //
