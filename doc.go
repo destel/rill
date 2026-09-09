@@ -4,9 +4,93 @@
 // centralized error handling, optional order preservation, and minimal
 // boilerplate.
 //
+// # Pipelines and streams
+//
+// Rill functions can be used standalone or composed into multi-stage pipelines.
 // The model is similar to the Go blog's "Pipelines and cancellation"
-// (https://go.dev/blog/pipelines), but it unifies error handling and
-// cancellation by letting errors travel downstream along with values.
+// (https://go.dev/blog/pipelines), but it unifies error handling by letting
+// errors travel downstream along with values. In rill's terms, the post's
+// definition of a pipeline becomes:
+//
+// A pipeline is a series of stages connected by streams - channels whose items
+// are [Try] structs, each holding either a value or an error. Each stage is a
+// group of goroutines running the same function; the argument n, where present,
+// is the size of the group. In each stage, the goroutines:
+//
+//   - receive values and errors from upstream via inbound streams
+//   - apply the function to the values, usually producing new values or errors
+//   - send the results downstream via outbound streams; upstream errors pass
+//     through unchanged
+//
+// Each stage can have any number of input and output streams, except the first stage
+// that has no input streams and the last stage that has no output streams. These stages
+// are called the source and the sink, respectively.
+//
+//	ids := rill.FromSlice(userIDs, nil)      // source
+//	filtered := rill.Filter(ids, 5, ...)     // stage, 5 goroutines
+//	batches := rill.Batch(filtered, ...)     // stage, 1 goroutine
+//	transformed := rill.Map(batches, 3, ...) // stage, 3 goroutines
+//	err := rill.ForEach(transformed, 2, ...) // sink, 2 goroutines
+//
+// The source and intermediate stages do not block: they spawn goroutines then immediately return their output stream.
+// Those goroutines keep working until all input streams are fully consumed and processed. When all work is done,
+// the output stream is closed.
+//
+// Sinks are different, they block, then return as soon as pipeline's outcome is known, which
+// can happen before the input is fully consumed and all work across the pipeline is done. In particular,
+// a sinks return early when:
+//
+//   - it observes an error, whether it came from upstream or from the sink itself
+//   - its internal short-circuit condition is met, for example [Any] returns as soon as it finds a match, and [First] returns after
+//     consuming a single item from its input stream
+//
+// # Context, cancellation and settlement
+//
+// When sink returns early it keeps draining and discarding the remaining input in the background to prevent upstream
+// stages from blocking forever and leaking their goroutines. Expensive cancellable work is usually context aware, so
+// caller can cancel anything that remains after the sink's early return:
+//
+//	ctx, cancel := context.WithCancel(ctx)
+//	defer cancel()
+//
+//	// source and other pipeline stages go here;
+//	// they might be context aware
+//
+//	err := rill.ForEach(stream, 5, func(x int) error {
+//		return process(ctx, x)
+//	})
+//
+//	// result known, cancel the context
+//	// or rely on the deferred call above
+//	cancel()
+//
+// When the caller wants not only to request cancellation but also to wait
+// for the pipeline to settle (no work remains, every user callback has
+// returned), rill provides the [Scope] API, which is like errgroup for pipelines.
+//
+//	scope, ctx := rill.NewScope(ctx)
+//	defer scope.Cancel()
+//
+//	// source and other pipeline stages go here;
+//	// they might be context aware
+//
+//	err := rill.ForEach(stream, 5, func(x int) error {
+//		return process(ctx, x)
+//	}, scope)
+//
+//	// result known
+//
+//	scope.Wait() // cancel context and wait for settlement
+//
+// ------ the end so far ------
+//
+// # If sink returned early
+//
+// which defines pipeline as a series of stages,
+// connected by channels, where
+//
+// The post defines pipeline as a series of stages,
+// connected by channels,
 //
 // # Streams
 //
@@ -124,7 +208,7 @@
 //     returned
 //   - joined (optional): the caller has waited for settlement, and can now
 //     do what would otherwise conflict with callbacks in flight: release
-//     resources they used or read state they wrote
+//     resources they used, or read state they wrote
 //
 // In computation-only pipelines where nothing ever fails or short-circuits,
 // the pipeline is already settled by the time the sink returns.
