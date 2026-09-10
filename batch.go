@@ -13,7 +13,7 @@ import (
 // its first value. When it expires, the pending batch is emitted even
 // if it is not full. This trades batch size for latency: batches can be
 // smaller when the input is sparse, but no value is ever held longer
-// than timeout.
+// than timeout, assuming there's no backpressure.
 //
 // A zero timeout panics: the expected behavior would be to accumulate
 // until reading from the input blocks, but in practice, with an
