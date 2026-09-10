@@ -4,15 +4,14 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Merge performs a fan-in, combining multiple channels into a single
-// output channel. It returns immediately, and consumes the inputs
-// simultaneously and independently, interleaving their items in the
-// output as they arrive. Merge preserves the relative order of items
-// from the same input.
+// Merge performs a fan-in: it returns a channel that carries the items from
+// all inputs, interleaved as they arrive, with the relative order of items
+// from the same input preserved. Merge consumes its inputs simultaneously
+// and independently.
 //
-// The output is closed only when all inputs are exhausted.
-// A nil input is never exhausted, so the output never closes.
-// Merge with no arguments immediately returns an empty closed channel.
+// The output is closed only when all inputs are exhausted. A nil input is
+// never exhausted, so the output never closes. Merge with no arguments
+// returns an empty closed channel.
 func Merge[A any](ins ...<-chan A) <-chan A {
 	return core.Merge(ins...)
 }
@@ -33,15 +32,15 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 // from existing ones. Unlike Split2, the composition is also not limited to two
 // branches.
 //
-// Quite often the predicate is a simple pure check (field comparison, type
-// switch, etc). In such cases splitting is just [Tee] plus a [Filter] on each
+// Quite often, the predicate is a simple, pure check (a field comparison, a type
+// switch, etc.). In such cases, splitting is just [Tee] plus a [Filter] on each
 // branch:
 //
 //	adults, minors := rill.Tee(users)
 //	adults = rill.Filter(adults, 1, func(u User) (bool, error) { return u.Age >= 18, nil })
 //	minors = rill.Filter(minors, 1, func(u User) (bool, error) { return u.Age < 18, nil })
 //
-// If the predicate is expensive, stateful, or can fail, it must be evaluated
+// If the predicate is expensive or stateful, or if it can fail, it must be evaluated
 // once per item, before [Tee]: inline this function's implementation, which
 // tags each item with the decision and routes on the tag. The same pattern
 // extends to n-way splitting by tagging with an index or key instead of a bool.
@@ -67,22 +66,22 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-
 }
 
 // OrderedSplit2 is the ordered version of [Split2]: the outputs
-// preserve the input order, for values and errors alike.
+// preserve the input order for values and errors alike.
 //
 // Deprecated: OrderedSplit2 will be removed in v1.0. Since the introduction of
 // [Tee] in v0.8, splitting no longer needs a dedicated operation — it can be
 // composed from existing ones. Unlike OrderedSplit2, the composition is also
 // not limited to two branches.
 //
-// Quite often the predicate is a simple pure check (field comparison, type
-// switch, etc). In such cases splitting is just [Tee] plus an [OrderedFilter]
+// Quite often, the predicate is a simple, pure check (a field comparison, a type
+// switch, etc.). In such cases, splitting is just [Tee] plus an [OrderedFilter]
 // on each branch:
 //
 //	adults, minors := rill.Tee(users)
 //	adults = rill.OrderedFilter(adults, 1, func(u User) (bool, error) { return u.Age >= 18, nil })
 //	minors = rill.OrderedFilter(minors, 1, func(u User) (bool, error) { return u.Age < 18, nil })
 //
-// If the predicate is expensive, stateful, or can fail, it must be evaluated
+// If the predicate is expensive or stateful, or if it can fail, it must be evaluated
 // once per item, before [Tee]: inline this function's implementation, which
 // tags each item with the decision and routes on the tag. The same pattern
 // extends to n-way splitting by tagging with an index or key instead of a bool.
@@ -107,9 +106,9 @@ func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (out
 	return
 }
 
-// Tee duplicates the input channel into two identical channels. It
-// returns immediately, forwards each item to both outputs as it
-// arrives, and closes both once the input is exhausted.
+// Tee duplicates the input: it returns two channels that both carry every
+// item from the input, forwarded as it arrives. Both outputs are closed
+// once the input is exhausted.
 //
 // The outputs must be consumed concurrently to avoid a deadlock.
 //

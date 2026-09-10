@@ -57,7 +57,7 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 // stream is exhausted or the loop exits with break or return. Error
 // items do not stop the iteration: they are yielded as ordinary pairs.
 //
-// The returned iterator is single-use and must be ranged for the
+// The returned iterator is single-use and must be ranged over for the
 // pipeline to settle. If the loop exits early with break or return,
 // ToSeq2 drains the input in the background before reporting settlement.
 func ToSeq2[A any](in <-chan Try[A], options ...SinkOption) iter.Seq2[A, error] {

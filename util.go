@@ -47,9 +47,8 @@ func DrainNB[A any](in <-chan A) {
 	Discard(in)
 }
 
-// Buffer forwards all input items to a new channel with a capacity of
-// size. It returns immediately and closes the output once the input is
-// exhausted.
+// Buffer returns a channel of the specified capacity and forwards all input
+// items to it. The output is closed once the input is exhausted.
 //
 //	users := getUsers(ctx, companyID)
 //	users = rill.Buffer(users, 100)

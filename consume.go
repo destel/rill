@@ -11,7 +11,7 @@ import (
 // returned.
 //
 // The argument n bounds the number of concurrent calls to f. When n = 1,
-// ForEach processes items sequentially in stream order, similar to a
+// ForEach processes items sequentially in stream order, the same as in a
 // regular for-range loop: f can safely read and modify shared state without
 // synchronization, and all its effects are visible to the caller after
 // ForEach returns.

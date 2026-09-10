@@ -8,7 +8,7 @@ type Try[A any] struct {
 }
 
 // Stream is a type alias for a receive-only channel of [Try] structs.
-// Using it is optional, but improves readability.
+// Using it is optional but improves readability.
 //
 // Before:
 //
@@ -45,7 +45,7 @@ func Wrap[A any](value A, err error) Try[A] {
 //
 // This signature allows concise wrapping of functions that return a
 // slice and an error. FromSlice assumes that a non-empty slice along
-// with an error is a partial result, and preserves both.
+// with an error is a partial result and preserves both.
 //
 //	stream := rill.FromSlice(someFunc())
 func FromSlice[A any](slice []A, err error) <-chan Try[A] {
@@ -179,10 +179,9 @@ func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 	return out
 }
 
-// ToChans splits the stream into two channels: one for values and one
-// for errors. It returns immediately, forwards each item to the
-// appropriate channel as it arrives, and closes both channels once the
-// input is exhausted.
+// ToChans splits the stream into two channels, one for values and one for
+// errors, and forwards each item to the appropriate one. Both channels are
+// closed once the input is exhausted.
 //
 // The channels must be consumed concurrently to avoid a deadlock.
 func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
@@ -209,7 +208,7 @@ func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 	return out, errs
 }
 
-// Generate is a shorthand for creating streams: it manages the
+// Generate is shorthand for creating streams: it manages the
 // goroutine and channel lifecycle. Inside f, send writes a value to the
 // stream, and sendError writes an error unless it is nil.
 //

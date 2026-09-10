@@ -9,7 +9,7 @@ import (
 // all of its work is done - including any work that happens after a sink's
 // early return.
 //
-// A scope passed to a sink as a [SinkOption] tracks not only that sink, but
+// A scope passed to a sink as a [SinkOption] tracks not only that sink but
 // also the whole pipeline behind it.
 //
 // For branching pipelines (see [Tee]), multiple sinks can be attached to the

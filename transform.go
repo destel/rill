@@ -176,21 +176,21 @@ func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan 
 	return out
 }
 
-// OrderedFlatMap is the ordered version of [FlatMap]: the output is the
-// sub-streams concatenated in the input order.
+// OrderedFlatMap is the ordered version of [FlatMap]: the output consists
+// of the sub-streams concatenated in the input order.
 //
 // The argument n bounds the number of concurrent calls to f. The
-// sub-streams are prepared concurrently, but - unlike in [FlatMap] -
-// consumed one at a time and in order: nothing reads from a sub-stream
+// sub-streams are prepared concurrently but - unlike in [FlatMap] -
+// are consumed one at a time and in order: nothing reads from a sub-stream
 // before its turn. In practice, to keep the stage concurrent, a
 // sub-stream must do all or part of its expensive work ahead of its
 // turn.
 //
 // Consider a stream of URLs: each file should be downloaded, and its
-// lines streamed to the output, all in order. Downloading is the
+// lines should be streamed to the output, all in order. Downloading is the
 // expensive work here.
 //
-// Example 1: f downloads the whole file into memory, then streams the
+// Example 1: f downloads the whole file into memory and then streams the
 // lines from there. Up to 5 downloads run concurrently.
 //
 //	rill.OrderedFlatMap(urls, 5, func(u string) <-chan rill.Try[string] {
@@ -198,10 +198,10 @@ func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan 
 //		return rill.FromSlice(lines, err)
 //	})
 //
-// Example 2: f streams the lines as the file is being downloaded,
+// Example 2: as the file is being downloaded, f streams the lines
 // through a [Buffer] that lets the sub-stream run ahead of its turn.
-// Again up to 5 concurrent downloads, but each pauses after the first
-// 100 lines, until its turn comes.
+// Again, up to 5 downloads run concurrently, but a download that runs
+// ahead of its turn pauses after its first 100 lines until the turn comes.
 //
 //	rill.OrderedFlatMap(urls, 5, func(u string) <-chan rill.Try[string] {
 //		lines := streamFileLines(u)
@@ -210,7 +210,7 @@ func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan 
 //
 // The two examples do the same thing: they buffer the lines, with or
 // without a bound. Without any buffering, the downloads would run one
-// at a time, and the stage would turn sequential.
+// at a time, and the stage would become sequential.
 func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
