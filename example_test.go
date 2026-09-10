@@ -19,8 +19,8 @@ import (
 
 // --- Package examples ---
 
-// This example demonstrates a Rill pipeline that fetches users from an API,
-// updates their status to active and saves them back.
+// This example demonstrates a rill pipeline that fetches users from an API,
+// updates their status to active, and saves them back.
 // Both operations are performed concurrently.
 // [ForEach] returns on the first error, and context cancellation via defer stops all remaining fetches.
 func Example() {
@@ -58,8 +58,8 @@ func Example() {
 	fmt.Println("Error:", err)
 }
 
-// This example demonstrates a Rill pipeline that fetches users from an API,
-// and updates their status to active and saves them back.
+// This example demonstrates a rill pipeline that fetches users from an API,
+// updates their status to active, and saves them back.
 // Users are fetched concurrently and in batches to reduce the number of API calls.
 func Example_batching() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -107,12 +107,14 @@ func Example_batching() {
 
 // This example demonstrates how batching can be used to group similar concurrent database updates into a single query.
 // The UpdateUserTimestamp function is used to update the last_active_at column in the users table. Updates are not
-// executed immediately, but are rather queued and then sent to the database in batches of up to 5.
+// executed immediately but are instead queued and then sent to the database in batches of up to 5.
 //
-// When updates are sparse, it can take some time to collect a full batch. In this case the [Batch] function
+// When updates are sparse, it can take some time to collect a full batch. In this case, the [Batch] function
 // emits partial batches, ensuring that updates are delayed by at most 100ms.
 //
-// For simplicity, this example does not have retries, error handling and synchronization
+// For simplicity, this example does not include retries, error handling, or synchronization.
+// A more complete version of this pattern, with context support, error handling, and
+// synchronization, is described at https://destel.dev/blog/real-time-batching-in-go.
 func Example_batchingRealTime() {
 	// Start the background worker that processes the updates
 	go updateUserTimestampWorker()
@@ -137,13 +139,13 @@ func Example_batchingRealTime() {
 // This is the queue of user IDs to update.
 var userIDsToUpdate = make(chan int)
 
-// UpdateUserTimestamp is the public API for updating the last_active_at column in the users table
+// UpdateUserTimestamp is the public API for updating the last_active_at column in the users table.
 func UpdateUserTimestamp(userID int) {
 	userIDsToUpdate <- userID
 }
 
 // This is a background worker that sends queued updates to the database in batches.
-// For simplicity, there are no retries, error handling and synchronization
+// For simplicity, this worker does not include retries, error handling, or synchronization.
 func updateUserTimestampWorker() {
 	// convert the channel of user IDs into a stream
 	ids := rill.FromChan(userIDsToUpdate, nil)
@@ -164,12 +166,12 @@ func updateUserTimestampWorker() {
 // hosted online.
 //
 // Downloading all files at once would consume too much memory, while processing
-// them one-by-one would take too long. And traditional concurrency patterns do not preserve the order of files,
+// them one by one would take too long. Traditional concurrency patterns do not preserve the order of files
 // and would make it challenging to find the first match.
 //
-// The combination of [OrderedFilter] and [First] functions solves the problem,
+// The combination of the [OrderedFilter] and [First] functions solves the problem
 // while downloading and holding in memory at most 5 files at the same time.
-// [First] returns on the first match, this triggers the context cancellation via defer,
+// [First] returns on the first match; this triggers context cancellation via defer,
 // stopping URL generation and file downloads.
 func Example_orderingAndContext() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -216,9 +218,12 @@ func Example_orderingAndContext() {
 	}
 }
 
-// This example demonstrates using [FlatMap] to fetch users from multiple departments concurrently.
-// Additionally, it demonstrates how to write a reusable streaming wrapper over paginated API calls - the StreamUsers function
-func Example_flatMap() {
+// This example demonstrates the parallel streaming pattern: [FlatMap] turns each
+// department into its own stream of users and merges these streams into one,
+// fetching from several departments concurrently.
+// Additionally, it demonstrates how to write a reusable streaming wrapper over paginated API calls -
+// the StreamUsers function.
+func Example_parallelStreaming() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -270,8 +275,8 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 }
 
 // This example demonstrates how to gracefully stop a pipeline on the first error.
-// The CheckAllUsersExist uses several concurrent workers and returns an error as soon as it encounters a non-existent user.
-// Such early return triggers the context cancellation, which in turn stops all remaining users fetches.
+// The CheckAllUsersExist function uses several concurrent workers and returns an error as soon as it encounters a non-existent user.
+// Such an early return triggers context cancellation, which in turn stops all remaining user fetches.
 func Example_context() {
 	ctx := context.Background()
 
@@ -280,7 +285,7 @@ func Example_context() {
 	fmt.Printf("Check result: %v\n", err)
 }
 
-// CheckAllUsersExist uses several concurrent workers to check if all users with given IDs exist.
+// CheckAllUsersExist uses several concurrent workers to check if all users with the given IDs exist.
 func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel() // cancel the remaining requests after the first error
@@ -334,7 +339,7 @@ func ExampleAny() {
 	fmt.Println("Error: ", err)
 }
 
-// Also check out the package level examples to see Batch in action
+// See the package-level examples for more realistic uses of Batch.
 func ExampleBatch() {
 	// Generate a stream of numbers 0 to 49, where a new number is emitted every 50ms
 	numbers := rill.Generate(func(send func(int), sendError func(error)) {
@@ -374,7 +379,6 @@ func ExampleCatch() {
 	printStream(ids)
 }
 
-// The same example as for the [Catch], but using ordered versions of functions.
 func ExampleOrderedCatch() {
 	// Convert a slice of strings into a stream
 	strs := rill.FromSlice([]string{"1", "2", "3", "4", "5", "not a number 6", "7", "8", "9", "10"}, nil)
@@ -436,7 +440,6 @@ func ExampleFilter() {
 	printStream(primes)
 }
 
-// The same example as for the [Filter], but using ordered versions of functions.
 func ExampleOrderedFilter() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
@@ -467,7 +470,6 @@ func ExampleFilterMap() {
 	printStream(squares)
 }
 
-// The same example as for the [FilterMap], but using ordered versions of functions.
 func ExampleOrderedFilterMap() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
@@ -521,7 +523,6 @@ func ExampleFlatMap() {
 	printStream(result)
 }
 
-// The same example as for the [FlatMap], but using ordered versions of functions.
 func ExampleOrderedFlatMap() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5}, nil)
@@ -557,31 +558,6 @@ func ExampleForEach() {
 	fmt.Println("Error:", err)
 }
 
-// There is no ordered version of the ForEach function. To achieve ordered processing, use concurrency set to 1.
-// If you need a concurrent and ordered ForEach, then do all processing with the [OrderedMap],
-// and then use ForEach with concurrency set to 1 at the final stage.
-func ExampleForEach_ordered() {
-	// Convert a slice of numbers into a stream
-	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
-
-	// Square each number
-	// Concurrency = 3; Ordered
-	squares := rill.OrderedMap(numbers, 3, func(x int) (int, error) {
-		return square(x), nil
-	})
-
-	// Print results.
-	// Concurrency = 1; Ordered
-	err := rill.ForEach(squares, 1, func(y int) error {
-		fmt.Println(y)
-		return nil
-	})
-
-	// Handle errors
-	fmt.Println("Error:", err)
-}
-
-// Generate a stream of URLs from https://example.com/file-0.txt to https://example.com/file-9.txt
 func ExampleGenerate() {
 	urls := rill.Generate(func(send func(string), sendError func(error)) {
 		for i := range 10 {
@@ -592,12 +568,11 @@ func ExampleGenerate() {
 	printStream(urls)
 }
 
-// Generate an infinite stream of natural numbers (1, 2, 3, ...).
-// New numbers are sent to the stream every 500ms until the context is canceled
 func ExampleGenerate_context() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// Keep generating numbers until the context is canceled after 5s.
 	numbers := rill.Generate(func(send func(int), sendError func(error)) {
 		for i := 1; ctx.Err() == nil; i++ {
 			send(i)
@@ -621,7 +596,6 @@ func ExampleMap() {
 	printStream(squares)
 }
 
-// The same example as for the [Map], but using ordered versions of functions.
 func ExampleOrderedMap() {
 	// Convert a slice of numbers into a stream
 	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
@@ -813,10 +787,6 @@ func ExampleToSeq2() {
 	}
 }
 
-// This example demonstrates how to wait until the pipeline has no callbacks left to run.
-// [ForEach] returns as soon as the error is known, while the source and the remaining
-// workers are still going. [Scope.Wait] cancels the scope's Context and blocks
-// until all of them have stopped.
 func ExampleNewScope() {
 	scope, ctx := rill.NewScope(context.Background())
 	defer scope.Cancel() // extra cancel to make sure the context doesn't leak
@@ -868,8 +838,8 @@ func ExampleNewScope() {
 
 // --- Helpers ---
 
-// helper function that checks if a number is prime
-// and simulates some additional work using sleep
+// isPrime checks if a number is prime
+// and simulates some additional work by sleeping.
 func isPrime(n int) bool {
 	simulateWork(500 * time.Millisecond)
 
@@ -884,14 +854,13 @@ func isPrime(n int) bool {
 	return true
 }
 
-// helper function that squares the number
-// and simulates some additional work using sleep
+// square returns the square of x and simulates some additional work by sleeping.
 func square(x int) int {
 	simulateWork(500 * time.Millisecond)
 	return x * x
 }
 
-// printStream prints all items from a stream (one per line) and an error if any.
+// printStream prints all items from a stream (one per line) and an error, if any.
 func printStream[A any](stream <-chan rill.Try[A]) {
 	fmt.Println("Result:")
 	err := rill.ForEach(stream, 1, func(x A) error {
