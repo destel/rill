@@ -4,28 +4,23 @@ import (
 	"time"
 )
 
-// Batch groups consecutive values of the stream into batches. In its
-// simplest form, with timeout = -1 and no errors in the input, Batch
-// accumulates values into a pending batch and emits it as soon as it
-// reaches the target size.
+// Batch groups consecutive values of the stream into batches. With
+// timeout = -1, it accumulates values until the batch reaches size,
+// then emits it. When the input closes, any remaining values are
+// emitted as a final batch.
 //
-// A positive timeout is the time each batch has to fill, starting from
-// its first value. When it expires, the pending batch is emitted even
-// if it is not full. This trades batch size for latency: batches can be
-// smaller when the input is sparse, but no value is ever held longer
-// than timeout, assuming there's no backpressure.
+// Input errors create batch boundaries: any pending batch is emitted
+// first, followed by the error as a separate item. This function never
+// emits empty batches.
 //
-// A zero timeout panics: the expected behavior would be to accumulate
-// until reading from the input blocks, but in practice, with an
-// unbuffered input, that often produces a flood of one-item batches.
-// Use a small positive timeout instead.
+// A positive timeout adds another trigger: each batch has that much
+// time to fill, starting from its first value. When the timeout expires,
+// the pending batch is emitted even if it is not full. This trades batch
+// size for latency: sparse input produces smaller batches, but no value
+// is ever held longer than timeout. Backpressure can still delay delivery
+// beyond the timeout.
 //
-// Input errors become batch boundaries: the pending batch, if not
-// empty, is emitted first, and the error follows as a separate item.
-//
-// When the end of the input is reached, whatever has accumulated is
-// emitted as a final batch. This function never emits empty batches,
-// regardless of what triggered the emission.
+// A zero timeout panics. Use a small positive timeout instead.
 func Batch[A any](in <-chan Try[A], size int, timeout time.Duration) <-chan Try[[]A] {
 	validateMinSize(size, 1)
 	if timeout == 0 {
