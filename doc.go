@@ -45,12 +45,12 @@
 //
 //   - [ForEach] immediately returns the first error it observes, otherwise fully consumes the input
 //   - [Any] can additionally short-circuit on the first match it finds
-//   - [First] never consumes more than one item from its input
+//   - [First] consumes one item and returns
 //
 // On early return, a sink drains and discards the remaining input in the
 // background, so upstream stages don't block forever and leak their goroutines.
 //
-// # Context, cancellation and settlement
+// # Context and cancellation
 //
 // It's up to the caller whether to cancel the extra work that happens
 // after an early return. Expensive work and large/infinite sources are usually
@@ -68,6 +68,8 @@
 //	// result known; cancel manually or rely on deferred cancel
 //	cancel()
 //
+// # Structured concurrency
+//
 // When the caller wants not only to request cancellation but also to wait
 // for the pipeline to settle (no work remains, every user callback has
 // returned), rill provides the [Scope] API, which is like errgroup for pipelines.
@@ -75,15 +77,17 @@
 //	scope, ctx := rill.NewScope(ctx)
 //	defer scope.Cancel()
 //
-//	// source and other pipeline stages go here; the source must also
-//	// watch ctx, or Wait below never returns (see [NewScope]'s example)
+//	// source and other pipeline stages go here
 //
 //	err := rill.ForEach(transformed, 5, func(x int) error {
 //		return process(ctx, x)
 //	}, scope)
+//
 //	// result known
 //
-//	scope.Wait() // cancel and wait for settlement
+//	scope.Wait() // cancel ctx and wait for settlement
+//
+//	// it's now safe to release resources and observe side effects
 //
 // Under the hood, [Scope.Wait] waits for the sink's own work to finish,
 // and for the "all upstream work is done" signal carried by the sink's
@@ -103,6 +107,29 @@
 // but each worker holds its result until all earlier results are sent,
 // so the output order matches the input order at the cost
 // of some latency. This ordering guarantee holds for both values and errors.
+//
+// # Backpressure
+//
+// Backpressure means that sending to an unbuffered channel blocks until
+// the receiver on the other end is ready to receive. Rill naturally
+// inherits this property: a slow stage in the
+// pipeline blocks the previous stage, and it in turn blocks the stage before that,
+// and so on, until the slow stage catches up.
+//
+// When this is not desirable, use [Buffer] to add slack between stages.
+//
+// # Nil handling
+//
+// Rill relies on input streams eventually closing for pipelines to finish.
+// Nil channels never emit values or close, so passing nil as an input
+// can leak goroutines or leave a sink blocked forever.
+//
+// # Panics
+//
+// Rill validates arguments of its functions and panics on misuse, such as zero or negative concurrency.
+// Rill does not automatically recover panics in user callbacks: a panicking
+// callback can crash the process, as it would in any hand-written concurrent
+// code.
 //
 // # Extending rill
 //
@@ -125,31 +152,4 @@
 //     consumed and processed
 //   - sinks must start with a deferred rill.Discard(in, options...), followed by a
 //     for-range loop that returns as soon as the sink's outcome is known
-//
-// # Backpressure
-//
-// Backpressure means that sending to an unbuffered channel blocks until
-// the receiver on the other end is ready to receive. Rill naturally
-// inherits this property: a slow stage in the
-// pipeline blocks the previous stage, and it in turn blocks the stage before that,
-// and so on, until the slow stage catches up.
-//
-// When this is not desirable, use [Buffer] to add slack between stages.
-//
-// # Nil handling
-//
-// Nil channels are valid in Go. They never emit values and are never closed.
-// In practice, this means that an attempt to read from a nil channel blocks
-// forever.
-//
-// Rill does not introduce any special semantics for nil channels. If a stage
-// receives a stream that's never closed, it never closes its output stream.
-// If a sink receives such a stream, the sink itself blocks forever.
-//
-// # Panics
-//
-// Rill validates arguments of its functions and panics on misuse, such as zero or negative concurrency.
-// Rill does not automatically recover panics in user callbacks: a panicking
-// callback can crash the process, as it would in any hand-written concurrent
-// code.
 package rill
