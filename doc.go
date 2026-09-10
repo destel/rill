@@ -66,7 +66,7 @@
 //		return process(ctx, x)
 //	})
 //
-//	// result known; cancel manually or rely on deferred cancel
+//	// outcome known; cancel manually or rely on deferred cancel
 //	cancel()
 //
 // # Structured concurrency
@@ -84,7 +84,7 @@
 //		return process(ctx, x)
 //	}, scope)
 //
-//	// result known
+//	// outcome known
 //
 //	scope.Wait() // cancel ctx and wait for settlement
 //
