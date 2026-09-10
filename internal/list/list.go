@@ -11,7 +11,7 @@ type Node[T any] struct {
 	list       *List[T]
 }
 
-// Next returns the next node, or nil if n is the last one or detached.
+// Next returns the next node or nil if n is the last one or is detached.
 func (n *Node[T]) Next() *Node[T] {
 	if l := n.list; l != nil && n.next != &l.root {
 		return n.next
@@ -19,7 +19,7 @@ func (n *Node[T]) Next() *Node[T] {
 	return nil
 }
 
-// Prev returns the previous node, or nil if n is the first one or detached.
+// Prev returns the previous node or nil if n is the first one or is detached.
 func (n *Node[T]) Prev() *Node[T] {
 	if l := n.list; l != nil && n.prev != &l.root {
 		return n.prev
@@ -54,7 +54,7 @@ func New[T any]() *List[T] {
 	return l
 }
 
-// Front returns the first node, or nil if the list is empty.
+// Front returns the first node or nil if the list is empty.
 func (l *List[T]) Front() *Node[T] {
 	if n := l.root.next; n != &l.root {
 		return n
@@ -62,7 +62,7 @@ func (l *List[T]) Front() *Node[T] {
 	return nil
 }
 
-// Back returns the last node, or nil if the list is empty.
+// Back returns the last node or nil if the list is empty.
 func (l *List[T]) Back() *Node[T] {
 	if n := l.root.prev; n != &l.root {
 		return n
@@ -77,21 +77,21 @@ func (l *List[T]) PushBack(n *Node[T]) {
 	l.insertAfter(n, l.root.prev)
 }
 
-// PushFront inserts n at the front of the list. Same contract for n as
-// [List.PushBack].
+// PushFront inserts n at the front of the list. It has the same contract
+// for n as [List.PushBack].
 func (l *List[T]) PushFront(n *Node[T]) {
 	l.insertAfter(n, &l.root)
 }
 
-// InsertAfter inserts n after mark, which must be a node of l. Same contract
-// for n as [List.PushBack].
+// InsertAfter inserts n after mark, which must be a node of l. It has the same
+// contract for n as [List.PushBack].
 func (l *List[T]) InsertAfter(n, mark *Node[T]) {
 	if mark.list == l {
 		l.insertAfter(n, mark)
 	}
 }
 
-// InsertBefore inserts n before mark. Same contract as [List.InsertAfter].
+// InsertBefore inserts n before mark. It has the same contract as [List.InsertAfter].
 func (l *List[T]) InsertBefore(n, mark *Node[T]) {
 	if mark.list == l {
 		l.insertAfter(n, mark.prev)

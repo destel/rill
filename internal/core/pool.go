@@ -2,10 +2,10 @@ package core
 
 import "sync"
 
-// Pool is a pool of reusable values. It grows on demand and never shrinks,
-// it's caller's responsibility to ensure that the pool stays bounded.
+// Pool is a pool of reusable values. It grows on demand and never shrinks;
+// it's the caller's responsibility to ensure that the pool stays bounded.
 //
-// A Pool is safe for concurrent use, unless Unsynchronized is set. Its fields
+// A Pool is safe for concurrent use unless Unsynchronized is set. Its fields
 // must not be changed once the pool is in use.
 type Pool[T any] struct {
 	// New creates a value when the pool is empty. It is required.
@@ -23,7 +23,7 @@ type Pool[T any] struct {
 	items []T
 }
 
-// Get returns a value from the pool, or a new one if the pool is empty.
+// Get returns a value from the pool or a new one if the pool is empty.
 func (p *Pool[T]) Get() T {
 	if !p.Unsynchronized {
 		p.mu.Lock()

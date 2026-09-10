@@ -4,8 +4,8 @@ import (
 	"sync"
 )
 
-// Loop allows to process items from the input channel concurrently using n goroutines.
-// If done channel is not nil, it will be closed after all items are processed.
+// Loop processes items from the input channel concurrently using n goroutines.
+// If the done channel is not nil, it will be closed after all items are processed.
 func Loop[A, B any](in <-chan A, done chan<- B, n int, f func(A)) {
 	if n == 1 {
 		go func() {
@@ -38,13 +38,17 @@ func Loop[A, B any](in <-chan A, done chan<- B, n int, f func(A)) {
 	}
 }
 
-// OrderedLoop is similar to Loop, but it allows to write results to some channel in the same order as items were read from the input.
-// If done channel is not nil, it will be closed after all items are processed.
-// Special "canWrite" channel is passed to user's function f. Typical f function looks like this:
-// - Do some processing (this part is executed concurrently).
-// - Read from canWrite channel exactly once. This step is required. Otherwise, behavior is undefined.
-// - Write result of the processing somewhere. This step is optional.
-// This way processing is done concurrently, but results are written in order.
+// OrderedLoop is similar to Loop, but it allows the caller to write results to a
+// channel in the same order as the items were read from the input.
+// If the done channel is not nil, it will be closed after all items are processed.
+// A special "canWrite" channel is passed to the user's function f.
+// A typical implementation of f performs the following steps:
+//
+//   - Do some processing (this part is executed concurrently).
+//   - Read from the canWrite channel exactly once. This step is required. Otherwise, behavior is undefined.
+//   - Write the result of the processing somewhere. This step is optional.
+//
+// This way, processing is done concurrently, but results are written in order.
 func OrderedLoop[A, B any](in <-chan A, done chan<- B, n int, f func(a A, canWrite <-chan struct{})) {
 	if n == 1 {
 		canWrite := make(chan struct{}, 1)
