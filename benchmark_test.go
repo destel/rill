@@ -10,9 +10,9 @@ import (
 )
 
 // The stock B/op and allocs/op columns are the per-item metrics reported by
-// benchmarkThroughput, integer divided, so anything under one allocation per
-// item reads as zero. We use custom floating point metrics and suppress the
-// stock ones - even when -benchmem is passed explicitly.
+// benchmarkThroughput, calculated using integer division, so anything under
+// one allocation per item reads as zero. We use custom floating-point metrics
+// and suppress the stock ones - even when -benchmem is passed explicitly.
 // This can only be done by mutating the flag.
 func TestMain(m *testing.M) {
 	flag.Parse()
@@ -54,7 +54,7 @@ func benchmarkThroughput(b *testing.B, definePipeline func(in <-chan Try[int])) 
 }
 
 // benchmarkThroughputForLevels runs benchmarkThroughput once per concurrency
-// level, as a subtest named name/n.
+// level as a subtest named name/n.
 func benchmarkThroughputForLevels(b *testing.B, name string, levels []int, definePipeline func(in <-chan Try[int], n int)) {
 	for _, n := range levels {
 		b.Run(fmt.Sprintf("%s/%d", name, n), func(b *testing.B) {
@@ -65,8 +65,8 @@ func benchmarkThroughputForLevels(b *testing.B, name string, levels []int, defin
 	}
 }
 
-// This benchmark acts as baseline. A single drainer is
-// as simple as pipeline can get.
+// This benchmark acts as a baseline. A single drainer is
+// as simple as a pipeline can get.
 func BenchmarkDrain(b *testing.B) {
 	benchmarkThroughput(b, func(in <-chan Try[int]) {
 		Drain(in)

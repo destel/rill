@@ -5,7 +5,7 @@ import (
 )
 
 // Item[A] is a comparable variation of Try[A] that's used for testing.
-// Stores errors as messages
+// It stores errors as strings.
 type Item[A any] struct {
 	Value A
 	Error string
@@ -48,7 +48,7 @@ func toItemSlice[A any](in <-chan Try[A]) []Item[A] {
 	return s
 }
 
-// Converts a stream in a slice of values and a slice of error messages.
+// Converts a stream into a slice of values and a slice of error messages.
 func toSliceAndErrors[A any](in <-chan Try[A]) ([]A, []string) {
 	var values []A
 	var errors []string
