@@ -17,8 +17,7 @@ import (
 // time to fill, starting from its first value. When the timeout expires,
 // the pending batch is emitted even if it is not full. This trades batch
 // size for latency: sparse input produces smaller batches, but no value
-// is ever held longer than timeout. Backpressure can still delay delivery
-// beyond the timeout.
+// is ever held longer than timeout, assuming there's no backpressure.
 //
 // A zero timeout panics. Use a small positive timeout instead.
 func Batch[A any](in <-chan Try[A], size int, timeout time.Duration) <-chan Try[[]A] {
