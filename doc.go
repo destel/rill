@@ -10,7 +10,7 @@
 //
 // The pipeline model in this package is similar to the one described in the
 // Go blog's "Pipelines and cancellation" (https://go.dev/blog/pipelines),
-// but unifies error handling by letting errors travel downstream along with
+// but it unifies error handling by letting errors travel downstream along with
 // values. In rill's terms, the post's definition of a pipeline becomes:
 //
 // A pipeline is a series of stages connected by streams - channels whose items
@@ -22,10 +22,11 @@
 //   - send the results downstream via output streams
 //   - forward upstream errors to the output streams ([Catch] is the only exception)
 //
-// Usually, in a pipeline most stages have one input stream and one output stream,
-// except the first stage that has no input stream and the last stage that has no output stream.
-// These stages are called the source and the sink, respectively. [Merge] and [Tee] functions
-// have more inputs/outputs and can be used to build DAG pipelines.
+// Usually, most stages in a pipeline have one input stream and one output stream.
+// The exceptions are the first stage, which has no input stream, and the last
+// stage, which has no output stream. These stages are called the source and
+// the sink, respectively. The [Merge] and [Tee] functions have more inputs/outputs
+// and can be used to build DAG pipelines.
 //
 //	ids := rill.FromSlice(userIDs, nil)      // source
 //	filtered := rill.Filter(ids, 5, ...)     // stage, concurrency = 5
@@ -34,21 +35,21 @@
 //	err := rill.ForEach(transformed, 2, ...) // sink, concurrency = 2
 //
 // Intermediate stages never block: they return their output streams
-// immediately, while the goroutines they started stay working in
+// immediately, while the goroutines they started continue working in
 // the background. These stages always fully consume and process their
-// inputs, before closing their outputs. This closure becomes an "all
+// inputs before closing their outputs. This closure becomes an "all
 // upstream work is done" signal that travels downstream along with values
 // and errors.
 //
-// Sinks are different, they block until the pipeline's outcome is known, which
+// Sinks are different: they block until the pipeline's outcome is known, which
 // can happen before the input is fully consumed and all work across the pipeline is done.
-// What "outcome known" means depends on the sink, for example:
+// What "outcome known" means depends on the sink. For example:
 //
-//   - [ForEach] immediately returns the first error it observes, otherwise fully consumes the input
+//   - [ForEach] immediately returns the first error it observes; otherwise, it fully consumes the input
 //   - [Any] can additionally short-circuit on the first match it finds
 //   - [First] consumes one item and returns
 //
-// On early return, a sink drains and discards the remaining input in the
+// On an early return, a sink drains and discards the remaining input in the
 // background, so upstream stages don't block forever and leak their goroutines.
 //
 // # Context and cancellation
@@ -66,13 +67,13 @@
 //		return process(ctx, x)
 //	})
 //
-//	// outcome known; cancel manually or rely on deferred cancel
+//	// outcome known; cancel manually or rely on the deferred cancel
 //	cancel()
 //
 // # Structured concurrency
 //
 // When the caller wants not only to request cancellation but also to wait
-// for the pipeline to settle (no work remains, every user callback has
+// for the pipeline to settle (no work remains and every user callback has
 // returned), rill provides the [Scope] API, which is like errgroup for pipelines.
 //
 //	scope, ctx := rill.NewScope(ctx)
@@ -90,7 +91,7 @@
 //
 //	// it's now safe to release resources and observe side effects
 //
-// Under the hood, [Scope.Wait] waits for the sink's own work to finish,
+// Under the hood, [Scope.Wait] waits for the sink's own work to finish
 // and for the "all upstream work is done" signal carried by the sink's
 // input streams.
 //
@@ -101,7 +102,7 @@
 //
 // By default, stages write results to their output streams as soon as they
 // are ready, in completion order. In concurrent stages, that order depends on how the Go runtime
-// schedules the stages' goroutines, and on the time each result takes to produce.
+// schedules the stages' goroutines and on the time it takes to produce each result.
 //
 // For cases where the input order must be preserved, rill provides ordered functions,
 // such as [OrderedMap] or [OrderedFilter]. They stay concurrent,
@@ -127,8 +128,8 @@
 //
 // # Panics
 //
-// Rill validates arguments of its functions and panics on misuse, such as zero or negative concurrency.
-// Rill does not automatically recover panics in user callbacks: a panicking
+// Rill validates the arguments to its functions and panics on misuse, such as zero or negative concurrency.
+// Rill does not automatically recover from panics in user callbacks: a panicking
 // callback can crash the process, as it would in any hand-written concurrent
 // code.
 //
@@ -140,8 +141,8 @@
 // errors into a slice.
 //
 // The easiest way to write a custom stage is to compose it from existing
-// functions rill provides. For manually written stages there are a few
-// simple rules to follow. Most of them are satisfied by construction,
+// functions rill provides. For manually written stages, there are a few
+// simple rules to follow. Most of them are satisfied by construction
 // and are related to preserving background drain and settlement semantics:
 //
 //   - sources must eventually close their output stream; a source that can
