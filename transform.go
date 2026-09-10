@@ -11,8 +11,6 @@ import (
 // The argument n bounds the number of concurrent calls to f.
 // Results and errors are written to the output in completion order.
 // Use [OrderedMap] to preserve the input order.
-//
-// See the [rill] package documentation for the full contract shared by all stages.
 func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -59,8 +57,6 @@ func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan 
 // The argument n bounds the number of concurrent calls to f.
 // Results and errors are written to the output in completion order.
 // Use [OrderedFilter] to preserve the input order.
-//
-// See the [rill] package documentation for the full contract shared by all stages.
 func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -107,8 +103,6 @@ func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-ch
 // The argument n bounds the number of concurrent calls to f.
 // Results and errors are written to the output in completion order.
 // Use [OrderedFilterMap] to preserve the input order.
-//
-// See the [rill] package documentation for the full contract shared by all stages.
 func FilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -157,8 +151,6 @@ func OrderedFilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, err
 // When n > 1, items from different sub-streams can interleave in the
 // output. Use [OrderedFlatMap] to concatenate the sub-streams in the
 // input order.
-//
-// See the [rill] package documentation for the full contract shared by all stages.
 func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -254,8 +246,6 @@ func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) 
 // The argument n bounds the number of concurrent calls to f.
 // Items are written to the output in completion order.
 // Use [OrderedCatch] to preserve the input order.
-//
-// See the [rill] package documentation for the full contract shared by all stages.
 func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)

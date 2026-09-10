@@ -26,8 +26,6 @@ import (
 // When the end of the input is reached, whatever has accumulated is
 // emitted as a final batch. This function never emits empty batches,
 // regardless of what triggered the emission.
-//
-// See the [rill] package documentation for the full contract shared by all stages.
 func Batch[A any](in <-chan Try[A], size int, timeout time.Duration) <-chan Try[[]A] {
 	validateMinSize(size, 1)
 	if timeout == 0 {
@@ -122,8 +120,6 @@ func Batch[A any](in <-chan Try[A], size int, timeout time.Duration) <-chan Try[
 
 // Unbatch flattens a stream of slices into a stream of their values.
 // This function is the inverse of [Batch].
-//
-// See the [rill] package documentation for the full contract shared by all stages.
 func Unbatch[A any](in <-chan Try[[]A]) <-chan Try[A] {
 	if in == nil {
 		return nil

@@ -28,8 +28,6 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 // differ from the input order when n > 1. Use [OrderedSplit2] to
 // preserve the order.
 //
-// See the [rill] package documentation for the full contract shared by all stages.
-//
 // Deprecated: Split2 will be removed in v1.0. Since the introduction of [Tee]
 // in v0.8, splitting no longer needs a dedicated operation — it can be composed
 // from existing ones. Unlike Split2, the composition is also not limited to two
