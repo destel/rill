@@ -37,9 +37,9 @@
 // Intermediate stages never block: they return their output streams
 // immediately, while the goroutines they started continue working in
 // the background. These stages always fully consume and process their
-// inputs before closing their outputs. This closure becomes an "all
-// upstream work is done" signal that travels downstream along with values
-// and errors.
+// inputs before closing their outputs. A closed output becomes an
+// "all upstream work is done" signal that travels downstream along with
+// values and errors.
 //
 // Sinks are different: they block until the pipeline's outcome is known, which
 // can happen before the input is fully consumed and all work across the pipeline is done.
