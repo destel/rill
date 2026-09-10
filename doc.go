@@ -1,16 +1,17 @@
-// Package rill provides composable primitives for building concurrent streaming
-// pipelines over plain Go channels: functions that transform, filter, batch,
-// reduce, and consume data streams, with bounded concurrency per stage,
-// centralized error handling, optional order preservation, and minimal
-// boilerplate.
+// Package rill provides composable concurrency primitives: functions over
+// plain channels that transform, filter, batch, reduce, and consume data
+// streams while propagating errors and optionally preserving order.
+//
+// Rill is not a framework: its functions can be used on their own or
+// composed into multi-stage pipelines. Either way, they are compatible
+// with existing channel-based code.
 //
 // # Pipelines and streams
 //
-// Rill functions can be used standalone or composed into multi-stage pipelines.
-// The model is similar to the Go blog's "Pipelines and cancellation"
-// (https://go.dev/blog/pipelines), but it unifies error handling by letting
-// errors travel downstream along with values. In rill's terms, the post's
-// definition of a pipeline becomes:
+// The pipeline model in this package is similar to the one described in the
+// Go blog's "Pipelines and cancellation" (https://go.dev/blog/pipelines),
+// but unifies error handling by letting errors travel downstream along with
+// values. In rill's terms, the post's definition of a pipeline becomes:
 //
 // A pipeline is a series of stages connected by streams - channels whose items
 // are [Try] structs, each holding either a value or an error. Under the hood, each stage
@@ -133,22 +134,19 @@
 //
 // # Extending rill
 //
-// Rill is not a framework, but a collection of functions over plain Go
-// channels. Almost any function that receives and/or returns such
-// channels is compatible with rill.
-//
-// For example, it's easy to write a context-aware source that streams rows from
-// a database table, or a sink that collects all observed errors into a
-// slice.
+// Almost any custom function that takes or returns streams is compatible
+// with rill. For example, it's easy to write a context-aware source that
+// streams rows from a database table, or a sink that collects all observed
+// errors into a slice.
 //
 // The easiest way to write a custom stage is to compose it from existing
 // functions rill provides. For manually written stages there are a few
 // simple rules to follow. Most of them are satisfied by construction,
-// and related to preserving background drain and settlement semantics:
+// and are related to preserving background drain and settlement semantics:
 //
 //   - sources must eventually close their output stream; a source that can
-//     run forever must watch a context
-//   - stages must close their output stream only after the input is fully
+//     run forever must watch a context and be cancellable
+//   - stages must close their output stream, but only after the input is fully
 //     consumed and processed
 //   - sinks must start with a deferred rill.Discard(in, options...), followed by a
 //     for-range loop that returns as soon as the sink's outcome is known
