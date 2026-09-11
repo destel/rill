@@ -4,9 +4,8 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Merge performs a fan-in: it combines multiple input channels into
-// one output channel.
-// It reads all inputs concurrently, so a slow input does not delay
+// Merge performs a fan-in: it combines multiple input channels into one output
+// channel. It reads all inputs concurrently, so a slow input does not delay
 // forwarding items from the others. Items are interleaved as they arrive,
 // preserving the relative order of items from each input.
 //
@@ -33,18 +32,19 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 // from existing ones. Unlike Split2, the composition is also not limited to two
 // branches.
 //
-// Quite often, the predicate is a simple, pure check (a field comparison, a type
-// switch, etc.). In such cases, splitting is just [Tee] plus a [Filter] on each
-// branch:
+// Quite often, the predicate is a simple, pure check (a field comparison, a
+// type switch, etc.). In such cases, splitting is just [Tee] plus a [Filter] on
+// each branch:
 //
 //	adults, minors := rill.Tee(users)
 //	adults = rill.Filter(adults, 1, func(u User) (bool, error) { return u.Age >= 18, nil })
 //	minors = rill.Filter(minors, 1, func(u User) (bool, error) { return u.Age < 18, nil })
 //
-// If the predicate is expensive or stateful, or if it can fail, it must be evaluated
-// once per item, before [Tee]: inline this function's implementation, which
-// tags each item with the decision and routes on the tag. The same pattern
-// extends to n-way splitting by tagging with an index or key instead of a bool.
+// If the predicate is expensive or stateful, or if it can fail, it must be
+// evaluated once per item, before [Tee]: inline this function's implementation,
+// which tags each item with the decision and routes on the tag. The same
+// pattern extends to n-way splitting by tagging with an index or key instead of
+// a bool.
 func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -74,18 +74,19 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-
 // composed from existing ones. Unlike OrderedSplit2, the composition is also
 // not limited to two branches.
 //
-// Quite often, the predicate is a simple, pure check (a field comparison, a type
-// switch, etc.). In such cases, splitting is just [Tee] plus an [OrderedFilter]
-// on each branch:
+// Quite often, the predicate is a simple, pure check (a field comparison, a
+// type switch, etc.). In such cases, splitting is just [Tee] plus an
+// [OrderedFilter] on each branch:
 //
 //	adults, minors := rill.Tee(users)
 //	adults = rill.OrderedFilter(adults, 1, func(u User) (bool, error) { return u.Age >= 18, nil })
 //	minors = rill.OrderedFilter(minors, 1, func(u User) (bool, error) { return u.Age < 18, nil })
 //
-// If the predicate is expensive or stateful, or if it can fail, it must be evaluated
-// once per item, before [Tee]: inline this function's implementation, which
-// tags each item with the decision and routes on the tag. The same pattern
-// extends to n-way splitting by tagging with an index or key instead of a bool.
+// If the predicate is expensive or stateful, or if it can fail, it must be
+// evaluated once per item, before [Tee]: inline this function's implementation,
+// which tags each item with the decision and routes on the tag. The same
+// pattern extends to n-way splitting by tagging with an index or key instead of
+// a bool.
 func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-chan Try[A], outFalse <-chan Try[A]) {
 	validateN(n)
 	validateNilFunc(f == nil)

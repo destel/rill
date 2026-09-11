@@ -14,19 +14,20 @@
 // values. In rill's terms, the post's definition of a pipeline becomes:
 //
 // A pipeline is a series of stages connected by streams - channels whose items
-// are [Try] structs, each holding either a value or an error. Under the hood, each stage
-// runs one or more goroutines that:
+// are [Try] structs, each holding either a value or an error. Under the hood,
+// each stage runs one or more goroutines that:
 //
 //   - receive values and errors from upstream via input streams
 //   - process the received values, usually producing new values or errors
 //   - send the results downstream via output streams
-//   - forward upstream errors to the output streams ([Catch] is the only exception)
+//   - forward upstream errors to the output streams ([Catch] is the only
+//     exception)
 //
-// Usually, most stages in a pipeline have one input stream and one output stream.
-// The exceptions are the first stage, which has no input stream, and the last
-// stage, which has no output stream. These stages are called the source and
-// the sink, respectively. The [Merge] and [Tee] functions have more inputs/outputs
-// and can be used to build DAG pipelines.
+// Usually, most stages in a pipeline have one input stream and one output
+// stream. The exceptions are the first stage, which has no input stream, and
+// the last stage, which has no output stream. These stages are called the
+// source and the sink, respectively. The [Merge] and [Tee] functions have more
+// inputs/outputs and can be used to build DAG pipelines.
 //
 //	ids := rill.FromSlice(userIDs, nil)      // source
 //	filtered := rill.Filter(ids, 5, ...)     // stage, concurrency = 5
@@ -41,10 +42,12 @@
 // downstream along with values and errors.
 //
 // Sinks are different: they block until the pipeline's outcome is known, which
-// can happen before the input is fully consumed and all work across the pipeline is done.
-// What "outcome known" means depends on the sink. For example:
+// can happen before the input is fully consumed and all work across the
+// pipeline is done. What "outcome known" means depends on the sink. For
+// example:
 //
-//   - [ForEach] immediately returns the first error it observes; otherwise, it fully consumes the input
+//   - [ForEach] immediately returns the first error it observes; otherwise, it
+//     fully consumes the input
 //   - [Any] can additionally short-circuit on the first match it finds
 //   - [First] consumes one item and returns
 //
@@ -71,9 +74,10 @@
 //
 // # Structured concurrency
 //
-// When the caller wants not only to request cancellation but also to wait
-// for the pipeline to settle (no work remains and every user callback has
-// returned), rill provides the [Scope] API, which is like errgroup for pipelines.
+// When the caller wants not only to request cancellation but also to wait for
+// the pipeline to settle (no work remains and every user callback has
+// returned), rill provides the [Scope] API, which is like errgroup for
+// pipelines.
 //
 //	scope, ctx := rill.NewScope(ctx)
 //	defer scope.Cancel()
@@ -99,23 +103,24 @@
 //
 // # Ordered stages
 //
-// By default, stages write results to their output streams as soon as they
-// are ready, in completion order. In concurrent stages, that order depends on how the Go runtime
-// schedules the stages' goroutines and on the time it takes to produce each result.
+// By default, stages write results to their output streams as soon as they are
+// ready, in completion order. In concurrent stages, that order depends on how
+// the Go runtime schedules the stages' goroutines and on the time it takes to
+// produce each result.
 //
-// For cases where the input order must be preserved, rill provides ordered functions,
-// such as [OrderedMap] or [OrderedFilter]. They stay concurrent,
-// but each worker holds its result until all earlier results are sent,
-// so the output order matches the input order at the cost
-// of some latency. This ordering guarantee holds for both values and errors.
+// For cases where the input order must be preserved, rill provides ordered
+// functions, such as [OrderedMap] or [OrderedFilter]. They stay concurrent, but
+// each worker holds its result until all earlier results are sent, so the
+// output order matches the input order at the cost of some latency. This
+// ordering guarantee holds for both values and errors.
 //
 // # Backpressure
 //
-// Backpressure means that sending to an unbuffered channel blocks until
-// the receiver on the other end is ready to receive. Rill naturally
-// inherits this property: a slow stage in the
-// pipeline blocks the previous stage, and it in turn blocks the stage before that,
-// and so on, until the slow stage catches up.
+// Backpressure means that sending to an unbuffered channel blocks until the
+// receiver on the other end is ready to receive. Rill naturally inherits this
+// property: a slow stage in the pipeline blocks the previous stage, and it in
+// turn blocks the stage before that, and so on, until the slow stage
+// catches up.
 //
 // When this is not desirable, use [Buffer] to add slack between stages.
 //
@@ -127,10 +132,10 @@
 //
 // # Panics
 //
-// Rill validates the arguments to its functions and panics on misuse, such as zero or negative concurrency.
-// Rill does not automatically recover from panics in user callbacks: a panicking
-// callback can crash the process, as it would in any hand-written concurrent
-// code.
+// Rill validates the arguments to its functions and panics on misuse, such as
+// zero or negative concurrency. Rill does not automatically recover from panics
+// in user callbacks: a panicking callback can crash the process, as it would in
+// any hand-written concurrent code.
 //
 // # Extending rill
 //
@@ -148,6 +153,7 @@
 //     run forever must watch a context and be cancellable
 //   - intermediate stages must close their output stream, but only after the
 //     input is fully consumed and processed
-//   - non-concurrent sinks must start with a deferred rill.Discard(in, options...),
-//     followed by a for-range loop that returns as soon as the sink's outcome is known
+//   - non-concurrent sinks must start with a deferred
+//     rill.Discard(in, options...), followed by a for-range loop that returns
+//     as soon as the sink's outcome is known
 package rill
