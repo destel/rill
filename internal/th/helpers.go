@@ -3,7 +3,6 @@ package th
 import (
 	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -102,18 +101,6 @@ func DelayEach[A any](in <-chan A, delay time.Duration) <-chan A {
 func SimulateWork(min, max time.Duration) {
 	d := min + time.Duration(rand.Int63n(int64(max-min+1)))
 	time.Sleep(d)
-}
-
-func DoConcurrently(ff ...func()) {
-	var wg sync.WaitGroup
-
-	for _, f := range ff {
-		wg.Go(func() {
-			f()
-		})
-	}
-
-	wg.Wait()
 }
 
 func TestBothOrderings(t *testing.T, f func(t *testing.T, ord bool)) {

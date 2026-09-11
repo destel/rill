@@ -2,6 +2,7 @@ package rill
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -48,10 +49,10 @@ func TestSplit2(t *testing.T) {
 				})
 
 				var outSliceTrue, outSliceFalse []Item[int]
-				th.DoConcurrently(
-					func() { outSliceTrue = toItemSlice(outTrue) },
-					func() { outSliceFalse = toItemSlice(outFalse) },
-				)
+				var wg sync.WaitGroup
+				wg.Go(func() { outSliceTrue = toItemSlice(outTrue) })
+				wg.Go(func() { outSliceFalse = toItemSlice(outFalse) })
+				wg.Wait()
 
 				var expectedTrue, expectedFalse []Item[int]
 				for i := range 20 {
@@ -105,11 +106,10 @@ func TestSplit2(t *testing.T) {
 				})
 
 				var outSliceTrue, outSliceFalse []string
-
-				th.DoConcurrently(
-					func() { outSliceTrue = toUnifiedStringSlice(outTrue, "%03d") },
-					func() { outSliceFalse = toUnifiedStringSlice(outFalse, "%03d") },
-				)
+				var wg sync.WaitGroup
+				wg.Go(func() { outSliceTrue = toUnifiedStringSlice(outTrue, "%03d") })
+				wg.Go(func() { outSliceFalse = toUnifiedStringSlice(outFalse, "%03d") })
+				wg.Wait()
 
 				if ord || n == 1 {
 					th.ExpectSorted(t, outSliceTrue)
@@ -136,11 +136,10 @@ func TestTee(t *testing.T) {
 		out1, out2 := Tee(in)
 
 		var outSlice1, outSlice2 []int
-
-		th.DoConcurrently(
-			func() { outSlice1 = th.ToSlice(out1) },
-			func() { outSlice2 = th.ToSlice(out2) },
-		)
+		var wg sync.WaitGroup
+		wg.Go(func() { outSlice1 = th.ToSlice(out1) })
+		wg.Go(func() { outSlice2 = th.ToSlice(out2) })
+		wg.Wait()
 
 		expected := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 
