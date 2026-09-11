@@ -132,26 +132,17 @@ func TestTee(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "correctness", func(t *testing.T) {
-		// Create input with mixed values and errors
-		in := FromChan(th.FromRange(0, 10), nil)
-		in = replaceWithError(in, 2, fmt.Errorf("err2"))
-		in = replaceWithError(in, 7, fmt.Errorf("err7"))
-
+		in := th.FromRange(0, 10)
 		out1, out2 := Tee(in)
 
-		var outSlice1, outSlice2 []Item[int]
+		var outSlice1, outSlice2 []int
 
 		th.DoConcurrently(
-			func() { outSlice1 = toItemSlice(out1) },
-			func() { outSlice2 = toItemSlice(out2) },
+			func() { outSlice1 = th.ToSlice(out1) },
+			func() { outSlice2 = th.ToSlice(out2) },
 		)
 
-		var expected []Item[int]
-		expected = appendVal(expected, 0, 1)
-		expected = appendErr(expected, fmt.Errorf("err2"))
-		expected = appendVal(expected, 3, 4, 5, 6)
-		expected = appendErr(expected, fmt.Errorf("err7"))
-		expected = appendVal(expected, 8, 9)
+		expected := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 
 		// Both outputs should be identical
 		th.ExpectSlice(t, outSlice1, expected)
@@ -160,13 +151,13 @@ func TestTee(t *testing.T) {
 
 	t.Run("non concurrent reads", func(t *testing.T) {
 		th.ExpectBlock(t, func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 10), nil)
+			in := th.FromRange(0, 10)
 			out1, out2 := Tee(in)
 
 			// Reading out1 blocks forever: the producer gets stuck sending to the unread out2,
 			// so it stops feeding out1 too. The second call is never reached.
-			toItemSlice(out1)
-			toItemSlice(out2)
+			th.ToSlice(out1)
+			th.ToSlice(out2)
 		})
 	})
 }

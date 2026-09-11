@@ -104,25 +104,26 @@ func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (out
 	return
 }
 
-// Tee returns two streams that are identical to the input stream (both errors and values).
-// Both output streams must be consumed independently to avoid deadlocks.
+// Tee duplicates the input: it returns two channels that both carry every
+// item from the input, forwarded as it arrives. Both outputs are closed
+// once the input is exhausted.
 //
-// This is a non-blocking function that processes items in a single goroutine.
-// See the package documentation for more information on non-blocking functions and error handling.
+// The outputs must be consumed concurrently to avoid a deadlock.
 //
-// If deep copying of values is needed, use [Map] on one or both outputs:
+// If deep copying of values is needed, use [Map] on one or both
+// outputs:
 //
 //	out1, out2 := rill.Tee(in)
 //	out2 = rill.Map(out2, 1, func(x A) (A, error) {
 //		return deepCopy(x), nil
 //	})
-func Tee[A any](in <-chan Try[A]) (<-chan Try[A], <-chan Try[A]) {
+func Tee[A any](in <-chan A) (<-chan A, <-chan A) {
 	if in == nil {
 		return nil, nil
 	}
 
-	out1 := make(chan Try[A])
-	out2 := make(chan Try[A])
+	out1 := make(chan A)
+	out2 := make(chan A)
 
 	go func() {
 		defer close(out1)
