@@ -175,10 +175,10 @@ func ExpectLeak(t *testing.T, f func(t *testing.T)) {
 	}
 }
 
-// outcomes:
+// Outcomes:
 // 0 - nothing blocked
-// 1 - some goroutines blocked, but not main
-// 2 - main blocked and possibly some goroutines also blocked
+// 1 - some goroutines blocked, but not the main goroutine
+// 2 - the main goroutine blocked, possibly along with other goroutines
 func checkBlock(t *testing.T, f func(t *testing.T)) (outcome int) {
 	mainBlocked := true
 

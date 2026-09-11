@@ -5,15 +5,18 @@ import (
 	"sync/atomic"
 )
 
-// ForEach applies a function f to each item in an input stream and returns the first error encountered.
+// ForEach calls f on the stream's values, like a concurrent for-range
+// loop. It immediately returns the first observed error. Otherwise, it
+// returns nil after the input is fully consumed and every call to f has
+// returned.
 //
-// This is a blocking unordered function that processes items concurrently using n goroutines.
+// The argument n bounds the number of concurrent calls to f. When n = 1,
+// ForEach processes items sequentially in stream order, the same as in a
+// regular for-range loop: f can safely read and modify shared state without
+// synchronization, and all its effects are visible to the caller after
+// ForEach returns.
 //
-// When n = 1, ForEach processes items sequentially in stream order, similar to a regular
-// for-range loop: f can safely read and modify shared state without synchronization,
-// and all its effects are visible to the caller after ForEach returns.
-//
-// See the package documentation for more information on blocking unordered functions and error handling.
+// See the [rill] package documentation for the full contract shared by all sinks.
 func ForEach[A any](in <-chan Try[A], n int, f func(A) error, options ...SinkOption) error {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -52,10 +55,10 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error, options ...SinkOpt
 	return Err(out, options...)
 }
 
-// Err returns the first error encountered in the input stream or nil if there were no errors.
+// Err immediately returns the first error of the stream. Otherwise, it
+// returns nil after the input is fully consumed.
 //
-// This is a blocking ordered function that processes items sequentially.
-// See the package documentation for more information on blocking ordered functions and error handling.
+// See the [rill] package documentation for the full contract shared by all sinks.
 func Err[A any](in <-chan Try[A], options ...SinkOption) error {
 	defer Discard(in, options...)
 
@@ -68,12 +71,11 @@ func Err[A any](in <-chan Try[A], options ...SinkOption) error {
 	return nil
 }
 
-// First returns the first value or error encountered in the input stream.
-// If the stream is empty or its first item is an error, found is false and
-// value is the zero value of A.
+// First returns the first item of the stream: (value, true, nil) if
+// the item is a value, (zero, false, err) if it is an error, or
+// (zero, false, nil) if the stream is empty.
 //
-// This is a blocking ordered function that processes items sequentially.
-// See the package documentation for more information on blocking ordered functions and error handling.
+// See the [rill] package documentation for the full contract shared by all sinks.
 func First[A any](in <-chan Try[A], options ...SinkOption) (value A, found bool, err error) {
 	defer Discard(in, options...)
 
@@ -91,13 +93,15 @@ func First[A any](in <-chan Try[A], options ...SinkOption) (value A, found bool,
 // sharing cannot contaminate across calls.
 var errFound = errors.New("found")
 
-// Any reports whether the input stream contains an item that satisfies the condition f.
-// This function returns true as soon as it finds such an item. Otherwise, it returns false.
+// Any reports whether the stream contains a value that matches the
+// condition f. It immediately returns (true, nil) or (false, err) on
+// the first observed match or error, respectively. Otherwise, it
+// returns (false, nil) after the input is fully consumed and every call
+// to f has returned.
 //
-// Any is a blocking unordered function that processes items concurrently using n goroutines.
-// When n = 1, items are processed sequentially in stream order.
+// The argument n bounds the number of concurrent calls to f.
 //
-// See the package documentation for more information on blocking unordered functions and error handling.
+// See the [rill] package documentation for the full contract shared by all sinks.
 func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...SinkOption) (bool, error) {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -119,14 +123,15 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...Sin
 	return false, err
 }
 
-// All reports whether all items in the input stream satisfy the condition f.
-// This function returns false as soon as it finds an item that does not satisfy the condition or encounters an error.
-// Otherwise, it returns true.
+// All reports whether every value in the stream matches the condition
+// f. It immediately returns (false, nil) or (false, err) on the first
+// observed mismatch or error, respectively. Otherwise, it returns
+// (true, nil) after the input is fully consumed and every call to f has
+// returned.
 //
-// All is a blocking unordered function that processes items concurrently using n goroutines.
-// When n = 1, items are processed sequentially in stream order.
+// The argument n bounds the number of concurrent calls to f.
 //
-// See the package documentation for more information on blocking unordered functions and error handling.
+// See the [rill] package documentation for the full contract shared by all sinks.
 func All[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...SinkOption) (bool, error) {
 	validateN(n)
 	validateNilFunc(f == nil)

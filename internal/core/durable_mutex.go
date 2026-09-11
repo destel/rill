@@ -8,16 +8,16 @@ import (
 // DurableMutex is a mutual exclusion lock whose contending callers block
 // durably when used inside a [testing/synctest] bubble.
 //
-// Most critical sections do plain non-blocking work. For them a stock
+// Most critical sections do plain non-blocking work. For them, a stock
 // [sync.Mutex] is the right choice, with or without synctest.
 // DurableMutex exists for one specific pattern: critical sections that do
-// durably blocking operations while holding the lock -for example,
+// durably blocking operations while holding the lock - for example,
 // atomically receiving values from a channel and appending them to a slice.
 //
-// Under synctest the stock mutex breaks this pattern: while the holder is
+// Under synctest, the stock mutex breaks this pattern: while the holder is
 // durably blocked on a channel, other goroutines are non-durably blocked on the Lock() calls,
 // so the bubble can neither advance time nor report a deadlock, and the test freezes.
-// With DurableMutex the test runs normally, and a genuine deadlock is caught and reported by the framework.
+// With DurableMutex, the test runs normally, and a genuine deadlock is caught and reported by the framework.
 //
 // DurableMutex does not attempt to prevent starvation. Under contention,
 // acquisition order depends on runtime scheduling, and the same goroutine
@@ -27,7 +27,7 @@ import (
 // A DurableMutex used within a synctest bubble is local to that bubble:
 // every Lock and Unlock call on it must occur in the same bubble.
 //
-// The zero value is ready to use, unlocking an unlocked mutex
+// The zero value is ready to use. Unlocking an unlocked mutex
 // panics, and a DurableMutex must not be copied after first use.
 type DurableMutex struct {
 	state atomic.Int32

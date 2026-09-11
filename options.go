@@ -10,8 +10,8 @@ func (o sinkOptions) settle() {
 	}
 }
 
-// A SinkOption is an optional argument accepted by every sink, such as a
-// [Scope]. The interface cannot be implemented outside this package.
+// A SinkOption is an optional argument accepted by every sink.
+// [Scope] implements this interface.
 type SinkOption interface {
 	apply(options *sinkOptions)
 }

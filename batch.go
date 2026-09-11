@@ -4,23 +4,22 @@ import (
 	"time"
 )
 
-// Batch takes a stream of items and returns a stream of batches based on a maximum size and a timeout.
+// Batch groups consecutive values of the stream into batches. With
+// timeout = -1, it accumulates values until the batch reaches size,
+// then emits it. When the input is exhausted, any pending values are
+// emitted as a final batch.
 //
-// A batch is emitted when one of the following conditions is met:
-//   - The batch reaches the maximum size
-//   - The time since the first item was added to the batch exceeds the timeout
-//   - An error is encountered in the input stream
-//   - The input stream is closed
+// Input errors create batch boundaries: any pending batch is emitted
+// first, followed by the error as a separate item. This function never
+// emits empty batches.
 //
-// Errors are never included in batches. Each error is forwarded to the output as a separate item,
-// preserving the relative order of values and errors.
+// A positive timeout adds another trigger: each batch has that much
+// time to fill, starting from its first value. When the timeout expires,
+// the pending batch is emitted even if it is not full. This trades batch
+// size for latency: sparse input produces smaller batches, but no value
+// is ever held longer than timeout, assuming there's no backpressure.
 //
-// This function never emits empty batches. To disable the timeout and emit batches only based on the size,
-// set the timeout to -1. Setting the timeout to zero is not supported and will result in a panic
-//
-// This is a non-blocking ordered function that processes items sequentially.
-//
-// See the package documentation for more information on non-blocking ordered functions and error handling.
+// A zero timeout panics. Use a small positive timeout instead.
 func Batch[A any](in <-chan Try[A], size int, timeout time.Duration) <-chan Try[[]A] {
 	validateMinSize(size, 1)
 	if timeout == 0 {
@@ -113,10 +112,8 @@ func Batch[A any](in <-chan Try[A], size int, timeout time.Duration) <-chan Try[
 	return out
 }
 
-// Unbatch is the inverse of [Batch]. It takes a stream of batches and returns a stream of individual items.
-//
-// This is a non-blocking ordered function that processes items sequentially.
-// See the package documentation for more information on non-blocking ordered functions and error handling.
+// Unbatch flattens a stream of slices into a stream of their values.
+// This function is the inverse of [Batch].
 func Unbatch[A any](in <-chan Try[[]A]) <-chan Try[A] {
 	if in == nil {
 		return nil

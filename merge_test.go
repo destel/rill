@@ -10,7 +10,7 @@ import (
 	"github.com/destel/rill/internal/th"
 )
 
-// Full behavior of Merge is tested in the internal/core package.
+// The full behavior of Merge is tested in the internal/core package.
 // This test only pins the wrapper wiring.
 func TestMerge(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {

@@ -1,6 +1,6 @@
 // Package mockapi provides a very basic mock API for examples and demos.
 // It's intentionally kept public to enable running and experimenting with examples in the Go Playground.
-// The implementation is naive and uses full scan for all operations.
+// The implementation is naive and uses a full scan for all operations.
 package mockapi
 
 import (
@@ -79,7 +79,7 @@ func GetUser(ctx context.Context, id int) (*User, error) {
 	return &user, nil
 }
 
-// GetUsers returns a list of users by IDs.
+// GetUsers returns a list of users by their IDs.
 // If a user is not found, nil is returned in the corresponding position.
 func GetUsers(ctx context.Context, ids []int) ([]*User, error) {
 	if err := simulateWork(ctx, 1000*time.Millisecond); err != nil {

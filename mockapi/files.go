@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// DownloadFile simulates a file download. It returns the whole content as []byte.
+// DownloadFile simulates a file download. It returns the entire contents as a byte slice.
 func DownloadFile(ctx context.Context, url string) ([]byte, error) {
 	if err := simulateWork(ctx, 1000*time.Millisecond); err != nil {
 		return nil, err

@@ -46,14 +46,14 @@ func DontClose[A any](in <-chan A) <-chan A {
 }
 
 // ExpectNoRace is a semantic name for a bare unsynchronized read.
-// Tests sometimes need to do an unsynchronized access to a variable, to
+// Tests sometimes need to perform an unsynchronized read of a variable to
 // have the race detector confirm that all writes in other goroutines
 // happen before this read. It's enough to do a no-op read:
 //
 //	_ = myVariable
 //
-// This works, but requires an explaining comment at every site.
-// ExpectNoRace is also a no-op, but makes the call site clearer:
+// This works but requires an explanatory comment at every site.
+// ExpectNoRace is also a no-op but makes the call site clearer:
 //
 //	th.ExpectNoRace(myVariable)
 //
@@ -64,8 +64,8 @@ func ExpectNoRace[T any](value T) {
 }
 
 // DelayEach forwards items, sleeping for the given duration before each one.
-// Under synctest this makes it impossible to consume the channel in zero fake
-// time, hence one goroutine (main) can observe the intermediate state of another
+// Under synctest, this makes it impossible to consume the channel in zero fake
+// time, so one goroutine (main) can observe the intermediate state of another
 // goroutine (drain) consuming the stream. This function is usually
 // paired with [ExpectOpenChan].
 //
@@ -126,7 +126,7 @@ func TestLevels(t *testing.T, levels []int, f func(t *testing.T, n int)) {
 }
 
 // RunSynctest runs a subtest in a synctest bubble.
-// It panics if any unless all goroutines started from f exit cleanly.
+// It panics unless all goroutines started from f exit cleanly.
 func RunSynctest(t *testing.T, name string, f func(t *testing.T)) {
 	t.Run(name, func(t *testing.T) {
 		synctest.Test(t, f)

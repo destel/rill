@@ -4,13 +4,13 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Map takes a stream of items of type A and transforms them into items of type B using a function f.
-// Returns a new stream of transformed items.
+// Map takes a stream of values of type A and returns a stream of values of
+// type B, using f to transform each. When f returns an error, it's written
+// to the output instead of a value.
 //
-// This is a non-blocking unordered function that processes items concurrently using n goroutines.
-// An ordered version of this function, [OrderedMap], is also available.
-//
-// See the package documentation for more information on non-blocking unordered functions and error handling.
+// The argument n bounds the number of concurrent calls to f.
+// Results and errors are written to the output in completion order.
+// Use [OrderedMap] to preserve the input order.
 func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -29,7 +29,8 @@ func Map[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] 
 	})
 }
 
-// OrderedMap is the ordered version of [Map].
+// OrderedMap is the ordered version of [Map]:
+// it writes results and errors in input order rather than completion order.
 func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -48,13 +49,14 @@ func OrderedMap[A, B any](in <-chan Try[A], n int, f func(A) (B, error)) <-chan 
 	})
 }
 
-// Filter takes a stream of items of type A and filters them using a predicate function f.
-// Returns a new stream of items that passed the filter.
+// Filter takes a stream of values and returns a new stream, keeping
+// only the values that match the condition f. When f returns an error,
+// it's written to the output instead of the value.
+// Errors are never filtered out.
 //
-// This is a non-blocking unordered function that processes items concurrently using n goroutines.
-// An ordered version of this function, [OrderedFilter], is also available.
-//
-// See the package documentation for more information on non-blocking unordered functions and error handling.
+// The argument n bounds the number of concurrent calls to f.
+// Results and errors are written to the output in completion order.
+// Use [OrderedFilter] to preserve the input order.
 func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -73,7 +75,8 @@ func Filter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[
 	})
 }
 
-// OrderedFilter is the ordered version of [Filter].
+// OrderedFilter is the ordered version of [Filter]:
+// it writes results and errors in input order rather than completion order.
 func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -92,14 +95,14 @@ func OrderedFilter[A any](in <-chan Try[A], n int, f func(A) (bool, error)) <-ch
 	})
 }
 
-// FilterMap takes a stream of items of type A, applies a function f that can filter and transform them into items of type B.
-// Returns a new stream of transformed items that passed the filter. This operation is equivalent to a
-// [Filter] followed by a [Map].
+// FilterMap takes a stream of values of type A and returns a stream of
+// values of type B, using f to transform each value and decide whether
+// to keep the result. When f returns an error, it's written to the
+// output instead of a value. Errors are never filtered out.
 //
-// This is a non-blocking unordered function that processes items concurrently using n goroutines.
-// An ordered version of this function, [OrderedFilterMap], is also available.
-//
-// See the package documentation for more information on non-blocking unordered functions and error handling.
+// The argument n bounds the number of concurrent calls to f.
+// Results and errors are written to the output in completion order.
+// Use [OrderedFilterMap] to preserve the input order.
 func FilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -118,7 +121,8 @@ func FilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-
 	})
 }
 
-// OrderedFilterMap is the ordered version of [FilterMap].
+// OrderedFilterMap is the ordered version of [FilterMap]:
+// it writes results and errors in input order rather than completion order.
 func OrderedFilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, error)) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -137,13 +141,16 @@ func OrderedFilterMap[A, B any](in <-chan Try[A], n int, f func(A) (B, bool, err
 	})
 }
 
-// FlatMap takes a stream of items of type A and transforms each item into a new sub-stream of items of type B using a function f.
-// Those sub-streams are then flattened into a single output stream, which is returned.
+// FlatMap takes a stream of values of type A and returns a stream of
+// values of type B, using f to expand each value into its own sub-stream.
+// The sub-streams are flattened into the output: every item is forwarded,
+// values and errors alike.
 //
-// This is a non-blocking unordered function that processes items concurrently using n goroutines.
-// An ordered version of this function, [OrderedFlatMap], is also available.
-//
-// See the package documentation for more information on non-blocking unordered functions and error handling.
+// The argument n bounds the number of sub-streams consumed concurrently:
+// each worker consumes one sub-stream to the end before starting the next.
+// When n > 1, items from different sub-streams can interleave in the
+// output. Use [OrderedFlatMap] to concatenate the sub-streams in the
+// input order.
 func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -169,7 +176,41 @@ func FlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan 
 	return out
 }
 
-// OrderedFlatMap is the ordered version of [FlatMap].
+// OrderedFlatMap is the ordered version of [FlatMap]: the output consists
+// of the sub-streams concatenated in the input order.
+//
+// The argument n bounds the number of concurrent calls to f. The
+// sub-streams are prepared concurrently but - unlike in [FlatMap] -
+// are consumed one at a time and in order: nothing reads from a sub-stream
+// before its turn. In practice, to keep the stage concurrent, a
+// sub-stream must do all or part of its expensive work ahead of its
+// turn.
+//
+// Consider a stream of URLs: each file should be downloaded, and its
+// lines should be streamed to the output, all in order. Downloading is the
+// expensive work here.
+//
+// Example 1: f downloads the whole file into memory and then streams the
+// lines from there. Up to 5 downloads run concurrently.
+//
+//	rill.OrderedFlatMap(urls, 5, func(u string) <-chan rill.Try[string] {
+//		lines, err := getFileLines(u)
+//		return rill.FromSlice(lines, err)
+//	})
+//
+// Example 2: as the file is being downloaded, f streams the lines
+// through a [Buffer] that lets the sub-stream run ahead of its turn.
+// Again, up to 5 downloads run concurrently, but a download that runs
+// ahead of its turn pauses after its first 100 lines until the turn comes.
+//
+//	rill.OrderedFlatMap(urls, 5, func(u string) <-chan rill.Try[string] {
+//		lines := streamFileLines(u)
+//		return rill.Buffer(lines, 100)
+//	})
+//
+// The two examples do the same thing: they buffer the lines, with or
+// without a bound. Without any buffering, the downloads would run one
+// at a time, and the stage would become sequential.
 func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) <-chan Try[B] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -197,17 +238,14 @@ func OrderedFlatMap[A, B any](in <-chan Try[A], n int, f func(A) <-chan Try[B]) 
 	return out
 }
 
-// Catch allows handling errors in the middle of a stream processing pipeline.
-// Every error encountered in the input stream is passed to the function f for handling.
+// Catch takes a stream and returns a new stream with the errors
+// optionally handled by f. Each error is passed to f, which returns nil
+// to drop it from the stream, the same error to keep it, or a different
+// one to replace it. Values never reach f and are passed through as-is.
 //
-// The outcome depends on the return value of f:
-//   - If f returns nil, the error is considered handled and filtered out from the output stream.
-//   - If f returns a non-nil error, the original error is replaced with the result of f.
-//
-// This is a non-blocking unordered function that handles errors concurrently using n goroutines.
-// An ordered version of this function, [OrderedCatch], is also available.
-//
-// See the package documentation for more information on non-blocking unordered functions and error handling.
+// The argument n bounds the number of concurrent calls to f.
+// Items are written to the output in completion order.
+// Use [OrderedCatch] to preserve the input order.
 func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -226,7 +264,8 @@ func Catch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	})
 }
 
-// OrderedCatch is the ordered version of [Catch].
+// OrderedCatch is the ordered version of [Catch]:
+// it writes items in input order rather than completion order.
 func OrderedCatch[A any](in <-chan Try[A], n int, f func(error) error) <-chan Try[A] {
 	validateN(n)
 	validateNilFunc(f == nil)
