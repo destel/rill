@@ -41,17 +41,16 @@
 // output becomes an "all upstream work is done" signal that travels
 // downstream along with values and errors.
 //
-// Sinks are different: they block until the pipeline's outcome is known, which
-// can happen before the input is fully consumed and all work across the
-// pipeline is done. What "outcome known" means depends on the sink. For
-// example:
+// Sinks are different: they block until their outcome is known, then return
+// even if work remains in the pipeline. What "outcome known" means depends on
+// the sink. For example:
 //
 //   - [ForEach] immediately returns the first error it observes; otherwise, it
 //     fully consumes the input
 //   - [Any] can additionally short-circuit on the first match it finds
 //   - [First] consumes one item and returns
 //
-// On an early return, a sink drains and discards the remaining input in the
+// On an early return, a sink drains and discards any remaining input in the
 // background, so upstream stages don't block forever and leak their goroutines.
 //
 // # Context and cancellation
