@@ -108,9 +108,8 @@ func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (out
 
 // Tee duplicates the input: it returns two channels that both carry every
 // item from the input, forwarded as it arrives. Both outputs are closed
-// once the input is exhausted.
-//
-// The outputs must be consumed concurrently to avoid a deadlock.
+// once the input is exhausted. They must be consumed concurrently to avoid
+// a deadlock.
 //
 // If deep copying of values is needed, use [Map] on one or both
 // outputs:

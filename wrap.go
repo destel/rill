@@ -181,9 +181,8 @@ func FromChans[A any](values <-chan A, errs <-chan error) <-chan Try[A] {
 
 // ToChans splits the stream into two channels, one for values and one for
 // errors, and forwards each item to the appropriate one. Both channels are
-// closed once the input is exhausted.
-//
-// The channels must be consumed concurrently to avoid a deadlock.
+// closed once the input is exhausted. They must be consumed concurrently
+// to avoid a deadlock.
 func ToChans[A any](in <-chan Try[A]) (<-chan A, <-chan error) {
 	if in == nil {
 		return nil, nil
