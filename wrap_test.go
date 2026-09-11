@@ -2,6 +2,7 @@ package rill
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -283,16 +284,17 @@ func TestToChans(t *testing.T) {
 
 		var outSlice []int
 		var errSlice []string
-		th.DoConcurrently(
-			func() { outSlice = th.ToSlice(out) },
-			func() {
-				for err := range errs {
-					if err != nil {
-						errSlice = append(errSlice, err.Error())
-					}
+
+		var wg sync.WaitGroup
+		wg.Go(func() { outSlice = th.ToSlice(out) })
+		wg.Go(func() {
+			for err := range errs {
+				if err != nil {
+					errSlice = append(errSlice, err.Error())
 				}
-			},
-		)
+			}
+		})
+		wg.Wait()
 
 		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 4, 5, 6, 8, 9})
 		th.ExpectSlice(t, errSlice, []string{"err003", "err007"})
