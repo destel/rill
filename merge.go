@@ -4,10 +4,11 @@ import (
 	"github.com/destel/rill/internal/core"
 )
 
-// Merge performs a fan-in: it returns a channel that carries the items from
-// all inputs, interleaved as they arrive, with the relative order of items
-// from the same input preserved. Merge consumes its inputs simultaneously
-// and independently.
+// Merge performs a fan-in: it combines multiple input channels into
+// one output channel.
+// It reads all inputs concurrently, so a slow input does not delay
+// forwarding items from the others. Items are interleaved as they arrive,
+// preserving the relative order of items from each input.
 //
 // The output is closed only when all inputs are exhausted. A nil input is
 // never exhausted, so the output never closes. Merge with no arguments
@@ -28,7 +29,7 @@ func Merge[A any](ins ...<-chan A) <-chan A {
 // preserve the order.
 //
 // Deprecated: Split2 will be removed in v1.0. Since the introduction of [Tee]
-// in v0.8, splitting no longer needs a dedicated operation — it can be composed
+// in v0.8, splitting no longer needs a dedicated operation - it can be composed
 // from existing ones. Unlike Split2, the composition is also not limited to two
 // branches.
 //
@@ -69,7 +70,7 @@ func Split2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (outTrue <-
 // preserve the input order for values and errors alike.
 //
 // Deprecated: OrderedSplit2 will be removed in v1.0. Since the introduction of
-// [Tee] in v0.8, splitting no longer needs a dedicated operation — it can be
+// [Tee] in v0.8, splitting no longer needs a dedicated operation - it can be
 // composed from existing ones. Unlike OrderedSplit2, the composition is also
 // not limited to two branches.
 //

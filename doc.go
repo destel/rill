@@ -34,12 +34,11 @@
 //	transformed := rill.Map(batches, 3, ...) // stage, concurrency = 3
 //	err := rill.ForEach(transformed, 2, ...) // sink, concurrency = 2
 //
-// Intermediate stages never block: they return their output streams
-// immediately, while the goroutines they started continue working in
-// the background. These stages always fully consume and process their
-// inputs before closing their outputs. A closed output becomes an
-// "all upstream work is done" signal that travels downstream along with
-// values and errors.
+// Intermediate stages return their output streams immediately, while their
+// goroutines continue working in the background. These stages always fully
+// consume and process their inputs before closing their outputs. A closed
+// output becomes an "all upstream work is done" signal that travels
+// downstream along with values and errors.
 //
 // Sinks are different: they block until the pipeline's outcome is known, which
 // can happen before the input is fully consumed and all work across the pipeline is done.
@@ -141,14 +140,14 @@
 // errors into a slice.
 //
 // The easiest way to write a custom stage is to compose it from existing
-// functions rill provides. For manually written stages, there are a few
-// simple rules to follow. Most of them are satisfied by construction
-// and are related to preserving background drain and settlement semantics:
+// functions rill provides. For manually written stages, a few simple rules
+// keep background draining and settlement working. Ordinary Go channel
+// code usually satisfies most of them:
 //
 //   - sources must eventually close their output stream; a source that can
 //     run forever must watch a context and be cancellable
-//   - stages must close their output stream, but only after the input is fully
-//     consumed and processed
-//   - sinks must start with a deferred rill.Discard(in, options...), followed by a
-//     for-range loop that returns as soon as the sink's outcome is known
+//   - intermediate stages must close their output stream, but only after the
+//     input is fully consumed and processed
+//   - non-concurrent sinks must start with a deferred rill.Discard(in, options...),
+//     followed by a for-range loop that returns as soon as the sink's outcome is known
 package rill

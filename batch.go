@@ -6,7 +6,7 @@ import (
 
 // Batch groups consecutive values of the stream into batches. With
 // timeout = -1, it accumulates values until the batch reaches size,
-// then emits it. When the input closes, any remaining values are
+// then emits it. When the input is exhausted, any pending values are
 // emitted as a final batch.
 //
 // Input errors create batch boundaries: any pending batch is emitted
