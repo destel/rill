@@ -45,50 +45,39 @@ does not grow with the input size.
 
 ## Quick Start
 Let's look at a practical example: fetch users from an API, activate them, and save the changes back. 
-It shows how to control concurrency at each step while keeping the code clean and manageable.
-**ForEach** returns on the first error, and context cancellation via defer stops all remaining fetches.
+It shows how to control concurrency at each step and how to handle errors: 
+**ForEach** returns the first error it encounters
 
 
 [Try in Go playground ↗](https://goplay.tools/snippet/xN_1zaBzfkq)
 ```go
-func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+// Convert a slice into a channel
+ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Convert a slice of user IDs into a channel
-	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+// Read users from the API with concurrency = 3
+users := rill.Map(ids, 3, func(id int) (*mockapi.User, error) {
+  return mockapi.GetUser(ctx, id)
+})
 
-	// Read users from the API.
-	// Concurrency = 3
-	users := rill.Map(ids, 3, func(id int) (*mockapi.User, error) {
-		return mockapi.GetUser(ctx, id)
-	})
+// Process users with concurrency = 2
+err := rill.ForEach(users, 2, func(u *mockapi.User) error {
+  if u.IsActive {
+    return nil
+  }
+  u.IsActive = true
+  return mockapi.SaveUser(ctx, u)
+})
 
-	// Activate users.
-	// Concurrency = 2
-	err := rill.ForEach(users, 2, func(u *mockapi.User) error {
-		if u.IsActive {
-			fmt.Printf("User %d is already active\n", u.ID)
-			return nil
-		}
-
-		u.IsActive = true
-		err := mockapi.SaveUser(ctx, u)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("User saved: %+v\n", u)
-		return nil
-	})
-
-	// Handle errors
-	fmt.Println("Error:", err)
-}
+// Handle errors
+fmt.Println("Error:", err)
 ```
+
+In rill errors are handled in one place no matter where they occur. Pipeline stages are connected by plain Go channels that carry both values and errors, so an error from any stage travels downstream to the sink (the last stage) that reports it to the caller.
+
 
 
 ## Batching
+
 Processing items in batches rather than individually can significantly improve performance in many scenarios, 
 particularly when working with external services or databases. Batching reduces the number of queries and API calls, 
 increases throughput, and typically lowers costs.
@@ -101,113 +90,178 @@ to fetch multiple users in a single call, instead of making individual `GetUser`
 
 [Try in Go playground ↗](https://goplay.tools/snippet/fpltOjeX-Le)
 ```go
-func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+// Convert a slice of user IDs into a channel
+ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7,..., 38, 39, 40,}, nil)
 
-	// Convert a slice of user IDs into a channel
-	ids := rill.FromSlice([]int{
-		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-		21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-	}, nil)
+// Group IDs into batches of 5
+idBatches := rill.Batch(ids, 5, -1)
 
-	// Group IDs into batches of 5
-	idBatches := rill.Batch(ids, 5, -1)
+// Bulk fetch users from the API with concurrency = 3
+userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*mockapi.User, error) {
+  return mockapi.GetUsers(ctx, ids)
+})
 
-	// Bulk fetch users from the API
-	// Concurrency = 3
-	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*mockapi.User, error) {
-		return mockapi.GetUsers(ctx, ids)
-	})
+// Transform the stream of batches back into a flat stream of users
+users := rill.Unbatch(userBatches)
 
-	// Transform the stream of batches back into a flat stream of users
-	users := rill.Unbatch(userBatches)
+// Same as above, process users with concurrency = 2
+err := rill.ForEach(users, 2, func(u *mockapi.User) error {
+  if u.IsActive {
+    return nil
+  }
+  u.IsActive = true
+  return mockapi.SaveUser(ctx, u)
+})
 
-	// Activate users.
-	// Concurrency = 2
-	err := rill.ForEach(users, 2, func(u *mockapi.User) error {
-		if u.IsActive {
-			fmt.Printf("User %d is already active\n", u.ID)
-			return nil
-		}
-
-		u.IsActive = true
-		err := mockapi.SaveUser(ctx, u)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("User saved: %+v\n", u)
-		return nil
-	})
-
-	// Handle errors
-	fmt.Println("Error:", err)
-}
+// Handle errors
+fmt.Println("Error:", err)
 ```
 
 
 ## Real-Time Batching
-Real-world applications often need to handle events or data that arrives at unpredictable rates. While batching is still 
-desirable for efficiency, waiting to collect a full batch might introduce unacceptable delays when 
-the input stream becomes slow or sparse.
+Rill’s **Batch** function can also be used to batch independent operations happening in real time across an application.
+For example, HTTP request handlers may need to update users’ `last_active_at` timestamps and have these independent
+updates automatically combined into bulk database queries.
 
-Rill solves this with timeout-based batching: batches are emitted either when they're full or after a specified timeout, 
-whichever comes first. This approach ensures optimal batch sizes during high load while maintaining responsiveness during quiet periods.
+`UpdateUserTimestamp` looks normal at the call site: it's context aware, takes a user ID, blocks waiting for the result,
+then returns nil or an error. But under the hood, a background worker combines individual calls into bulk database updates. 
+The query errors (if any) are then sent back to the corresponding callers.
 
-Consider an application that needs to update users' _last_active_at_ timestamps in a database. The function responsible 
-for this - `UpdateUserTimestamp` can be called concurrently, at unpredictable rates, and from different parts of the application.
-Performing all these updates individually may create too many concurrent queries, potentially overwhelming the database.
+Waiting for a full batch to accumulate can take a long time if calls to `UpdateUserTimestamp` are rare.
+We can limit this wait and process partial batches using a timeout argument.
+Using a small value, like _50ms_, allows us to benefit from bulk queries when there are many concurrent updates, while
+introducing at most _50ms_ of additional latency when the stream of updates is sparse.
 
-In the example below, the updates are queued into `userIDsToUpdate` channel and then grouped into batches of up to 5 items, 
-with each batch sent to the database as a single query.
-The **Batch** function is used with a timeout of 100ms, ensuring zero latency during high load, 
-and up to 100ms latency with smaller batches during quiet periods.
+(todo: clear the code; fix casing in the request struct)
 
 [Try in Go playground ↗](https://goplay.tools/snippet/w0xsLilX1ca)
+
 ```go
-func main() {
-	// Start the background worker that processes the updates
-	go updateUserTimestampWorker()
+func UpdateUserTimestamp(ctx context.Context, userID int) error {
+	// Prepare a request to the worker.
+	req := request{userID:  userID, ReplyTo: make(chan error, 1)}
 
-	// Do some updates. They'll be automatically grouped into
-	// batches: [1,2,3,4,5], [6,7], [8]
-	UpdateUserTimestamp(1)
-	UpdateUserTimestamp(2)
-	UpdateUserTimestamp(3)
-	UpdateUserTimestamp(4)
-	UpdateUserTimestamp(5)
-	UpdateUserTimestamp(6)
-	UpdateUserTimestamp(7)
-	time.Sleep(500 * time.Millisecond) // simulate sparse updates
-	UpdateUserTimestamp(8)
+	// Send request to the worker
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case queue <- req:
+	}
+
+	// Block and wait for the result 
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-req.ReplyTo:
+		return err
+	}
 }
 
-// This is the queue of user IDs to update.
-var userIDsToUpdate = make(chan int)
-
-// UpdateUserTimestamp is the public API for updating the last_active_at column in the users table
-func UpdateUserTimestamp(userID int) {
-	userIDsToUpdate <- userID
-}
-
-// This is a background worker that sends queued updates to the database in batches.
-// For simplicity, there are no retries, error handling and synchronization.
-// Note: with a real database call, error handling would be required: as written,
-// a single failed batch would stop the worker for good, while the queue would
-// keep draining silently.
 func updateUserTimestampWorker() {
+	// Start with a stream of update requests
+	requests := rill.FromChan(queue, nil)
 
-	ids := rill.FromChan(userIDsToUpdate, nil)
+	// Group requests into batches with timeout
+	requestBatches := rill.Batch(requests, 100, 50*time.Millisecond))
 
-	idBatches := rill.Batch(ids, 5, 100*time.Millisecond)
+	// Send bulk updates to DB with concurrency = 2
+	_ = rill.ForEach(requestBatches, 2, func(batch []request) error {
+		// Create a slice of user IDs
+		ids := make([]int, len(batch))
+		for i, req := range batch {
+			ids[i] = req.userID
+		}
 
-	_ = rill.ForEach(idBatches, 1, func(batch []int) error {
-		fmt.Printf("Executed: UPDATE users SET last_active_at = NOW() WHERE id IN (%v)\n", batch)
+		// Execute batched update
+		err := sendQueryToDB("UPDATE users SET last_active_at = NOW() WHERE id IN (?)", ids)
+
+		// Send result back to all callers in this batch
+		for _, req := range batch {
+			req.ReplyTo <- err
+			close(req.ReplyTo)
+		}
 		return nil
 	})
 }
+
+// This type represents a single request to the worker
+type request struct {
+	userID  int
+	ReplyTo chan error
+}
+
+// This is the queue of user IDs to update.
+var queue = make(chan request)
 ```
+
+## Context and Structured Concurrency
+
+In rill, the sink returns as soon as the pipeline's outcome is known. **ForEach**, for example, returns the first error it encounters without waiting for the calls still in flight in other stages. This is a deliberate choice: control returns to the caller as early as possible.
+
+In cases when the caller needs more control over a pipeline's lifetime and cancellation, rill provides **Scope**. Think of it as errgroup for pipelines: by the time `Wait` returns, the context is canceled and nothing is running anymore, which is what structured concurrency means here. The main difference from errgroup is that in rill the outcome comes from the sink, not from `Wait`.
+
+- `rill.NewScope` derives a cancellable context, like `errgroup.WithContext`
+- Pipeline stages capture that context and watch it
+- The scope is passed to the sink, which covers every stage behind it
+- The sink returns the outcome
+- `scope.Wait` cancels the context and waits until the pipeline settles (nothing is running anymore)
+
+Let's modify the quick start example, adding scope to it:
+
+```go
+scope, ctx := rill.NewScope(ctx)
+
+// Convert a slice into a stream
+ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+// Read users from the API with concurrency = 3
+users := rill.Map(ids, 3, func(id int) (*mockapi.User, error) {
+	return mockapi.GetUser(ctx, id)
+})
+
+// Process users with concurrency = 2
+err := rill.ForEach(users, 2, func(u *mockapi.User) error {
+	if u.IsActive {
+		return nil
+	}
+	u.IsActive = true
+	return mockapi.SaveUser(ctx, u)
+}, scope) // The scope is passed as an option
+
+// Handle the error (outcome known)
+fmt.Println("Error:", err)
+
+// Cancel the context and wait for the pipeline to settle
+scope.Wait()
+
+// Settled: safe to close the API client, observe side effects, etc.
+```
+
+
+
+Depending on the use case, `Wait` can be called before or after handling the outcome. It can also be
+  deferred so that the enclosing function returns only after the pipeline has settled.
+
+```go
+scope, ctx := rill.NewScope(ctx)
+defer scope.Wait()
+```
+
+
+
+Scope is optional. When you don't need to wait for settlement and the surrounding code already owns cancellation, the pipeline can use the existing context directly, as the earlier examples do. A request context, for instance, is canceled when its handler returns, and any work depending on that context stops with it.
+
+
+
+
+> [!NOTE]
+> After a sink returns early, it keeps draining its input to prevent upstream stages from blocking and leaking their goroutines. This also enables seamless composition of stages: each stage just sends more values and errors to its output, always knowing there's a live consumer somewhere downstream. Draining handles the channels but does not stop the work; that is what the context is for.
+
+A scope can be shared by several sinks. When a pipeline is branched with [Tee](https://pkg.go.dev/github.com/destel/rill#example-Tee) and each branch ends with its own sink, `scope.Wait`, called once every sink has returned, waits for all branches.
+
+
+
+
 
 
 
