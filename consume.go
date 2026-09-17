@@ -2,6 +2,7 @@ package rill
 
 import (
 	"errors"
+	"sync"
 	"sync/atomic"
 )
 
@@ -42,15 +43,40 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error, options ...SinkOpt
 		return nil
 	}
 
-	var done atomic.Bool
-	defer done.Store(true)
+	var errSeen atomic.Bool
+	out := make(chan Try[struct{}], n)
 
-	out := FilterMap(in, n, func(a A) (struct{}, bool, error) {
-		if done.Load() {
-			return struct{}{}, false, nil
-		}
-		return struct{}{}, false, f(a)
-	})
+	var wg sync.WaitGroup
+
+	for range n {
+		wg.Go(func() {
+			for a := range in {
+				if errSeen.Load() {
+					return
+				}
+
+				err := a.Error
+				if err == nil {
+					err = f(a.Value)
+				}
+
+				if err != nil {
+					errSeen.Store(true)
+					out <- Try[struct{}]{Error: err}
+					return
+				}
+			}
+		})
+	}
+
+	go func() {
+		wg.Wait()
+
+		// out carries the settlement signal.
+		// Drain the input before closing out.
+		Drain(in)
+		close(out)
+	}()
 
 	return Err(out, options...)
 }
