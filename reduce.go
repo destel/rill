@@ -232,20 +232,13 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error), options ...
 			}
 		}
 
-		nodes = nil // free memory before the drain below
+		nodes = nil // help the GC
 
-		// This drain is needed for correctness:
-		// out chan carries settlement signal,
-		// don't close it until the input is drained.
+		// out carries the settlement signal.
+		// Drain the input before closing out.
 		Drain(in)
-
 		close(out)
 	}()
-
-	// This discard is needed for promptness:
-	// it starts earlier than the drain above - when the result is known.
-	// It takes no options: the settlement signal is carried by out, not in.
-	defer Discard(in)
 
 	return First(out, options...)
 }
@@ -475,18 +468,11 @@ func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func
 
 		lists = nil // help the GC
 
-		// This drain is needed for correctness:
-		// out chan carries settlement signal,
-		// don't close it until the input is drained.
+		// out carries the settlement signal.
+		// Drain the input before closing out.
 		Drain(entries)
-
 		close(out)
 	}()
-
-	// This discard is needed for promptness:
-	// it starts earlier than the drain above - when the result is known.
-	// It takes no options: the settlement signal is carried by out, not entries.
-	defer Discard(entries)
 
 	res, _, err := First(out, options...)
 	if err != nil {
