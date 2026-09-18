@@ -28,3 +28,9 @@ func collectSinkOptions(options []SinkOption) sinkOptions {
 	}
 	return result
 }
+
+type sinkOptionFunc func(options *sinkOptions)
+
+func (f sinkOptionFunc) apply(options *sinkOptions) {
+	f(options)
+}

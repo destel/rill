@@ -1,6 +1,7 @@
 package rill
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -240,6 +241,55 @@ func TestReduce(t *testing.T) {
 			th.ExpectNoRace(state)
 			th.ExpectDrainedChan(t, in)
 			th.ExpectCanceledContext(t, ctx)
+		})
+
+		th.RunSynctest(t, "context2", func(t *testing.T) {
+			ctx, scope := WithContext(t.Context())
+
+			in := FromChan(th.FromRange(0, 100), nil)
+
+			var state int64
+			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				atomic.AddInt64(&state, 1)
+				return x + y, nil
+			}, scope)
+
+			th.ExpectNoError(t, err)
+			th.ExpectValue(t, out, 99*100/2)
+			th.ExpectValue(t, ok, true)
+			th.ExpectNoRace(state)
+			th.ExpectDrainedChan(t, in)
+			th.ExpectCanceledContext(t, ctx)
+		})
+
+		th.RunSynctest(t, "context2 (error)", func(t *testing.T) {
+			ctx, scope := WithContext(t.Context())
+
+			var stopwatch th.Stopwatch
+			context.AfterFunc(ctx, stopwatch.Stop)
+
+			in := FromChan(th.FromRange(0, 1000), nil)
+			in = th.DelayEach(in, 1)
+
+			var state int64
+			x, ok, err := Reduce(in, n, func(x, y int) (int, error) {
+				th.SimulateWork(1*time.Second, 2*time.Second)
+				if atomic.AddInt64(&state, 1) == 200 {
+					stopwatch.Start()
+					return 0, fmt.Errorf("err200")
+				}
+				return x + y, nil
+			}, scope)
+
+			th.ExpectError(t, err, "err200")
+			th.ExpectValue(t, x, 0)
+			th.ExpectValue(t, ok, false)
+
+			th.ExpectNoRace(state)
+			th.ExpectDrainedChan(t, in)
+			th.ExpectCanceledContext(t, ctx)
+			th.ExpectValue(t, stopwatch.Elapsed(), 0)
 		})
 
 		th.RunSynctest(t, "concurrency", func(t *testing.T) {
