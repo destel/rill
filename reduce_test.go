@@ -26,8 +26,8 @@ func TestReduce(t *testing.T) {
 
 			var calls atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				calls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
+				calls.Add(1)
 				return x + y, nil
 			})
 
@@ -44,8 +44,8 @@ func TestReduce(t *testing.T) {
 
 			var calls atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				calls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
+				calls.Add(1)
 				return x + y, nil
 			})
 
@@ -62,8 +62,8 @@ func TestReduce(t *testing.T) {
 
 			var calls atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				calls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
+				calls.Add(1)
 				return x + y, nil
 			})
 
@@ -73,8 +73,8 @@ func TestReduce(t *testing.T) {
 
 			time.Sleep(24 * time.Hour) // eventually drained
 
-			th.ExpectValue(t, calls.Load(), 0)
 			th.ExpectDrainedChan(t, in)
+			th.ExpectValue(t, calls.Load(), 0)
 		})
 
 		th.RunSynctest(t, "no errors", func(t *testing.T) {
@@ -82,8 +82,8 @@ func TestReduce(t *testing.T) {
 
 			var calls atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				calls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
+				calls.Add(1)
 				return x + y, nil
 			})
 
@@ -102,8 +102,8 @@ func TestReduce(t *testing.T) {
 
 			var extraCalls atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				extraCalls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
+				extraCalls.Add(1)
 				return x + y, nil
 			})
 			extraCalls.Store(0)
@@ -115,8 +115,12 @@ func TestReduce(t *testing.T) {
 
 			time.Sleep(24 * time.Hour) // eventually drained
 
-			th.ExpectLTE(t, int(extraCalls.Load()), when(n == 1, 0, 50))
 			th.ExpectDrainedChan(t, in)
+			if n == 1 {
+				th.ExpectValue(t, extraCalls.Load(), 0)
+			} else {
+				th.ExpectBetween(t, extraCalls.Load(), 1, 50)
+			}
 		})
 
 		th.RunSynctest(t, "error in func", func(t *testing.T) {
@@ -126,9 +130,8 @@ func TestReduce(t *testing.T) {
 			var extraCalls atomic.Int64
 			var stopwatch th.Stopwatch
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				c := extraCalls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
-				if c == 200 {
+				if extraCalls.Add(1) == 200 {
 					stopwatch.Start()
 					return 0, fmt.Errorf("err200")
 				}
@@ -145,8 +148,12 @@ func TestReduce(t *testing.T) {
 
 			time.Sleep(24 * time.Hour) // eventually drained
 
-			th.ExpectLTE(t, int(extraCalls.Load()), when(n == 1, 0, 50))
 			th.ExpectDrainedChan(t, in)
+			if n == 1 {
+				th.ExpectValue(t, extraCalls.Load(), 0)
+			} else {
+				th.ExpectBetween(t, extraCalls.Load(), 1, 50)
+			}
 		})
 
 		th.RunSynctest(t, "error in func (last)", func(t *testing.T) {
@@ -154,9 +161,8 @@ func TestReduce(t *testing.T) {
 
 			var extraCalls atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				c := extraCalls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
-				if c == 999 {
+				if extraCalls.Add(1) == 999 {
 					return 0, fmt.Errorf("err999")
 				}
 				return x + y, nil
@@ -169,8 +175,8 @@ func TestReduce(t *testing.T) {
 
 			time.Sleep(24 * time.Hour) // eventually drained
 
-			th.ExpectValue(t, extraCalls.Load(), 0)
 			th.ExpectDrainedChan(t, in)
+			th.ExpectValue(t, extraCalls.Load(), 0)
 		})
 
 		t.Run("unclosed", func(t *testing.T) {
@@ -204,6 +210,7 @@ func TestReduce(t *testing.T) {
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, out, 99*100/2)
 			th.ExpectValue(t, ok, true)
+
 			th.ExpectNoRace(state)
 			th.ExpectDrainedChan(t, in)
 			th.ExpectCanceledContext(t, ctx)
