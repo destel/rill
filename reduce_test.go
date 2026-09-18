@@ -694,6 +694,76 @@ func TestMapReduce(t *testing.T) {
 				th.ExpectCanceledContext(t, ctx)
 			})
 
+			th.RunSynctest(t, "context2", func(t *testing.T) {
+				ctx, scope := WithContext(t.Context())
+
+				in := FromChan(th.FromRange(0, 200), nil)
+
+				var state int64
+				out, err := MapReduce(in,
+					nm, func(x int) (string, int, error) {
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						atomic.AddInt64(&state, 1)
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
+					},
+					nr, func(x, y int) (int, error) {
+						th.SimulateWork(10*time.Second, 20*time.Second)
+						atomic.AddInt64(&state, 1)
+						return x + y, nil
+					},
+					scope,
+				)
+
+				th.ExpectNoError(t, err)
+				th.ExpectMap(t, out, map[string]int{
+					"1-digit": (0 + 9) * 10 / 2,
+					"2-digit": (10 + 99) * 90 / 2,
+					"3-digit": (100 + 199) * 100 / 2,
+				})
+
+				th.ExpectNoRace(state)
+				th.ExpectDrainedChan(t, in)
+				th.ExpectCanceledContext(t, ctx)
+			})
+
+			th.RunSynctest(t, "context2 (error)", func(t *testing.T) {
+				ctx, scope := WithContext(t.Context())
+
+				var stopwatch th.Stopwatch
+				context.AfterFunc(ctx, stopwatch.Stop)
+
+				in := FromChan(th.FromRange(0, 1000), nil)
+				in = th.DelayEach(in, 1)
+
+				var state int64
+				var errorSent atomic.Bool
+				out, err := MapReduce(in,
+					nm, func(x int) (string, int, error) {
+						th.SimulateWork(1*time.Second, 2*time.Second)
+						atomic.AddInt64(&state, 1)
+						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
+					},
+					nr, func(x, y int) (int, error) {
+						th.SimulateWork(10*time.Second, 20*time.Second)
+						c := atomic.AddInt64(&state, 1)
+						if c >= 200 && errorSent.CompareAndSwap(false, true) {
+							stopwatch.Start()
+							return 0, fmt.Errorf("err200")
+						}
+						return x + y, nil
+					},
+					scope,
+				)
+
+				th.ExpectError(t, err, "err200")
+				th.ExpectMap(t, out, nil)
+
+				th.ExpectNoRace(state)
+				th.ExpectDrainedChan(t, in)
+				th.ExpectCanceledContext(t, ctx)
+				th.ExpectValue(t, stopwatch.Elapsed(), 0)
+			})
+
 			th.RunSynctest(t, "concurrency", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 100), nil)
 
