@@ -123,20 +123,24 @@ func TestReduce(t *testing.T) {
 			in = th.DelayEach(in, 1)
 
 			var extraCalls atomic.Int64
+			var stopwatch th.Stopwatch
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
 				c := extraCalls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				if c == 200 {
+					stopwatch.Start()
 					return 0, fmt.Errorf("err200")
 				}
 				return x + y, nil
 			})
 			extraCalls.Store(0)
+			stopwatch.Stop()
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, out, 0)
 			th.ExpectValue(t, ok, false)
 			th.ExpectOpenChan(t, in)
+			th.ExpectValue(t, stopwatch.Elapsed(), 0)
 
 			time.Sleep(24 * time.Hour) // eventually drained
 
