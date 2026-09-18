@@ -538,6 +538,7 @@ func TestMapReduce(t *testing.T) {
 
 				var extraCalls atomic.Int64
 				var errorSent atomic.Bool
+				var stopwatch th.Stopwatch
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
 						extraCalls.Add(1)
@@ -548,16 +549,19 @@ func TestMapReduce(t *testing.T) {
 						c := extraCalls.Add(1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
 						if c >= 200 && errorSent.CompareAndSwap(false, true) {
+							stopwatch.Start()
 							return 0, fmt.Errorf("err200")
 						}
 						return x + y, nil
 					},
 				)
 				extraCalls.Store(0)
+				stopwatch.Stop()
 
 				th.ExpectError(t, err, "err200")
 				th.ExpectMap(t, out, nil)
 				th.ExpectOpenChan(t, in)
+				th.ExpectValue(t, stopwatch.Elapsed(), 0)
 
 				time.Sleep(24 * time.Hour) // eventually drained
 
