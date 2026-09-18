@@ -190,60 +190,6 @@ func TestReduce(t *testing.T) {
 		})
 
 		th.RunSynctest(t, "context", func(t *testing.T) {
-			scope, ctx := NewScope(t.Context())
-			defer scope.Cancel()
-
-			in := FromChan(th.FromRange(0, 100), nil)
-
-			var state int64
-			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				th.SimulateWork(1*time.Second, 2*time.Second)
-				atomic.AddInt64(&state, 1)
-				return x + y, nil
-			}, scope)
-
-			th.ExpectNoError(t, err)
-			th.ExpectValue(t, out, 99*100/2)
-			th.ExpectValue(t, ok, true)
-			th.ExpectNoRace(state)
-			th.ExpectDrainedChan(t, in)
-			th.ExpectActiveContext(t, ctx)
-
-			scope.Wait()
-
-			th.ExpectCanceledContext(t, ctx)
-		})
-
-		th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-			scope, ctx := NewScope(t.Context())
-			defer scope.Cancel()
-
-			in := FromChan(th.FromRange(0, 1000), nil)
-			in = th.DelayEach(in, 1)
-
-			var state int64
-			x, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				th.SimulateWork(1*time.Second, 2*time.Second)
-				if atomic.AddInt64(&state, 1) == 200 {
-					return 0, fmt.Errorf("err200")
-				}
-				return x + y, nil
-			}, scope)
-
-			th.ExpectError(t, err, "err200")
-			th.ExpectValue(t, x, 0)
-			th.ExpectValue(t, ok, false)
-			th.ExpectOpenChan(t, in)
-			th.ExpectActiveContext(t, ctx)
-
-			scope.Wait()
-
-			th.ExpectNoRace(state)
-			th.ExpectDrainedChan(t, in)
-			th.ExpectCanceledContext(t, ctx)
-		})
-
-		th.RunSynctest(t, "context2", func(t *testing.T) {
 			ctx, scope := WithContext(t.Context())
 
 			in := FromChan(th.FromRange(0, 100), nil)
@@ -263,7 +209,7 @@ func TestReduce(t *testing.T) {
 			th.ExpectCanceledContext(t, ctx)
 		})
 
-		th.RunSynctest(t, "context2 (error)", func(t *testing.T) {
+		th.RunSynctest(t, "context (early cancellation)", func(t *testing.T) {
 			ctx, scope := WithContext(t.Context())
 
 			var stopwatch th.Stopwatch
@@ -620,81 +566,6 @@ func TestMapReduce(t *testing.T) {
 			})
 
 			th.RunSynctest(t, "context", func(t *testing.T) {
-				scope, ctx := NewScope(t.Context())
-				defer scope.Cancel()
-
-				in := FromChan(th.FromRange(0, 200), nil)
-
-				var stateMapper, stateReducer int64
-				out, err := MapReduce(in,
-					nm, func(x int) (string, int, error) {
-						atomic.AddInt64(&stateMapper, 1)
-						th.SimulateWork(1*time.Second, 2*time.Second)
-						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
-					},
-					nr, func(x, y int) (int, error) {
-						atomic.AddInt64(&stateReducer, 1)
-						th.SimulateWork(10*time.Second, 20*time.Second)
-						return x + y, nil
-					},
-					scope,
-				)
-
-				th.ExpectNoError(t, err)
-				th.ExpectMap(t, out, map[string]int{
-					"1-digit": (0 + 9) * 10 / 2,
-					"2-digit": (10 + 99) * 90 / 2,
-					"3-digit": (100 + 199) * 100 / 2,
-				})
-				th.ExpectNoRace(stateMapper)
-				th.ExpectNoRace(stateReducer)
-				th.ExpectDrainedChan(t, in)
-				th.ExpectActiveContext(t, ctx)
-
-				scope.Wait()
-
-				th.ExpectCanceledContext(t, ctx)
-			})
-
-			th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-				scope, ctx := NewScope(t.Context())
-				defer scope.Cancel()
-
-				in := FromChan(th.FromRange(0, 1000), nil)
-				in = th.DelayEach(in, 1)
-
-				var state int64
-				var errorSent atomic.Bool
-				out, err := MapReduce(in,
-					nm, func(x int) (string, int, error) {
-						atomic.AddInt64(&state, 1)
-						th.SimulateWork(1*time.Second, 2*time.Second)
-						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
-					},
-					nr, func(x, y int) (int, error) {
-						c := atomic.AddInt64(&state, 1)
-						th.SimulateWork(10*time.Second, 20*time.Second)
-						if c >= 200 && errorSent.CompareAndSwap(false, true) {
-							return 0, fmt.Errorf("err200")
-						}
-						return x + y, nil
-					},
-					scope,
-				)
-
-				th.ExpectError(t, err, "err200")
-				th.ExpectMap(t, out, nil)
-				th.ExpectOpenChan(t, in)
-				th.ExpectActiveContext(t, ctx)
-
-				scope.Wait()
-
-				th.ExpectNoRace(state)
-				th.ExpectDrainedChan(t, in)
-				th.ExpectCanceledContext(t, ctx)
-			})
-
-			th.RunSynctest(t, "context2", func(t *testing.T) {
 				ctx, scope := WithContext(t.Context())
 
 				in := FromChan(th.FromRange(0, 200), nil)
@@ -726,7 +597,7 @@ func TestMapReduce(t *testing.T) {
 				th.ExpectCanceledContext(t, ctx)
 			})
 
-			th.RunSynctest(t, "context2 (error)", func(t *testing.T) {
+			th.RunSynctest(t, "context (early cancellation)", func(t *testing.T) {
 				ctx, scope := WithContext(t.Context())
 
 				var stopwatch th.Stopwatch
