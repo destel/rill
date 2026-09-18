@@ -74,15 +74,22 @@ func ToSeq2[A any](in <-chan Try[A], options ...SinkOption) iter.Seq2[A, error] 
 		endReached := false
 
 		defer once.Do(func() {
+			call(opts.onOutcomeKnown)
+
 			if endReached {
-				opts.settle()
+				call(opts.onSettled)
 				return
 			}
 
-			go func() {
+			if opts.waitForDrain {
 				Drain(in)
-				opts.settle()
-			}()
+				call(opts.onSettled)
+			} else {
+				go func() {
+					Drain(in)
+					call(opts.onSettled)
+				}()
+			}
 		})
 
 		for x := range in {

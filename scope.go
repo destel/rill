@@ -50,7 +50,7 @@ func (s *scope) apply(options *sinkOptions) {
 	}
 
 	s.cnt++
-	options.settleFuncs = append(options.settleFuncs, s.release)
+	options.onSettled = append(options.onSettled, s.release)
 }
 
 func (s *scope) release() {

@@ -22,21 +22,29 @@ func Discard[A any](in <-chan A, options ...SinkOption) {
 		return
 	}
 
-	// do nothing if the channel is already closed
+	// Discard assumes the sink's outcome is already known
+	call(opts.onOutcomeKnown)
+
+	// Do nothing if the channel is already closed
 	select {
 	case _, ok := <-in:
 		if !ok {
-			opts.settle()
+			call(opts.onSettled)
 			return
 		}
 	default:
 	}
 
-	// drain in background
-	go func() {
+	// Drain in background or foreground depending on the option
+	if opts.waitForDrain {
 		core.Drain(in)
-		opts.settle()
-	}()
+		call(opts.onSettled)
+	} else {
+		go func() {
+			core.Drain(in)
+			call(opts.onSettled)
+		}()
+	}
 }
 
 // DrainNB is a non-blocking version of [Drain].

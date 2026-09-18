@@ -1,11 +1,13 @@
 package rill
 
 type sinkOptions struct {
-	settleFuncs []func()
+	onSettled      []func()
+	onOutcomeKnown []func()
+	waitForDrain   bool
 }
 
-func (o sinkOptions) settle() {
-	for _, fn := range o.settleFuncs {
+func call(fns []func()) {
+	for _, fn := range fns {
 		fn()
 	}
 }

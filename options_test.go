@@ -12,6 +12,6 @@ func TestSinkOption(t *testing.T) {
 		defer scope.Cancel()
 
 		opts := collectSinkOptions([]SinkOption{nil, scope, nil})
-		th.ExpectValue(t, len(opts.settleFuncs), 1)
+		th.ExpectValue(t, len(opts.onSettled), 1)
 	})
 }
