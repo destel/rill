@@ -26,7 +26,7 @@ func TestErr(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "no errors", func(t *testing.T) {
-		in := FromChan(th.FromRange(1, 20), nil)
+		in := FromChan(th.FromRange(1, 21), nil)
 		err := Err(in)
 
 		th.ExpectNoError(t, err)
@@ -34,7 +34,7 @@ func TestErr(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "error", func(t *testing.T) {
-		in := FromChan(th.FromRange(1, 20), nil)
+		in := FromChan(th.FromRange(1, 21), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
 		in = replaceWithError(in, 15, fmt.Errorf("err015"))
 		in = th.DelayEach(in, 1*time.Second)
@@ -54,7 +54,7 @@ func TestErr(t *testing.T) {
 
 	t.Run("unclosed", func(t *testing.T) {
 		th.ExpectLeak(t, func(t *testing.T) {
-			in := FromChan(th.FromRange(1, 20), nil)
+			in := FromChan(th.FromRange(1, 21), nil)
 			in = replaceWithError(in, 10, fmt.Errorf("err010"))
 			in = th.DontClose(in)
 
@@ -67,7 +67,7 @@ func TestErr(t *testing.T) {
 	th.RunSynctest(t, "context", func(t *testing.T) {
 		ctx, scope := WithContext(t.Context())
 
-		in := FromChan(th.FromRange(1, 20), nil)
+		in := FromChan(th.FromRange(1, 21), nil)
 
 		err := Err(in, scope)
 
@@ -82,7 +82,7 @@ func TestErr(t *testing.T) {
 		var stopwatch th.Stopwatch
 		context.AfterFunc(ctx, stopwatch.Stop)
 
-		in := FromChan(th.FromRange(1, 20), nil)
+		in := FromChan(th.FromRange(1, 21), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
 		in = th.DelayEach(in, 1*time.Second)
 
@@ -116,7 +116,7 @@ func TestFirst(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "value is first", func(t *testing.T) {
-		in := FromChan(th.FromRange(1, 20), nil)
+		in := FromChan(th.FromRange(1, 21), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
 		in = th.DelayEach(in, 1*time.Second)
 
@@ -136,7 +136,7 @@ func TestFirst(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "error is first", func(t *testing.T) {
-		in := FromChan(th.FromRange(1, 20), nil)
+		in := FromChan(th.FromRange(1, 21), nil)
 		in = replaceWithError(in, 1, fmt.Errorf("err001"))
 		in = th.DelayEach(in, 1*time.Second)
 
@@ -169,7 +169,7 @@ func TestFirst(t *testing.T) {
 
 	t.Run("unclosed", func(t *testing.T) {
 		th.ExpectLeak(t, func(t *testing.T) {
-			in := FromChan(th.FromRange(1, 20), nil)
+			in := FromChan(th.FromRange(1, 21), nil)
 			in = th.DontClose(in)
 			x, ok, err := First(in)
 
@@ -199,7 +199,7 @@ func TestFirst(t *testing.T) {
 		var stopwatch th.Stopwatch
 		context.AfterFunc(ctx, stopwatch.Stop)
 
-		in := FromChan(th.FromRange(1, 20), nil)
+		in := FromChan(th.FromRange(1, 21), nil)
 		in = th.DelayEach(in, 1*time.Second)
 
 		stopwatch.Start()
