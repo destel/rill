@@ -26,7 +26,7 @@ func TestErr(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "no errors", func(t *testing.T) {
-		in := FromChan(th.FromRange(0, 20), nil)
+		in := FromChan(th.FromRange(1, 20), nil)
 		err := Err(in)
 
 		th.ExpectNoError(t, err)
@@ -34,15 +34,18 @@ func TestErr(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "error", func(t *testing.T) {
-		in := FromChan(th.FromRange(0, 20), nil)
+		in := FromChan(th.FromRange(1, 20), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
 		in = replaceWithError(in, 15, fmt.Errorf("err015"))
-		in = th.DelayEach(in, 1)
+		in = th.DelayEach(in, 1*time.Second)
 
+		stopwatch := th.StartStopwatch()
 		err := Err(in)
+		stopwatch.Stop()
 
 		th.ExpectError(t, err, "err010")
 		th.ExpectOpenChan(t, in)
+		th.ExpectValue(t, stopwatch.Elapsed(), 10*time.Second)
 
 		time.Sleep(24 * time.Hour) // eventually drained
 
@@ -51,7 +54,7 @@ func TestErr(t *testing.T) {
 
 	t.Run("unclosed", func(t *testing.T) {
 		th.ExpectLeak(t, func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 20), nil)
+			in := FromChan(th.FromRange(1, 20), nil)
 			in = replaceWithError(in, 10, fmt.Errorf("err010"))
 			in = th.DontClose(in)
 
@@ -62,40 +65,34 @@ func TestErr(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "context", func(t *testing.T) {
-		scope, ctx := NewScope(t.Context())
-		defer scope.Cancel()
+		ctx, scope := WithContext(t.Context())
 
-		in := FromChan(th.FromRange(0, 20), nil)
+		in := FromChan(th.FromRange(1, 20), nil)
 
 		err := Err(in, scope)
 
 		th.ExpectNoError(t, err)
 		th.ExpectDrainedChan(t, in)
-		th.ExpectActiveContext(t, ctx)
-
-		scope.Wait()
-
 		th.ExpectCanceledContext(t, ctx)
 	})
 
-	th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-		scope, ctx := NewScope(t.Context())
-		defer scope.Cancel()
+	th.RunSynctest(t, "context (early cancellation)", func(t *testing.T) {
+		ctx, scope := WithContext(t.Context())
 
-		in := FromChan(th.FromRange(0, 20), nil)
+		var stopwatch th.Stopwatch
+		context.AfterFunc(ctx, stopwatch.Stop)
+
+		in := FromChan(th.FromRange(1, 20), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
-		in = th.DelayEach(in, 1)
+		in = th.DelayEach(in, 1*time.Second)
 
+		stopwatch.Start()
 		err := Err(in, scope)
 
 		th.ExpectError(t, err, "err010")
-		th.ExpectOpenChan(t, in)
-		th.ExpectActiveContext(t, ctx)
-
-		scope.Wait()
-
 		th.ExpectDrainedChan(t, in)
 		th.ExpectCanceledContext(t, ctx)
+		th.ExpectValue(t, stopwatch.Elapsed(), 10*time.Second)
 	})
 }
 
@@ -119,16 +116,19 @@ func TestFirst(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "value is first", func(t *testing.T) {
-		in := FromChan(th.FromRange(0, 20), nil)
+		in := FromChan(th.FromRange(1, 20), nil)
 		in = replaceWithError(in, 10, fmt.Errorf("err010"))
-		in = th.DelayEach(in, 1)
+		in = th.DelayEach(in, 1*time.Second)
 
+		stopwatch := th.StartStopwatch()
 		x, ok, err := First(in)
+		stopwatch.Stop()
 
 		th.ExpectNoError(t, err)
 		th.ExpectValue(t, ok, true)
-		th.ExpectValue(t, x, 0)
+		th.ExpectValue(t, x, 1)
 		th.ExpectOpenChan(t, in)
+		th.ExpectValue(t, stopwatch.Elapsed(), 1*time.Second)
 
 		time.Sleep(24 * time.Hour) // eventually drained
 
@@ -136,16 +136,19 @@ func TestFirst(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "error is first", func(t *testing.T) {
-		in := FromChan(th.FromRange(0, 20), nil)
-		in = replaceWithError(in, 0, fmt.Errorf("err000"))
-		in = th.DelayEach(in, 1)
+		in := FromChan(th.FromRange(1, 20), nil)
+		in = replaceWithError(in, 1, fmt.Errorf("err001"))
+		in = th.DelayEach(in, 1*time.Second)
 
+		stopwatch := th.StartStopwatch()
 		x, ok, err := First(in)
+		stopwatch.Stop()
 
-		th.ExpectError(t, err, "err000")
+		th.ExpectError(t, err, "err001")
 		th.ExpectValue(t, ok, false)
 		th.ExpectValue(t, x, 0)
 		th.ExpectOpenChan(t, in)
+		th.ExpectValue(t, stopwatch.Elapsed(), 1*time.Second)
 
 		time.Sleep(24 * time.Hour) // eventually drained
 
@@ -166,19 +169,18 @@ func TestFirst(t *testing.T) {
 
 	t.Run("unclosed", func(t *testing.T) {
 		th.ExpectLeak(t, func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 20), nil)
+			in := FromChan(th.FromRange(1, 20), nil)
 			in = th.DontClose(in)
 			x, ok, err := First(in)
 
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, ok, true)
-			th.ExpectValue(t, x, 0)
+			th.ExpectValue(t, x, 1)
 		})
 	})
 
 	th.RunSynctest(t, "context", func(t *testing.T) {
-		scope, ctx := NewScope(t.Context())
-		defer scope.Cancel()
+		ctx, scope := WithContext(t.Context())
 
 		in := FromSlice([]int{}, nil)
 
@@ -188,32 +190,27 @@ func TestFirst(t *testing.T) {
 		th.ExpectValue(t, ok, false)
 		th.ExpectValue(t, x, 0)
 		th.ExpectDrainedChan(t, in)
-		th.ExpectActiveContext(t, ctx)
-
-		scope.Wait()
-
 		th.ExpectCanceledContext(t, ctx)
 	})
 
-	th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-		scope, ctx := NewScope(t.Context())
-		defer scope.Cancel()
+	th.RunSynctest(t, "context (early cancellation)", func(t *testing.T) {
+		ctx, scope := WithContext(t.Context())
 
-		in := FromChan(th.FromRange(0, 20), nil)
-		in = th.DelayEach(in, 1)
+		var stopwatch th.Stopwatch
+		context.AfterFunc(ctx, stopwatch.Stop)
 
+		in := FromChan(th.FromRange(1, 20), nil)
+		in = th.DelayEach(in, 1*time.Second)
+
+		stopwatch.Start()
 		x, ok, err := First(in, scope)
 
 		th.ExpectNoError(t, err)
 		th.ExpectValue(t, ok, true)
-		th.ExpectValue(t, x, 0)
-		th.ExpectOpenChan(t, in)
-		th.ExpectActiveContext(t, ctx)
-
-		scope.Wait()
-
+		th.ExpectValue(t, x, 1)
 		th.ExpectDrainedChan(t, in)
 		th.ExpectCanceledContext(t, ctx)
+		th.ExpectValue(t, stopwatch.Elapsed(), 1*time.Second)
 	})
 }
 

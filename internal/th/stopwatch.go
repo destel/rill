@@ -14,6 +14,13 @@ type Stopwatch struct {
 	mu        sync.Mutex
 }
 
+// StartStopwatch returns a new Stopwatch that is already started.
+func StartStopwatch() *Stopwatch {
+	var sw Stopwatch
+	sw.Start()
+	return &sw
+}
+
 func (sw *Stopwatch) Start() {
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
