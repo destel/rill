@@ -1,6 +1,7 @@
 package rill
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -19,7 +20,7 @@ func TestToSeq2(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "normal", func(t *testing.T) {
-		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+		in := FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 		in = replaceWithError(in, 5, fmt.Errorf("err5"))
 		in = replaceWithError(in, 8, fmt.Errorf("err8"))
 
@@ -37,22 +38,23 @@ func TestToSeq2(t *testing.T) {
 		th.ExpectDrainedChan(t, in)
 
 		var expectedSlice []Item[int]
-		expectedSlice = appendVal(expectedSlice, 0, 1, 2, 3, 4)
+		expectedSlice = appendVal(expectedSlice, 1, 2, 3, 4)
 		expectedSlice = appendErr(expectedSlice, fmt.Errorf("err5"))
 		expectedSlice = appendVal(expectedSlice, 6, 7)
 		expectedSlice = appendErr(expectedSlice, fmt.Errorf("err8"))
-		expectedSlice = appendVal(expectedSlice, 9)
+		expectedSlice = appendVal(expectedSlice, 9, 10)
 
 		th.ExpectSlice(t, outSlice, expectedSlice)
 	})
 
 	th.RunSynctest(t, "early exit", func(t *testing.T) {
-		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+		in := FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 		in = replaceWithError(in, 8, fmt.Errorf("err8"))
-		in = th.DelayEach(in, 1)
+		in = th.DelayEach(in, 1*time.Second)
 
 		out := ToSeq2(in)
 
+		stopwatch := th.StartStopwatch()
 		var outSlice []Item[int]
 		for val, err := range out {
 			if val == 5 {
@@ -65,12 +67,14 @@ func TestToSeq2(t *testing.T) {
 			}
 			outSlice = appendVal(outSlice, val)
 		}
+		stopwatch.Stop()
 
 		var expectedSlice []Item[int]
-		expectedSlice = appendVal(expectedSlice, 0, 1, 2, 3, 4)
+		expectedSlice = appendVal(expectedSlice, 1, 2, 3, 4)
 
 		th.ExpectSlice(t, outSlice, expectedSlice)
 		th.ExpectOpenChan(t, in)
+		th.ExpectValue(t, stopwatch.Elapsed(), 5*time.Second)
 
 		time.Sleep(24 * time.Hour) // eventually drained
 
@@ -79,7 +83,7 @@ func TestToSeq2(t *testing.T) {
 
 	t.Run("never ranged", func(t *testing.T) {
 		th.ExpectLeak(t, func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 20), nil)
+			in := FromChan(th.FromRange(1, 21), nil)
 
 			_ = ToSeq2(in)
 
@@ -91,7 +95,7 @@ func TestToSeq2(t *testing.T) {
 
 	t.Run("unclosed", func(t *testing.T) {
 		th.ExpectLeak(t, func(t *testing.T) {
-			in := FromChan(th.FromRange(0, 20), nil)
+			in := FromChan(th.FromRange(1, 21), nil)
 			in = th.DontClose(in)
 
 			out := ToSeq2(in)
@@ -102,10 +106,9 @@ func TestToSeq2(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "context", func(t *testing.T) {
-		scope, ctx := NewScope(t.Context())
-		defer scope.Cancel()
+		ctx, scope := WithContext(t.Context())
 
-		in := FromChan(th.FromRange(0, 10), nil)
+		in := FromChan(th.FromRange(1, 11), nil)
 
 		out := ToSeq2(in, scope)
 
@@ -114,24 +117,44 @@ func TestToSeq2(t *testing.T) {
 			outSlice = append(outSlice, val)
 		}
 
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+		th.ExpectSlice(t, outSlice, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 		th.ExpectDrainedChan(t, in)
-		th.ExpectActiveContext(t, ctx)
-
-		scope.Wait()
-
 		th.ExpectCanceledContext(t, ctx)
 	})
 
-	th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-		scope, ctx := NewScope(t.Context())
-		defer scope.Cancel()
+	th.RunSynctest(t, "ranged twice", func(t *testing.T) {
+		// The options are opened once, at the call site: a spent iterator can be
+		// ranged again and yields nothing.
+		var applied int
+		opt := sinkOptionFunc(func(*sinkOptions) { applied++ })
 
-		in := FromChan(th.FromRange(0, 10), nil)
-		in = th.DelayEach(in, 1)
+		in := FromChan(th.FromRange(1, 21), nil)
+		out := ToSeq2(in, opt)
+
+		for range out {
+		}
+		second := 0
+		for range out {
+			second++
+		}
+
+		th.ExpectValue(t, applied, 1)
+		th.ExpectValue(t, second, 0)
+		th.ExpectDrainedChan(t, in)
+	})
+
+	th.RunSynctest(t, "context (early cancellation)", func(t *testing.T) {
+		ctx, scope := WithContext(t.Context())
+
+		var stopwatch th.Stopwatch
+		context.AfterFunc(ctx, stopwatch.Stop)
+
+		in := FromChan(th.FromRange(1, 11), nil)
+		in = th.DelayEach(in, 1*time.Second)
 
 		out := ToSeq2(in, scope)
 
+		stopwatch.Start()
 		var outSlice []int
 		for val := range out {
 			if val == 5 {
@@ -140,42 +163,23 @@ func TestToSeq2(t *testing.T) {
 			outSlice = append(outSlice, val)
 		}
 
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
-		th.ExpectOpenChan(t, in)
-		th.ExpectActiveContext(t, ctx)
-
-		scope.Wait()
-
+		th.ExpectSlice(t, outSlice, []int{1, 2, 3, 4})
 		th.ExpectDrainedChan(t, in)
 		th.ExpectCanceledContext(t, ctx)
-	})
-
-	th.RunSynctest(t, "context (double consumption)", func(t *testing.T) {
-		scope, _ := NewScope(t.Context())
-		defer scope.Cancel()
-
-		in := FromChan(th.FromRange(0, 20), nil)
-
-		out := ToSeq2(in, scope)
-
-		for range out {
-		}
-		for range out {
-		}
-
-		scope.Wait()
-		th.ExpectDrainedChan(t, in)
+		th.ExpectValue(t, stopwatch.Elapsed(), 5*time.Second)
 	})
 
 	t.Run("context (never ranged)", func(t *testing.T) {
-		th.ExpectBlock(t, func(t *testing.T) {
-			scope, _ := NewScope(t.Context())
-			defer scope.Cancel()
+		th.ExpectLeak(t, func(t *testing.T) {
+			ctx, scope := WithContext(t.Context())
 
-			in := FromChan(th.FromRange(0, 20), nil)
+			in := FromChan(th.FromRange(1, 21), nil)
 			_ = ToSeq2(in, scope) // ignore the iterator
 
-			scope.Wait() // this blocks forever
+			time.Sleep(24 * time.Hour) // nothing happens, not even the cancel
+
+			th.ExpectOpenChan(t, in)
+			th.ExpectActiveContext(t, ctx)
 		})
 	})
 }
