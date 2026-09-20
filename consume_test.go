@@ -357,6 +357,22 @@ func TestForEach(t *testing.T) {
 			th.ExpectValue(t, stopwatch.Elapsed(), 0)
 		})
 
+		th.RunSynctest(t, "concurrency", func(t *testing.T) {
+			in := FromChan(th.FromRange(0, 100), nil)
+
+			var gauge th.InFlightGauge
+
+			_ = ForEach(in, n, func(x int) error {
+				gauge.Enter()
+				defer gauge.Exit()
+				th.SimulateWork(1*time.Second, 2*time.Second)
+
+				return nil
+			})
+
+			th.ExpectValue(t, gauge.Max(), n)
+		})
+
 	})
 
 	th.RunSynctest(t, "n=1 determinism", func(t *testing.T) {
