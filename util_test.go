@@ -2,6 +2,7 @@ package rill
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -90,6 +91,47 @@ func TestDiscard(t *testing.T) {
 		Discard(in, opt)
 
 		th.ExpectCanceledContext(t, ctx)
+	})
+
+	th.RunSynctest(t, "hooks", func(t *testing.T) {
+		var appliedCnt, outcomeKnownCnt, settledCnt atomic.Int32
+
+		opt := sinkOptionFunc(func(options *sinkOptions) {
+			appliedCnt.Add(1)
+			options.onOutcomeKnown = append(options.onOutcomeKnown, func() {
+				outcomeKnownCnt.Add(1)
+			})
+			options.onSettled = append(options.onSettled, func() {
+				settledCnt.Add(1)
+			})
+		})
+
+		// Closed input, instant settlement
+		in1 := make(chan int)
+		close(in1)
+
+		Discard(in1, opt)
+		th.ExpectValue(t, appliedCnt.Load(), 1)
+		th.ExpectValue(t, outcomeKnownCnt.Load(), 1)
+		th.ExpectValue(t, settledCnt.Load(), 1)
+
+		time.Sleep(10 * time.Second)
+		synctest.Wait()
+		th.ExpectValue(t, settledCnt.Load(), 1)
+
+		// The same option twice on another sink: each occurrence is applied
+		// Settlement after 10s
+		in2 := th.FromRange(0, 10)
+		in2 = th.DelayEach(in2, 1*time.Second)
+
+		Discard(in2, opt, opt)
+		th.ExpectValue(t, appliedCnt.Load(), 3)
+		th.ExpectValue(t, outcomeKnownCnt.Load(), 3)
+		th.ExpectValue(t, settledCnt.Load(), 1)
+
+		time.Sleep(10 * time.Second)
+		synctest.Wait()
+		th.ExpectValue(t, settledCnt.Load(), 3)
 	})
 }
 

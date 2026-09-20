@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/destel/rill/internal/th"
@@ -167,6 +169,42 @@ func TestToSeq2(t *testing.T) {
 		th.ExpectDrainedChan(t, in)
 		th.ExpectCanceledContext(t, ctx)
 		th.ExpectValue(t, stopwatch.Elapsed(), 5*time.Second)
+	})
+
+	th.RunSynctest(t, "hooks", func(t *testing.T) {
+		var appliedCnt, outcomeKnownCnt, settledCnt atomic.Int32
+
+		opt := sinkOptionFunc(func(options *sinkOptions) {
+			appliedCnt.Add(1)
+			options.onOutcomeKnown = append(options.onOutcomeKnown, func() {
+				outcomeKnownCnt.Add(1)
+			})
+			options.onSettled = append(options.onSettled, func() {
+				settledCnt.Add(1)
+			})
+		})
+
+		// Ranged to the end: the outcome and the settle land together
+		in1 := FromChan(th.FromRange(0, 10), nil)
+		for range ToSeq2(in1, opt) {
+		}
+		th.ExpectValue(t, appliedCnt.Load(), 1)
+		th.ExpectValue(t, outcomeKnownCnt.Load(), 1)
+		th.ExpectValue(t, settledCnt.Load(), 1)
+
+		// Broken early: the outcome lands at the break, the settle once the background drain is done
+		in2 := FromChan(th.FromRange(0, 10), nil)
+		in2 = th.DelayEach(in2, 1*time.Second)
+		for range ToSeq2(in2, opt, opt) {
+			break
+		}
+		th.ExpectValue(t, appliedCnt.Load(), 3)
+		th.ExpectValue(t, outcomeKnownCnt.Load(), 3)
+		th.ExpectValue(t, settledCnt.Load(), 1)
+
+		time.Sleep(10 * time.Second)
+		synctest.Wait()
+		th.ExpectValue(t, settledCnt.Load(), 3)
 	})
 
 	t.Run("context (never ranged)", func(t *testing.T) {
