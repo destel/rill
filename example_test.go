@@ -21,11 +21,11 @@ import (
 
 // This example demonstrates a rill pipeline that fetches users from an API,
 // updates their status to active, and saves them back.
-// Both operations are performed concurrently.
-// [ForEach] returns on the first error, and context cancellation via defer stops all remaining fetches.
+// Both operations are performed concurrently, and errors are handled in one place at the end.
 func Example() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// The context is canceled on the first error or when ForEach returns,
+	// whichever occurs first.
+	ctx, scope := rill.WithContext(context.Background())
 
 	// Convert a slice of user IDs into a stream
 	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
@@ -52,9 +52,9 @@ func Example() {
 
 		fmt.Printf("User saved: %+v\n", u)
 		return nil
-	})
+	}, scope)
 
-	// Handle errors
+	// Nothing is running anymore. Handle errors:
 	fmt.Println("Error:", err)
 }
 
@@ -62,8 +62,7 @@ func Example() {
 // updates their status to active, and saves them back.
 // Users are fetched concurrently and in batches to reduce the number of API calls.
 func Example_batching() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, scope := rill.WithContext(context.Background())
 
 	// Convert a slice of user IDs into a stream
 	ids := rill.FromSlice([]int{
@@ -99,7 +98,7 @@ func Example_batching() {
 
 		fmt.Printf("User saved: %+v\n", u)
 		return nil
-	})
+	}, scope)
 
 	// Handle errors
 	fmt.Println("Error:", err)
@@ -171,11 +170,8 @@ func updateUserTimestampWorker() {
 //
 // The combination of the [OrderedFilter] and [First] functions solves the problem
 // while downloading and holding in memory at most 5 files at the same time.
-// [First] returns on the first match; this triggers context cancellation via defer,
-// stopping URL generation and file downloads.
-func Example_orderingAndContext() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel() // cancel all the remaining requests after the first match or error
+func Example_ordering() {
+	ctx, scope := rill.WithContext(context.Background())
 
 	// The string to search for in the downloaded files
 	needle := []byte("26")
@@ -203,19 +199,11 @@ func Example_orderingAndContext() {
 		return bytes.Contains(content, needle), nil
 	})
 
-	// Find the first matched URL
-	firstMatchedUrl, found, err := rill.First(matchedUrls)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	// Print the result
-	if found {
-		fmt.Println("Found in:", firstMatchedUrl)
-	} else {
-		fmt.Println("Not found")
-	}
+	// Find the first matched URL.
+	// The match cancels the context, which stops the URL generation and the
+	// downloads in flight; First returns once they have.
+	firstMatchedUrl, found, err := rill.First(matchedUrls, scope)
+	fmt.Println("First matched URL:", firstMatchedUrl, found, err)
 }
 
 // This example demonstrates the parallel streaming pattern: [FlatMap] turns each
@@ -224,8 +212,7 @@ func Example_orderingAndContext() {
 // Additionally, it demonstrates how to write a reusable streaming wrapper over paginated API calls -
 // the StreamUsers function.
 func Example_parallelStreaming() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, scope := rill.WithContext(context.Background())
 
 	// Start with a stream of department names
 	departments := rill.FromSlice([]string{"IT", "Finance", "Marketing", "Support", "Engineering"}, nil)
@@ -240,7 +227,7 @@ func Example_parallelStreaming() {
 	err := rill.ForEach(users, 1, func(user *mockapi.User) error {
 		fmt.Printf("%+v\n", user)
 		return nil
-	})
+	}, scope)
 	fmt.Println("Error:", err)
 }
 
@@ -272,41 +259,6 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 			}
 		}
 	})
-}
-
-// This example demonstrates how to gracefully stop a pipeline on the first error.
-// The CheckAllUsersExist function uses several concurrent workers and returns an error as soon as it encounters a non-existent user.
-// Such an early return triggers context cancellation, which in turn stops all remaining user fetches.
-func Example_context() {
-	ctx := context.Background()
-
-	// ID 999 doesn't exist, so fetching will stop after hitting it.
-	err := CheckAllUsersExist(ctx, 3, []int{1, 2, 3, 4, 5, 999, 7, 8, 9, 10, 11, 12, 13, 14, 15})
-	fmt.Printf("Check result: %v\n", err)
-}
-
-// CheckAllUsersExist uses several concurrent workers to check if all users with the given IDs exist.
-func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel() // cancel the remaining requests after the first error
-
-	// Convert the slice into a stream
-	// (alternatively, use Generate instead of FromSlice to make the source context-aware)
-	idsStream := rill.FromSlice(ids, nil)
-
-	// Fetch users concurrently.
-	users := rill.Map(idsStream, concurrency, func(id int) (*mockapi.User, error) {
-		u, err := mockapi.GetUser(ctx, id)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch user %d: %w", id, err)
-		}
-
-		fmt.Printf("Fetched user %d\n", id)
-		return u, nil
-	})
-
-	// Return the first error (if any)
-	return rill.Err(users)
 }
 
 // --- Function examples ---
