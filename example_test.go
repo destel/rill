@@ -787,53 +787,30 @@ func ExampleToSeq2() {
 	}
 }
 
-func ExampleNewScope() {
-	scope, ctx := rill.NewScope(context.Background())
-	defer scope.Cancel() // extra cancel to make sure the context doesn't leak
+func ExampleWithContext() {
+	ctx, scope := rill.WithContext(context.Background())
 
-	// Use Generate instead of FromSlice to make the source context-aware
-	// and infinite
-	ids := rill.Generate(func(send func(int), sendError func(error)) {
-		for i := 1; ctx.Err() == nil; i++ {
+	// The source is an infinite, context-aware stream of natural numbers starting from 114
+	numbers := rill.Generate(func(send func(int), sendError func(error)) {
+		for i := 114; ctx.Err() == nil; i++ {
 			send(i)
 		}
 	})
 
-	// Callbacks write here, so it's unsafe to touch while any of them is still running
-	var mu sync.Mutex
-	var seen []int
-
-	// Process ids until one of them turns out to be bad.
-	// Callbacks have a side effect: they write to the `seen` slice.
-	// Concurrency = 3
-	err := rill.ForEach(ids, 3, func(id int) error {
-		simulateWork(500 * time.Millisecond)
-
-		mu.Lock()
-		seen = append(seen, id)
-		mu.Unlock()
-
-		fmt.Println("Seen:", id)
-
-		if id == 15 {
-			return fmt.Errorf("bad id (%d)", id)
+	// Keep only the primes. Concurrency = 3; Ordered
+	// The check is context-aware: it gives up as soon as the context is canceled
+	primes := rill.OrderedFilter(numbers, 3, func(x int) (bool, error) {
+		if err := simulateWorkContext(ctx, 500*time.Millisecond); err != nil {
+			return false, err
 		}
+		fmt.Println("Checked:", x)
+		return isPrime(x), nil
+	})
 
-		return nil
-	}, scope)
-	fmt.Println("* Returned:", err)
-
-	// Wait until the pipeline is settled:
-	// source is stopped and all remaining callbacks are finished.
-	//
-	// If we don't need to access side effects created by the pipeline,
-	// we can just return here and let `defer scope.Cancel()` handle the cleanup.
-	scope.Wait()
-	fmt.Println("* Settled")
-
-	// No callback can be running now, the `seen` slice is now
-	// stable and safe-to-read w/o the mutex.
-	fmt.Println("Total seen:", len(seen))
+	// Finding the first prime cancels the context, which stops the source and the remaining checks.
+	// First returns once nothing is running anymore.
+	first, ok, err := rill.First(primes, scope)
+	fmt.Println("First prime:", first, ok, err) // prints 127
 }
 
 // --- Helpers ---
@@ -872,4 +849,13 @@ func printStream[A any](stream <-chan rill.Try[A]) {
 
 func simulateWork(max time.Duration) {
 	time.Sleep(time.Duration(rand.Intn(int(max))))
+}
+
+func simulateWorkContext(ctx context.Context, max time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(time.Duration(rand.Intn(int(max)))):
+		return nil
+	}
 }
