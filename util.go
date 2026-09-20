@@ -18,10 +18,6 @@ func Drain[A any](in <-chan A) {
 func Discard[A any](in <-chan A, options ...SinkOption) {
 	opts := collectSinkOptions(options)
 
-	if in == nil {
-		return
-	}
-
 	// Discard assumes the sink's outcome is already known
 	call(opts.onOutcomeKnown)
 
