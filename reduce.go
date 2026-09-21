@@ -18,14 +18,14 @@ import (
 // that every parenthesization yields the same result. Commutativity is
 // not required.
 //
-// Reduce immediately returns (zero, false, err) on the first observed
-// error. Otherwise, it returns (zero, false, nil) if the stream is
-// empty, or (result, true, nil) after the input is fully consumed and
-// every call to f has returned.
+// Reduce returns:
+//   - (zero, false, err) if an error is observed
+//   - (zero, false, nil) if the stream is empty
+//   - (result, true, nil) otherwise
 //
 // The argument n bounds the number of concurrent calls to f.
 //
-// See the [rill] package documentation for the full contract shared by all sinks.
+// See the [rill] package documentation for the contract shared by all sinks.
 func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error), options ...SinkOption) (result A, hasResult bool, err error) {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -250,15 +250,12 @@ func Reduce[A any](in <-chan Try[A], n int, f func(A, A) (A, error), options ...
 // order, with unspecified parenthesization, so reducer must be
 // associative. Commutativity is not required.
 //
-// MapReduce immediately returns (nil, err) on the first observed
-// error. Otherwise, it returns the map after the input is fully
-// consumed and every call to mapper and reducer has returned. An empty
-// stream results in an empty map.
+// MapReduce returns (nil, err) if an error is observed, and (map, nil) otherwise.
 //
 // The arguments nm and nr bound the number of concurrent calls to
 // mapper and reducer, respectively.
 //
-// See the [rill] package documentation for the full contract shared by all sinks.
+// See the [rill] package documentation for the contract shared by all sinks.
 func MapReduce[A any, K comparable, V any](in <-chan Try[A], nm int, mapper func(A) (K, V, error), nr int, reducer func(V, V) (V, error), options ...SinkOption) (map[K]V, error) {
 	validateN(nm)
 	validateNilFunc(mapper == nil)
