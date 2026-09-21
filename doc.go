@@ -23,11 +23,10 @@
 //   - forward upstream errors to the output streams ([Catch] is the only
 //     exception)
 //
-// Most stages in a pipeline have one input stream and one output stream. The
-// first stage has no input stream, and the last stage has no output stream.
-// These stages are called the source and the sink, respectively. The [Merge]
-// and [Tee] functions have more inputs/outputs and can be used to build DAG
-// pipelines.
+// The first stage in a pipeline has no input stream, and the last stage has no
+// output stream. These stages are called the source and the sink, respectively.
+// Other stages typically have one input and one output, though functions like
+// [Merge] and [Tee] have more and can be used to build DAG pipelines.
 //
 //	ids := rill.FromSlice(userIDs, nil)      // source
 //	filtered := rill.Filter(ids, 5, ...)     // stage, concurrency = 5
@@ -48,8 +47,9 @@
 // even if more work remains in the pipeline. Given a [WithContext] option,
 // the sink blocks until the whole pipeline has finished.
 //
-// Every sink knows its outcome after consuming and processing the whole input.
-// Some know it earlier, for example:
+// When the outcome becomes known depends on the sink. It is always known
+// after the whole input has been consumed and processed, but some sinks know
+// it earlier, for example:
 //
 //   - [ForEach] - on the first error
 //   - [Any] - on the first match or error, whichever comes first
