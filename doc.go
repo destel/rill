@@ -115,9 +115,10 @@
 //
 // # Nil handling
 //
-// Rill relies on input streams eventually closing for pipelines to finish.
-// Nil channels never emit values or close, so passing nil as an input
-// can leak goroutines or leave a sink blocked forever.
+// A nil channel never emits values and never closes, and rill treats it as
+// exactly that: stages with a nil input never close their outputs and can
+// leak goroutines; sinks with a nil input can block forever. Nil channels
+// never make sense within a pipeline.
 //
 // # Panics
 //
