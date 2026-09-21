@@ -38,67 +38,56 @@
 // Intermediate stages return their output streams immediately, while their
 // goroutines continue working in the background. These stages always fully
 // consume and process their inputs before closing their outputs. A closed
-// output becomes an "all upstream work is done" signal that travels
+// output becomes an "all upstream work has finished" signal that travels
 // downstream along with values and errors.
 //
-// Sinks are different: they block until their outcome is known, then return
-// even if work remains in the pipeline. What "outcome known" means depends on
-// the sink. For example:
+// # Sinks
 //
-//   - [ForEach] immediately returns the first error it observes; otherwise, it
-//     fully consumes the input
-//   - [Any] can additionally short-circuit on the first match it finds
-//   - [First] consumes one item and returns
+// Sinks are different: they return a regular Go value instead of a channel.
+// By default a sink blocks until its outcome is known and returns that outcome
+// even if more work remains in the pipeline. Given a [WithContext] option, the
+// sink blocks until the whole pipeline has finished.
 //
-// On an early return, a sink drains and discards any remaining input in the
-// background, so upstream stages don't block forever and leak their goroutines.
+// Every sink knows its outcome after consuming and processing the whole input.
+// Some know it earlier, for example:
 //
-// # Context and cancellation
+//   - [ForEach] - on the first error
+//   - [Any] - on the first match or error, whichever comes first
+//   - [First] - after consuming one item
 //
-// It's up to the caller whether to cancel the extra work that happens
-// after an early return. Expensive work and large/infinite sources are usually
-// context-aware, so all that's needed is to cancel the context they captured:
+// After an early return, a sink keeps draining and discarding any remaining
+// input in the background, so upstream stages don't block forever and leak
+// their goroutines. While draining, the sink suppresses its own callbacks. The
+// suppression is best effort: when the sink runs callbacks concurrently, a few
+// extra calls can start after the early return.
 //
-//	ctx, cancel := context.WithCancel(ctx)
-//	defer cancel()
+// # Context and structured concurrency
 //
-//	// source and other pipeline stages go here
+// Rill can manage the context and give the pipeline structured
+// concurrency semantics similar to errgroup.
 //
-//	err := rill.ForEach(transformed, 5, func(x int) error {
-//		return process(ctx, x)
-//	})
+//   - [WithContext] derives a context that user's callbacks capture and watch
+//   - A sink cancels the context as soon as the outcome is known (typically on
+//     the first error that reaches the sink)
+//   - Instead of returning the outcome immediately, the sink first waits for
+//     the pipeline to finish, as errgroup's Wait does
 //
-//	// outcome known; cancel manually or rely on the deferred cancel
-//	cancel()
+// Example:
 //
-// # Structured concurrency
+//	ctx, scope := rill.WithContext(ctx)
 //
-// When the caller wants not only to request cancellation but also to wait for
-// the pipeline to settle (no work remains and every user callback has
-// returned), rill provides the [Scope] API, which is like errgroup for
-// pipelines.
+//	// Source and other pipeline stages go here.
+//	// They can also watch ctx to stop early
 //
-//	scope, ctx := rill.NewScope(ctx)
-//	defer scope.Cancel()
-//
-//	// source and other pipeline stages go here
-//
+//	// scope covers both the sink and the upstream stages
 //	err := rill.ForEach(transformed, 5, func(x int) error {
 //		return process(ctx, x)
 //	}, scope)
 //
-//	// outcome known
+//	// Nothing is running anymore
 //
-//	scope.Wait() // cancel ctx and wait for settlement
-//
-//	// it's now safe to release resources and observe side effects
-//
-// Under the hood, [Scope.Wait] waits for the sink's own work to finish
-// and for the "all upstream work is done" signal carried by the sink's
-// input streams.
-//
-// In computation-only pipelines that never fail or short-circuit, everything
-// settles by the time the sink returns, so [Scope] is not needed.
+// Draining and callback suppression still apply, even though the sink no
+// longer returns early.
 //
 // # Ordered stages
 //
@@ -145,8 +134,8 @@
 //
 // The easiest way to write a custom stage is to compose it from existing
 // functions rill provides. For manually written stages, a few simple rules
-// keep background draining and settlement working. Ordinary Go channel
-// code usually satisfies most of them:
+// keep background draining and the "all upstream work has finished" signal
+// working. Ordinary Go channel code usually satisfies most of them:
 //
 //   - sources must eventually close their output stream; a source that can
 //     run forever must watch a context and be cancellable

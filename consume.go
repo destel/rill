@@ -6,18 +6,12 @@ import (
 	"sync/atomic"
 )
 
-// ForEach calls f on the stream's values, like a concurrent for-range
-// loop. It immediately returns the first observed error. Otherwise, it
-// returns nil after the input is fully consumed and every call to f has
-// returned.
+// ForEach calls f on the stream's values, like a concurrent for-range loop,
+// and returns the first error it observes, or nil if there is none.
 //
-// The argument n bounds the number of concurrent calls to f. When n = 1,
-// ForEach processes items sequentially in stream order, the same as in a
-// regular for-range loop: f can safely read and modify shared state without
-// synchronization, and all its effects are visible to the caller after
-// ForEach returns.
+// The argument n bounds the number of concurrent calls to f.
 //
-// See the [rill] package documentation for the full contract shared by all sinks.
+// See the [rill] package documentation for the contract shared by all sinks.
 func ForEach[A any](in <-chan Try[A], n int, f func(A) error, options ...SinkOption) error {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -81,10 +75,9 @@ func ForEach[A any](in <-chan Try[A], n int, f func(A) error, options ...SinkOpt
 	return Err(out, options...)
 }
 
-// Err immediately returns the first error of the stream. Otherwise, it
-// returns nil after the input is fully consumed.
+// Err returns the first error in the stream.
 //
-// See the [rill] package documentation for the full contract shared by all sinks.
+// See the [rill] package documentation for the contract shared by all sinks.
 func Err[A any](in <-chan Try[A], options ...SinkOption) error {
 	defer Discard(in, options...)
 
@@ -97,11 +90,12 @@ func Err[A any](in <-chan Try[A], options ...SinkOption) error {
 	return nil
 }
 
-// First returns the first item of the stream: (value, true, nil) if
-// the item is a value, (zero, false, err) if it is an error, or
-// (zero, false, nil) if the stream is empty.
+// First consumes the first item of the stream and returns:
+//   - (value, true, nil) if the item is a value
+//   - (zero, false, err) if the item is an error
+//   - (zero, false, nil) if the stream is empty
 //
-// See the [rill] package documentation for the full contract shared by all sinks.
+// See the [rill] package documentation for the contract shared by all sinks.
 func First[A any](in <-chan Try[A], options ...SinkOption) (value A, found bool, err error) {
 	defer Discard(in, options...)
 
@@ -119,15 +113,14 @@ func First[A any](in <-chan Try[A], options ...SinkOption) (value A, found bool,
 // sharing cannot contaminate across calls.
 var errFound = errors.New("found")
 
-// Any reports whether the stream contains a value that matches the
-// condition f. It immediately returns (true, nil) or (false, err) on
-// the first observed match or error, respectively. Otherwise, it
-// returns (false, nil) after the input is fully consumed and every call
-// to f has returned.
+// Any reports whether the stream contains a value that matches f. It returns:
+//   - (true, nil) if a match is observed first
+//   - (false, err) if an error is observed first
+//   - (false, nil) if neither is observed
 //
 // The argument n bounds the number of concurrent calls to f.
 //
-// See the [rill] package documentation for the full contract shared by all sinks.
+// See the [rill] package documentation for the contract shared by all sinks.
 func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...SinkOption) (bool, error) {
 	validateN(n)
 	validateNilFunc(f == nil)
@@ -149,15 +142,14 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...Sin
 	return false, err
 }
 
-// All reports whether every value in the stream matches the condition
-// f. It immediately returns (false, nil) or (false, err) on the first
-// observed mismatch or error, respectively. Otherwise, it returns
-// (true, nil) after the input is fully consumed and every call to f has
-// returned.
+// All reports whether every value in the stream matches f. It returns:
+//   - (false, nil) if a mismatch is observed first
+//   - (false, err) if an error is observed first
+//   - (true, nil) if neither is observed
 //
 // The argument n bounds the number of concurrent calls to f.
 //
-// See the [rill] package documentation for the full contract shared by all sinks.
+// See the [rill] package documentation for the contract shared by all sinks.
 func All[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...SinkOption) (bool, error) {
 	validateN(n)
 	validateNilFunc(f == nil)
