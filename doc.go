@@ -23,11 +23,11 @@
 //   - forward upstream errors to the output streams ([Catch] is the only
 //     exception)
 //
-// Usually, most stages in a pipeline have one input stream and one output
-// stream. The exceptions are the first stage, which has no input stream, and
-// the last stage, which has no output stream. These stages are called the
-// source and the sink, respectively. The [Merge] and [Tee] functions have more
-// inputs/outputs and can be used to build DAG pipelines.
+// Most stages in a pipeline have one input stream and one output stream. The
+// first stage has no input stream, and the last stage has no output stream.
+// These stages are called the source and the sink, respectively. The [Merge]
+// and [Tee] functions have more inputs/outputs and can be used to build DAG
+// pipelines.
 //
 //	ids := rill.FromSlice(userIDs, nil)      // source
 //	filtered := rill.Filter(ids, 5, ...)     // stage, concurrency = 5
@@ -43,10 +43,10 @@
 //
 // # Sinks
 //
-// Sinks are different: they return a regular Go value instead of a channel.
-// By default a sink blocks until its outcome is known and returns that outcome
-// even if more work remains in the pipeline. Given a [WithContext] option, the
-// sink blocks until the whole pipeline has finished.
+// Unlike intermediate stages, sinks return regular Go values, not channels.
+// By default, a sink blocks until its outcome is known, then returns it,
+// even if more work remains in the pipeline. Given a [WithContext] option,
+// the sink blocks until the whole pipeline has finished.
 //
 // Every sink knows its outcome after consuming and processing the whole input.
 // Some know it earlier, for example:
@@ -64,9 +64,10 @@
 // # Context and structured concurrency
 //
 // Rill can manage the context and give the pipeline structured
-// concurrency semantics similar to errgroup.
+// concurrency semantics similar to errgroup's.
 //
-//   - [WithContext] derives a context that user's callbacks capture and watch
+//   - [WithContext] derives a context
+//   - User callbacks and custom stages capture and watch the context
 //   - A sink cancels the context as soon as the outcome is known (typically on
 //     the first error that reaches the sink)
 //   - Instead of returning the outcome immediately, the sink first waits for
@@ -106,8 +107,8 @@
 //
 // Backpressure means that sending to an unbuffered channel blocks until the
 // receiver on the other end is ready to receive. Rill naturally inherits this
-// property: a slow stage in the pipeline blocks the previous stage, and it in
-// turn blocks the stage before that, and so on, until the slow stage
+// property: a slow stage in the pipeline blocks the previous stage, and it,
+// in turn, blocks the stage before that, and so on, until the slow stage
 // catches up.
 //
 // When this is not desirable, use [Buffer] to add slack between stages.
@@ -137,11 +138,11 @@
 // keep background draining and the "all upstream work has finished" signal
 // working. Ordinary Go channel code usually satisfies most of them:
 //
-//   - sources must eventually close their output stream; a source that can
+//   - Sources must eventually close their output stream; a source that can
 //     run forever must watch a context and be cancellable
-//   - intermediate stages must close their output stream, but only after the
+//   - Intermediate stages must close their output stream, but only after the
 //     input is fully consumed and processed
-//   - non-concurrent sinks must start with a deferred
+//   - Non-concurrent sinks must start with a deferred
 //     rill.Discard(in, options...), followed by a for-range loop that returns
 //     as soon as the sink's outcome is known
 package rill
