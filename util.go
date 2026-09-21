@@ -12,9 +12,9 @@ func Drain[A any](in <-chan A) {
 	core.Drain(in)
 }
 
-// Discard returns immediately, then drains and discards all items of
-// the channel in the background. A [Scope] passed as an option can be
-// used to find out when draining completes.
+// Discard drains and discards all items of the channel. By default it
+// returns immediately and drains in the background. Given a [WithContext]
+// option, it cancels the context, then blocks until the drain completes.
 func Discard[A any](in <-chan A, options ...SinkOption) {
 	opts := collectSinkOptions(options)
 
