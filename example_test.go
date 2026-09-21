@@ -720,23 +720,28 @@ func ExampleFromSeq2() {
 }
 
 func ExampleToSeq2() {
-	// Convert a slice of numbers into a stream
-	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+	ctx, scope := rill.WithContext(context.Background())
 
-	// Transform each number
-	// Concurrency = 3
-	squares := rill.Map(numbers, 3, func(x int) (int, error) {
-		return square(x), nil
+	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Read users from the API.
+	users := rill.Map(ids, 1, func(id int) (*mockapi.User, error) {
+		return mockapi.GetUser(ctx, id)
 	})
 
-	// Convert the stream into an iterator and use for-range to print the results
-	for val, err := range rill.ToSeq2(squares) {
+	for user, err := range rill.ToSeq2(users, scope) {
 		if err != nil {
 			fmt.Println("Error:", err)
-			break // cleanup is done regardless of early exit
+			break
 		}
-		fmt.Printf("%+v\n", val)
+
+		fmt.Println("Seen:", user.ID)
+		if user.ID == 5 {
+			break // blocks until the pipeline has finished
+		}
 	}
+
+	// The context is canceled and nothing is running anymore
 }
 
 func ExampleWithContext() {

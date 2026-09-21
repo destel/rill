@@ -53,14 +53,15 @@ func FromSeq2[A any](seq iter.Seq2[A, error]) <-chan Try[A] {
 }
 
 // ToSeq2 converts the stream into an iterator of value-error pairs,
-// typically consumed with a for-range loop. Pairs are yielded until the
-// stream is exhausted or the loop exits with break or return. Error
-// items do not stop the iteration: they are yielded as ordinary pairs.
+// typically consumed with a for-range loop. Error items do not stop the
+// iteration: they are yielded as ordinary pairs.
 //
-// The returned iterator is single-use and must be ranged over for the
-// pipeline to settle. If the loop exits early with break or return,
-// ToSeq2 drains the input in the background before reporting settlement
-// via a [Scope].
+// The returned iterator is single-use and must be ranged over.
+//
+// ToSeq2 is a sink like the others: its outcome is known once the iterator
+// is consumed to the end or interrupted by break/return.
+//
+// See the [rill] package documentation for the contract shared by all sinks.
 func ToSeq2[A any](in <-chan Try[A], options ...SinkOption) iter.Seq2[A, error] {
 	// Unlike other sinks, ToSeq2 opens the options at the call site: its work
 	// happens while the iterator is ranged, which can be arbitrarily far from
