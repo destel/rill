@@ -10,6 +10,7 @@ import (
 // and returns the first error it observes, or nil if there is none.
 //
 // The argument n bounds the number of concurrent calls to f.
+// When n = 1, f is called sequentially in stream order.
 //
 // See the [rill] package documentation for the contract shared by all sinks.
 func ForEach[A any](in <-chan Try[A], n int, f func(A) error, options ...SinkOption) error {
@@ -119,6 +120,7 @@ var errFound = errors.New("found")
 //   - (false, nil) if neither is observed
 //
 // The argument n bounds the number of concurrent calls to f.
+// When n = 1, f is called sequentially in stream order.
 //
 // See the [rill] package documentation for the contract shared by all sinks.
 func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...SinkOption) (bool, error) {
@@ -148,6 +150,7 @@ func Any[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...Sin
 //   - (true, nil) if neither is observed
 //
 // The argument n bounds the number of concurrent calls to f.
+// When n = 1, f is called sequentially in stream order.
 //
 // See the [rill] package documentation for the contract shared by all sinks.
 func All[A any](in <-chan Try[A], n int, f func(A) (bool, error), options ...SinkOption) (bool, error) {
