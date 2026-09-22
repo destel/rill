@@ -77,12 +77,15 @@
 //
 //	ctx, scope := rill.WithContext(ctx)
 //
-//	// Source and other pipeline stages go here.
-//	// They can also watch ctx to stop early
+//	// Source and other pipeline stages go here
+//
+//	users := rill.Map(ids, 10, func(id int) (*User, error) {
+//		return getUser(ctx, id)
+//	})
 //
 //	// scope covers both the sink and the upstream stages
-//	err := rill.ForEach(transformed, 5, func(x int) error {
-//		return process(ctx, x)
+//	err := rill.ForEach(users, 5, func(u *User) error {
+//		return process(ctx, u)
 //	}, scope)
 //
 //	// Nothing is running anymore
