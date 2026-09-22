@@ -1,6 +1,7 @@
 package rill
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -25,8 +26,8 @@ func TestReduce(t *testing.T) {
 
 			var calls atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				calls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
+				calls.Add(1)
 				return x + y, nil
 			})
 
@@ -43,8 +44,8 @@ func TestReduce(t *testing.T) {
 
 			var calls atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				calls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
+				calls.Add(1)
 				return x + y, nil
 			})
 
@@ -61,8 +62,8 @@ func TestReduce(t *testing.T) {
 
 			var calls atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				calls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
+				calls.Add(1)
 				return x + y, nil
 			})
 
@@ -72,8 +73,8 @@ func TestReduce(t *testing.T) {
 
 			time.Sleep(24 * time.Hour) // eventually drained
 
-			th.ExpectValue(t, calls.Load(), 0)
 			th.ExpectDrainedChan(t, in)
+			th.ExpectValue(t, calls.Load(), 0)
 		})
 
 		th.RunSynctest(t, "no errors", func(t *testing.T) {
@@ -81,8 +82,8 @@ func TestReduce(t *testing.T) {
 
 			var calls atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				calls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
+				calls.Add(1)
 				return x + y, nil
 			})
 
@@ -101,8 +102,8 @@ func TestReduce(t *testing.T) {
 
 			var extraCalls atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				extraCalls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
+				extraCalls.Add(1)
 				return x + y, nil
 			})
 			extraCalls.Store(0)
@@ -114,8 +115,12 @@ func TestReduce(t *testing.T) {
 
 			time.Sleep(24 * time.Hour) // eventually drained
 
-			th.ExpectLTE(t, int(extraCalls.Load()), when(n == 1, 0, 50))
 			th.ExpectDrainedChan(t, in)
+			if n == 1 {
+				th.ExpectValue(t, extraCalls.Load(), 0)
+			} else {
+				th.ExpectBetween(t, extraCalls.Load(), 1, 50)
+			}
 		})
 
 		th.RunSynctest(t, "error in func", func(t *testing.T) {
@@ -123,25 +128,32 @@ func TestReduce(t *testing.T) {
 			in = th.DelayEach(in, 1)
 
 			var extraCalls atomic.Int64
+			var stopwatch th.Stopwatch
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				c := extraCalls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
-				if c == 200 {
+				if extraCalls.Add(1) == 200 {
+					stopwatch.Start()
 					return 0, fmt.Errorf("err200")
 				}
 				return x + y, nil
 			})
 			extraCalls.Store(0)
+			stopwatch.Stop()
 
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, out, 0)
 			th.ExpectValue(t, ok, false)
 			th.ExpectOpenChan(t, in)
+			th.ExpectValue(t, stopwatch.Elapsed(), 0)
 
 			time.Sleep(24 * time.Hour) // eventually drained
 
-			th.ExpectLTE(t, int(extraCalls.Load()), when(n == 1, 0, 50))
 			th.ExpectDrainedChan(t, in)
+			if n == 1 {
+				th.ExpectValue(t, extraCalls.Load(), 0)
+			} else {
+				th.ExpectBetween(t, extraCalls.Load(), 1, 50)
+			}
 		})
 
 		th.RunSynctest(t, "error in func (last)", func(t *testing.T) {
@@ -149,9 +161,8 @@ func TestReduce(t *testing.T) {
 
 			var extraCalls atomic.Int64
 			out, ok, err := Reduce(in, n, func(x, y int) (int, error) {
-				c := extraCalls.Add(1)
 				th.SimulateWork(1*time.Second, 2*time.Second)
-				if c == 999 {
+				if extraCalls.Add(1) == 999 {
 					return 0, fmt.Errorf("err999")
 				}
 				return x + y, nil
@@ -164,8 +175,8 @@ func TestReduce(t *testing.T) {
 
 			time.Sleep(24 * time.Hour) // eventually drained
 
-			th.ExpectValue(t, extraCalls.Load(), 0)
 			th.ExpectDrainedChan(t, in)
+			th.ExpectValue(t, extraCalls.Load(), 0)
 		})
 
 		t.Run("unclosed", func(t *testing.T) {
@@ -185,8 +196,7 @@ func TestReduce(t *testing.T) {
 		})
 
 		th.RunSynctest(t, "context", func(t *testing.T) {
-			scope, ctx := NewScope(t.Context())
-			defer scope.Cancel()
+			ctx, scope := WithContext(t.Context())
 
 			in := FromChan(th.FromRange(0, 100), nil)
 
@@ -200,18 +210,17 @@ func TestReduce(t *testing.T) {
 			th.ExpectNoError(t, err)
 			th.ExpectValue(t, out, 99*100/2)
 			th.ExpectValue(t, ok, true)
+
 			th.ExpectNoRace(state)
 			th.ExpectDrainedChan(t, in)
-			th.ExpectActiveContext(t, ctx)
-
-			scope.Wait()
-
 			th.ExpectCanceledContext(t, ctx)
 		})
 
-		th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-			scope, ctx := NewScope(t.Context())
-			defer scope.Cancel()
+		th.RunSynctest(t, "context (early cancellation)", func(t *testing.T) {
+			ctx, scope := WithContext(t.Context())
+
+			var stopwatch th.Stopwatch
+			context.AfterFunc(ctx, stopwatch.Stop)
 
 			in := FromChan(th.FromRange(0, 1000), nil)
 			in = th.DelayEach(in, 1)
@@ -220,6 +229,7 @@ func TestReduce(t *testing.T) {
 			x, ok, err := Reduce(in, n, func(x, y int) (int, error) {
 				th.SimulateWork(1*time.Second, 2*time.Second)
 				if atomic.AddInt64(&state, 1) == 200 {
+					stopwatch.Start()
 					return 0, fmt.Errorf("err200")
 				}
 				return x + y, nil
@@ -228,14 +238,11 @@ func TestReduce(t *testing.T) {
 			th.ExpectError(t, err, "err200")
 			th.ExpectValue(t, x, 0)
 			th.ExpectValue(t, ok, false)
-			th.ExpectOpenChan(t, in)
-			th.ExpectActiveContext(t, ctx)
-
-			scope.Wait()
 
 			th.ExpectNoRace(state)
 			th.ExpectDrainedChan(t, in)
 			th.ExpectCanceledContext(t, ctx)
+			th.ExpectValue(t, stopwatch.Elapsed(), 0)
 		})
 
 		th.RunSynctest(t, "concurrency", func(t *testing.T) {
@@ -313,21 +320,22 @@ func TestMapReduce(t *testing.T) {
 				var callsMapper, callsReducer atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						callsMapper.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
+						callsMapper.Add(1)
 						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						callsReducer.Add(1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
+						callsReducer.Add(1)
 						return x + y, nil
 					})
 
 				th.ExpectNoError(t, err)
 				th.ExpectMap(t, out, map[string]int{})
+
+				th.ExpectDrainedChan(t, in)
 				th.ExpectValue(t, callsMapper.Load(), 0)
 				th.ExpectValue(t, callsReducer.Load(), 0)
-				th.ExpectDrainedChan(t, in)
 			})
 
 			th.RunSynctest(t, "single error stream", func(t *testing.T) {
@@ -336,13 +344,13 @@ func TestMapReduce(t *testing.T) {
 				var callsMapper, callsReducer atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						callsMapper.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
+						callsMapper.Add(1)
 						return fmt.Sprint(x), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						callsReducer.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
+						callsReducer.Add(1)
 						return x + y, nil
 					},
 				)
@@ -352,9 +360,9 @@ func TestMapReduce(t *testing.T) {
 
 				time.Sleep(24 * time.Hour) // eventually drained
 
+				th.ExpectDrainedChan(t, in)
 				th.ExpectValue(t, callsMapper.Load(), 0)
 				th.ExpectValue(t, callsReducer.Load(), 0)
-				th.ExpectDrainedChan(t, in)
 			})
 
 			th.RunSynctest(t, "single value keys", func(t *testing.T) {
@@ -363,13 +371,13 @@ func TestMapReduce(t *testing.T) {
 				var callsMapper, callsReducer atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						callsMapper.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
+						callsMapper.Add(1)
 						return fmt.Sprint(x), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						callsReducer.Add(1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
+						callsReducer.Add(1)
 						return x + y, nil
 					},
 				)
@@ -382,9 +390,10 @@ func TestMapReduce(t *testing.T) {
 					"4": 4,
 					"5": 5,
 				})
+
+				th.ExpectDrainedChan(t, in)
 				th.ExpectValue(t, callsMapper.Load(), 5)
 				th.ExpectValue(t, callsReducer.Load(), 0)
-				th.ExpectDrainedChan(t, in)
 			})
 
 			th.RunSynctest(t, "no errors", func(t *testing.T) {
@@ -393,13 +402,13 @@ func TestMapReduce(t *testing.T) {
 				var callsMapper, callsReducer atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						callsMapper.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
+						callsMapper.Add(1)
 						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						callsReducer.Add(1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
+						callsReducer.Add(1)
 						return x + y, nil
 					},
 				)
@@ -410,9 +419,10 @@ func TestMapReduce(t *testing.T) {
 					"2-digit": (10 + 99) * 90 / 2,
 					"3-digit": (100 + 199) * 100 / 2,
 				})
+
+				th.ExpectDrainedChan(t, in)
 				th.ExpectValue(t, callsMapper.Load(), 200)
 				th.ExpectValue(t, callsReducer.Load(), 9+89+99)
-				th.ExpectDrainedChan(t, in)
 			})
 
 			th.RunSynctest(t, "error in input", func(t *testing.T) {
@@ -420,21 +430,20 @@ func TestMapReduce(t *testing.T) {
 				in = replaceWithError(in, 200, fmt.Errorf("err200"))
 				in = th.DelayEach(in, 1)
 
-				var extraCallsMapper, extraCallsReducer atomic.Int64
+				var extraCalls atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						extraCallsMapper.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
+						extraCalls.Add(1)
 						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						extraCallsReducer.Add(1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
+						extraCalls.Add(1)
 						return x + y, nil
 					},
 				)
-				extraCallsMapper.Store(0)
-				extraCallsReducer.Store(0)
+				extraCalls.Store(0)
 
 				th.ExpectError(t, err, "err200")
 				th.ExpectMap(t, out, nil)
@@ -442,33 +451,35 @@ func TestMapReduce(t *testing.T) {
 
 				time.Sleep(24 * time.Hour) // eventually drained
 
-				th.ExpectLTE(t, int(extraCallsMapper.Load()), when(nm == 1 && nr == 1, 0, 50))
-				th.ExpectLTE(t, int(extraCallsReducer.Load()), when(nr == 1, 0, 50))
 				th.ExpectDrainedChan(t, in)
+				if nm == 1 && nr == 1 {
+					th.ExpectValue(t, extraCalls.Load(), 0)
+				} else {
+					th.ExpectBetween(t, extraCalls.Load(), 0, 50)
+				}
 			})
 
 			th.RunSynctest(t, "error in mapper", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 				in = th.DelayEach(in, 1)
 
-				var extraCallsMapper, extraCallsReducer atomic.Int64
+				var extraCalls atomic.Int64
+				var errorSent atomic.Bool
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						c := extraCallsMapper.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
-						if c == 200 {
+						if extraCalls.Add(1) >= 200 && errorSent.CompareAndSwap(false, true) {
 							return "", 0, fmt.Errorf("err200")
 						}
 						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						extraCallsReducer.Add(1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
+						extraCalls.Add(1)
 						return x + y, nil
 					},
 				)
-				extraCallsMapper.Store(0)
-				extraCallsReducer.Store(0)
+				extraCalls.Store(0)
 
 				th.ExpectError(t, err, "err200")
 				th.ExpectMap(t, out, nil)
@@ -476,75 +487,81 @@ func TestMapReduce(t *testing.T) {
 
 				time.Sleep(24 * time.Hour) // eventually drained
 
-				th.ExpectLTE(t, int(extraCallsMapper.Load()), when(nm == 1 && nr == 1, 0, 50))
-				th.ExpectLTE(t, int(extraCallsReducer.Load()), when(nr == 1, 0, 50))
 				th.ExpectDrainedChan(t, in)
+				if nm == 1 && nr == 1 {
+					th.ExpectValue(t, extraCalls.Load(), 0)
+				} else {
+					th.ExpectBetween(t, extraCalls.Load(), 0, 50)
+				}
 			})
 
 			th.RunSynctest(t, "error in reducer", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 				in = th.DelayEach(in, 1)
 
-				var extraCallsMapper, extraCallsReducer atomic.Int64
+				var extraCalls atomic.Int64
+				var errorSent atomic.Bool
+				var stopwatch th.Stopwatch
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						extraCallsMapper.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
+						extraCalls.Add(1)
 						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						c := extraCallsReducer.Add(1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
-						if c == 200 {
+						if extraCalls.Add(1) >= 200 && errorSent.CompareAndSwap(false, true) {
+							stopwatch.Start()
 							return 0, fmt.Errorf("err200")
 						}
 						return x + y, nil
 					},
 				)
-				extraCallsMapper.Store(0)
-				extraCallsReducer.Store(0)
+				extraCalls.Store(0)
+				stopwatch.Stop()
 
 				th.ExpectError(t, err, "err200")
 				th.ExpectMap(t, out, nil)
 				th.ExpectOpenChan(t, in)
+				th.ExpectValue(t, stopwatch.Elapsed(), 0)
 
 				time.Sleep(24 * time.Hour) // eventually drained
 
-				th.ExpectLTE(t, int(extraCallsMapper.Load()), when(nm == 1 && nr == 1, 0, 50))
-				th.ExpectLTE(t, int(extraCallsReducer.Load()), when(nr == 1, 0, 50))
 				th.ExpectDrainedChan(t, in)
+				if nm == 1 && nr == 1 {
+					th.ExpectValue(t, extraCalls.Load(), 0)
+				} else {
+					th.ExpectBetween(t, extraCalls.Load(), 0, 50)
+				}
 			})
 
 			th.RunSynctest(t, "error in reducer (last)", func(t *testing.T) {
 				in := FromChan(th.FromRange(0, 1000), nil)
 
-				var extraCallsMapper, extraCallsReducer atomic.Int64
+				var extraCalls atomic.Int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						extraCallsMapper.Add(1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
+						extraCalls.Add(1)
 						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						c := extraCallsReducer.Add(1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
-						if c == 9+89+899 {
+						if extraCalls.Add(1) == 1000+(9-0)+(99-10)+(999-100) {
 							return 0, fmt.Errorf("errLast")
 						}
 						return x + y, nil
 					},
 				)
-				extraCallsMapper.Store(0)
-				extraCallsReducer.Store(0)
+				extraCalls.Store(0)
 
 				th.ExpectError(t, err, "errLast")
 				th.ExpectMap(t, out, nil)
 
 				time.Sleep(24 * time.Hour) // eventually drained
 
-				th.ExpectLTE(t, int(extraCallsMapper.Load()), 0)
-				th.ExpectLTE(t, int(extraCallsReducer.Load()), 0)
 				th.ExpectDrainedChan(t, in)
+				th.ExpectValue(t, extraCalls.Load(), 0)
 			})
 
 			t.Run("unclosed", func(t *testing.T) {
@@ -568,21 +585,20 @@ func TestMapReduce(t *testing.T) {
 			})
 
 			th.RunSynctest(t, "context", func(t *testing.T) {
-				scope, ctx := NewScope(t.Context())
-				defer scope.Cancel()
+				ctx, scope := WithContext(t.Context())
 
 				in := FromChan(th.FromRange(0, 200), nil)
 
-				var stateMapper, stateReducer int64
+				var state int64
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						atomic.AddInt64(&stateMapper, 1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
+						atomic.AddInt64(&state, 1)
 						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						atomic.AddInt64(&stateReducer, 1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
+						atomic.AddInt64(&state, 1)
 						return x + y, nil
 					},
 					scope,
@@ -594,34 +610,33 @@ func TestMapReduce(t *testing.T) {
 					"2-digit": (10 + 99) * 90 / 2,
 					"3-digit": (100 + 199) * 100 / 2,
 				})
-				th.ExpectNoRace(stateMapper)
-				th.ExpectNoRace(stateReducer)
+
+				th.ExpectNoRace(state)
 				th.ExpectDrainedChan(t, in)
-				th.ExpectActiveContext(t, ctx)
-
-				scope.Wait()
-
 				th.ExpectCanceledContext(t, ctx)
 			})
 
-			th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-				scope, ctx := NewScope(t.Context())
-				defer scope.Cancel()
+			th.RunSynctest(t, "context (early cancellation)", func(t *testing.T) {
+				ctx, scope := WithContext(t.Context())
+
+				var stopwatch th.Stopwatch
+				context.AfterFunc(ctx, stopwatch.Stop)
 
 				in := FromChan(th.FromRange(0, 1000), nil)
 				in = th.DelayEach(in, 1)
 
-				var stateMapper, stateReducer int64
+				var state int64
+				var errorSent atomic.Bool
 				out, err := MapReduce(in,
 					nm, func(x int) (string, int, error) {
-						atomic.AddInt64(&stateMapper, 1)
 						th.SimulateWork(1*time.Second, 2*time.Second)
+						atomic.AddInt64(&state, 1)
 						return fmt.Sprintf("%d-digit", len(fmt.Sprint(x))), x, nil
 					},
 					nr, func(x, y int) (int, error) {
-						c := atomic.AddInt64(&stateReducer, 1)
 						th.SimulateWork(10*time.Second, 20*time.Second)
-						if c == 200 {
+						if atomic.AddInt64(&state, 1) >= 200 && errorSent.CompareAndSwap(false, true) {
+							stopwatch.Start()
 							return 0, fmt.Errorf("err200")
 						}
 						return x + y, nil
@@ -631,15 +646,11 @@ func TestMapReduce(t *testing.T) {
 
 				th.ExpectError(t, err, "err200")
 				th.ExpectMap(t, out, nil)
-				th.ExpectOpenChan(t, in)
-				th.ExpectActiveContext(t, ctx)
 
-				scope.Wait()
-
-				th.ExpectNoRace(stateMapper)
-				th.ExpectNoRace(stateReducer)
+				th.ExpectNoRace(state)
 				th.ExpectDrainedChan(t, in)
 				th.ExpectCanceledContext(t, ctx)
+				th.ExpectValue(t, stopwatch.Elapsed(), 0)
 			})
 
 			th.RunSynctest(t, "concurrency", func(t *testing.T) {

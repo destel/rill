@@ -26,6 +26,13 @@ func ExpectLTE[A cmp.Ordered](t *testing.T, actual A, max A) {
 	}
 }
 
+func ExpectBetween[A cmp.Ordered](t *testing.T, actual A, min A, max A) {
+	t.Helper()
+	if actual < min || actual > max {
+		t.Errorf("expected %v to be between %v and %v", actual, min, max)
+	}
+}
+
 func ExpectSlice[A comparable](t *testing.T, actual []A, expected []A) {
 	t.Helper()
 	if len(expected) != len(actual) {

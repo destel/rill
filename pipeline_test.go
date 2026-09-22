@@ -56,26 +56,26 @@ func TestPipelines(t *testing.T) {
 
 	// Find the first palindromic number greater than 123456.
 	th.RunSynctest(t, "context", func(t *testing.T) {
-		scope, ctx := NewScope(t.Context())
-		defer scope.Cancel()
+		ctx, scope := WithContext(t.Context())
 
 		// shared state, mutated with atomics by the stages
-		var totalCalls int64
+		var state int64
 
-		// an infinite source: generates numbers until the context is canceled
+		// an infinite source: generates numbers until the context is canceled by First
 		numbers := Generate(func(send func(int), sendError func(error)) {
 			for i := 123456; ctx.Err() == nil; i++ {
+				atomic.AddInt64(&state, 1)
 				send(i)
 			}
 		})
 
 		strs := OrderedMap(numbers, 10, func(x int) (string, error) {
-			atomic.AddInt64(&totalCalls, 1)
+			atomic.AddInt64(&state, 1)
 			return strconv.Itoa(x), nil
 		})
 
 		palindromes := OrderedFilter(strs, 10, func(x string) (bool, error) {
-			atomic.AddInt64(&totalCalls, 1)
+			atomic.AddInt64(&state, 1)
 			return isPalindrome(x), nil
 		})
 
@@ -84,10 +84,9 @@ func TestPipelines(t *testing.T) {
 		th.ExpectNoError(t, err)
 		th.ExpectValue(t, res, "124421")
 
-		// stop the source and wait for the pipeline to settle (no more callbacks)
-		scope.Wait()
-
-		// shared state is now safe to read without atomics
-		th.ExpectNoRace(totalCalls)
+		// the pipeline has settled: shared state is safe to read without atomics
+		th.ExpectNoRace(state)
+		th.ExpectDrainedChan(t, palindromes)
+		th.ExpectCanceledContext(t, ctx)
 	})
 }

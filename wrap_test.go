@@ -1,6 +1,7 @@
 package rill
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -75,26 +76,29 @@ func TestToSlice(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "no errors", func(t *testing.T) {
-		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+		in := FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
 		outSlice, err := ToSlice(in)
 
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+		th.ExpectSlice(t, outSlice, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 		th.ExpectNoError(t, err)
 		th.ExpectDrainedChan(t, in)
 	})
 
 	th.RunSynctest(t, "errors", func(t *testing.T) {
-		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+		in := FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 		in = replaceWithError(in, 5, fmt.Errorf("err005"))
 		in = replaceWithError(in, 7, fmt.Errorf("err007"))
-		in = th.DelayEach(in, 1)
+		in = th.DelayEach(in, 1*time.Second)
 
+		stopwatch := th.StartStopwatch()
 		outSlice, err := ToSlice(in)
+		stopwatch.Stop()
 
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
+		th.ExpectSlice(t, outSlice, []int{1, 2, 3, 4})
 		th.ExpectError(t, err, "err005")
 		th.ExpectOpenChan(t, in)
+		th.ExpectValue(t, stopwatch.Elapsed(), 5*time.Second)
 
 		time.Sleep(24 * time.Hour) // eventually drained
 
@@ -103,7 +107,7 @@ func TestToSlice(t *testing.T) {
 
 	t.Run("unclosed", func(t *testing.T) {
 		th.ExpectLeak(t, func(t *testing.T) {
-			in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+			in := FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 			in = replaceWithError(in, 5, fmt.Errorf("err005"))
 			in = th.DontClose(in)
 
@@ -112,43 +116,36 @@ func TestToSlice(t *testing.T) {
 	})
 
 	th.RunSynctest(t, "context", func(t *testing.T) {
-		scope, ctx := NewScope(t.Context())
-		defer scope.Cancel()
+		ctx, scope := WithContext(t.Context())
 
-		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+		in := FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
 		outSlice, err := ToSlice(in, scope)
 
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+		th.ExpectSlice(t, outSlice, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 		th.ExpectNoError(t, err)
 		th.ExpectDrainedChan(t, in)
-		th.ExpectActiveContext(t, ctx)
-
-		scope.Wait()
-
 		th.ExpectCanceledContext(t, ctx)
 	})
 
-	th.RunSynctest(t, "context (early return)", func(t *testing.T) {
-		scope, ctx := NewScope(t.Context())
-		defer scope.Cancel()
+	th.RunSynctest(t, "context (early cancellation)", func(t *testing.T) {
+		ctx, scope := WithContext(t.Context())
 
-		in := FromSlice([]int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil)
+		var stopwatch th.Stopwatch
+		context.AfterFunc(ctx, stopwatch.Stop)
+
+		in := FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 		in = replaceWithError(in, 5, fmt.Errorf("err005"))
-		in = replaceWithError(in, 7, fmt.Errorf("err007"))
-		in = th.DelayEach(in, 1)
+		in = th.DelayEach(in, 1*time.Second)
 
+		stopwatch.Start()
 		outSlice, err := ToSlice(in, scope)
 
-		th.ExpectSlice(t, outSlice, []int{0, 1, 2, 3, 4})
+		th.ExpectSlice(t, outSlice, []int{1, 2, 3, 4})
 		th.ExpectError(t, err, "err005")
-		th.ExpectOpenChan(t, in)
-		th.ExpectActiveContext(t, ctx)
-
-		scope.Wait()
-
 		th.ExpectDrainedChan(t, in)
 		th.ExpectCanceledContext(t, ctx)
+		th.ExpectValue(t, stopwatch.Elapsed(), 5*time.Second)
 	})
 }
 

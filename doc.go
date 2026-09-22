@@ -23,11 +23,10 @@
 //   - forward upstream errors to the output streams ([Catch] is the only
 //     exception)
 //
-// Usually, most stages in a pipeline have one input stream and one output
-// stream. The exceptions are the first stage, which has no input stream, and
-// the last stage, which has no output stream. These stages are called the
-// source and the sink, respectively. The [Merge] and [Tee] functions have more
-// inputs/outputs and can be used to build DAG pipelines.
+// The first stage in a pipeline has no input stream, and the last stage has no
+// output stream. These stages are called the source and the sink, respectively.
+// Other stages typically have one input and one output, though functions like
+// [Merge] and [Tee] have more and can be used to build DAG pipelines.
 //
 //	ids := rill.FromSlice(userIDs, nil)      // source
 //	filtered := rill.Filter(ids, 5, ...)     // stage, concurrency = 5
@@ -38,67 +37,61 @@
 // Intermediate stages return their output streams immediately, while their
 // goroutines continue working in the background. These stages always fully
 // consume and process their inputs before closing their outputs. A closed
-// output becomes an "all upstream work is done" signal that travels
+// output becomes an "all upstream work has finished" signal that travels
 // downstream along with values and errors.
 //
-// Sinks are different: they block until their outcome is known, then return
-// even if work remains in the pipeline. What "outcome known" means depends on
-// the sink. For example:
+// # Sinks
 //
-//   - [ForEach] immediately returns the first error it observes; otherwise, it
-//     fully consumes the input
-//   - [Any] can additionally short-circuit on the first match it finds
-//   - [First] consumes one item and returns
+// Unlike intermediate stages, sinks return regular Go values, not channels.
+// By default, a sink blocks until its outcome is known, then returns it,
+// even if more work remains in the pipeline. Given a [WithContext] option,
+// the sink blocks until the whole pipeline has finished.
 //
-// On an early return, a sink drains and discards any remaining input in the
-// background, so upstream stages don't block forever and leak their goroutines.
+// When the outcome becomes known depends on the sink. It is always known
+// after the whole input has been consumed and processed, but some sinks know
+// it earlier, for example:
 //
-// # Context and cancellation
+//   - [ForEach] - on the first error
+//   - [Any] - on the first match or error, whichever comes first
+//   - [First] - after consuming one item
 //
-// It's up to the caller whether to cancel the extra work that happens
-// after an early return. Expensive work and large/infinite sources are usually
-// context-aware, so all that's needed is to cancel the context they captured:
+// After an early return, a sink keeps draining and discarding any remaining
+// input in the background, so upstream stages don't block forever and leak
+// their goroutines. While draining, the sink suppresses its own callbacks. The
+// suppression is best effort: when the sink runs callbacks concurrently, a few
+// extra calls can start after the early return.
 //
-//	ctx, cancel := context.WithCancel(ctx)
-//	defer cancel()
+// # Context and structured concurrency
 //
-//	// source and other pipeline stages go here
+// Rill can manage the context and give the pipeline structured
+// concurrency semantics similar to errgroup's.
 //
-//	err := rill.ForEach(transformed, 5, func(x int) error {
-//		return process(ctx, x)
+//   - [WithContext] derives a context
+//   - User callbacks and custom stages capture and watch the context
+//   - A sink cancels the context as soon as the outcome is known (typically on
+//     the first error that reaches the sink)
+//   - Instead of returning the outcome immediately, the sink first waits for
+//     the pipeline to finish, as errgroup's Wait does
+//
+// Example:
+//
+//	ctx, scope := rill.WithContext(ctx)
+//
+//	// Source and other pipeline stages go here
+//
+//	users := rill.Map(ids, 10, func(id int) (*User, error) {
+//		return getUser(ctx, id)
 //	})
 //
-//	// outcome known; cancel manually or rely on the deferred cancel
-//	cancel()
-//
-// # Structured concurrency
-//
-// When the caller wants not only to request cancellation but also to wait for
-// the pipeline to settle (no work remains and every user callback has
-// returned), rill provides the [Scope] API, which is like errgroup for
-// pipelines.
-//
-//	scope, ctx := rill.NewScope(ctx)
-//	defer scope.Cancel()
-//
-//	// source and other pipeline stages go here
-//
-//	err := rill.ForEach(transformed, 5, func(x int) error {
-//		return process(ctx, x)
+//	// scope covers both the sink and the upstream stages
+//	err := rill.ForEach(users, 5, func(u *User) error {
+//		return process(ctx, u)
 //	}, scope)
 //
-//	// outcome known
+//	// Nothing is running anymore and ctx is canceled
 //
-//	scope.Wait() // cancel ctx and wait for settlement
-//
-//	// it's now safe to release resources and observe side effects
-//
-// Under the hood, [Scope.Wait] waits for the sink's own work to finish
-// and for the "all upstream work is done" signal carried by the sink's
-// input streams.
-//
-// In computation-only pipelines that never fail or short-circuit, everything
-// settles by the time the sink returns, so [Scope] is not needed.
+// Draining and callback suppression still apply, even though the sink no
+// longer returns early.
 //
 // # Ordered stages
 //
@@ -117,17 +110,18 @@
 //
 // Backpressure means that sending to an unbuffered channel blocks until the
 // receiver on the other end is ready to receive. Rill naturally inherits this
-// property: a slow stage in the pipeline blocks the previous stage, and it in
-// turn blocks the stage before that, and so on, until the slow stage
+// property: a slow stage in the pipeline blocks the previous stage, and it,
+// in turn, blocks the stage before that, and so on, until the slow stage
 // catches up.
 //
 // When this is not desirable, use [Buffer] to add slack between stages.
 //
 // # Nil handling
 //
-// Rill relies on input streams eventually closing for pipelines to finish.
-// Nil channels never emit values or close, so passing nil as an input
-// can leak goroutines or leave a sink blocked forever.
+// A nil channel never emits values and never closes, and rill treats it as
+// exactly that: stages with a nil input never close their outputs and can
+// leak goroutines; sinks with a nil input can block forever. Nil channels
+// never make sense within a pipeline.
 //
 // # Panics
 //
@@ -145,14 +139,14 @@
 //
 // The easiest way to write a custom stage is to compose it from existing
 // functions rill provides. For manually written stages, a few simple rules
-// keep background draining and settlement working. Ordinary Go channel
-// code usually satisfies most of them:
+// keep background draining and the "all upstream work has finished" signal
+// working. Ordinary Go channel code usually satisfies most of them:
 //
-//   - sources must eventually close their output stream; a source that can
+//   - Sources must eventually close their output stream; a source that can
 //     run forever must watch a context and be cancellable
-//   - intermediate stages must close their output stream, but only after the
+//   - Intermediate stages must close their output stream, but only after the
 //     input is fully consumed and processed
-//   - non-concurrent sinks must start with a deferred
+//   - Non-concurrent sinks must start with a deferred
 //     rill.Discard(in, options...), followed by a for-range loop that returns
 //     as soon as the sink's outcome is known
 package rill

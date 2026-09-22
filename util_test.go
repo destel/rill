@@ -1,6 +1,8 @@
 package rill
 
 import (
+	"context"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -18,98 +20,118 @@ func TestDrain(t *testing.T) {
 }
 
 func TestDiscard(t *testing.T) {
-	th.RunSynctest(t, "nil", func(t *testing.T) {
-		Discard[int](nil)
+	t.Run("nil", func(t *testing.T) {
+		th.ExpectLeak(t, func(t *testing.T) {
+			Discard[int](nil)
+		})
 	})
 
 	t.Run("nil w context", func(t *testing.T) {
 		th.ExpectBlock(t, func(t *testing.T) {
-			scope, _ := NewScope(t.Context())
-			defer scope.Cancel()
-
-			Discard[int](nil, scope)
-			scope.Wait()
+			_, opt := WithContext(t.Context())
+			Discard[int](nil, opt)
 		})
 	})
 
 	th.RunSynctest(t, "normal", func(t *testing.T) {
 		in := th.FromRange(0, 100)
 		in = th.DelayEach(in, 1*time.Second)
-		Discard(in) // doesn't block
 
-		time.Sleep(60 * time.Second)
+		stopwatch := th.StartStopwatch()
+		Discard(in)
+		stopwatch.Stop()
+
+		th.ExpectOpenChan(t, in)
+		th.ExpectValue(t, stopwatch.Elapsed(), 0)
+
+		time.Sleep(50 * time.Second)
 		th.ExpectOpenChan(t, in)
 
-		time.Sleep(60 * time.Second)
+		time.Sleep(50 * time.Second)
 		th.ExpectDrainedChan(t, in)
 	})
 
 	th.RunSynctest(t, "normal w context", func(t *testing.T) {
-		scope, ctx := NewScope(t.Context())
-		defer scope.Cancel()
+		ctx, opt := WithContext(t.Context())
+
+		var stopwatch th.Stopwatch
+		context.AfterFunc(ctx, stopwatch.Stop)
 
 		in := th.FromRange(0, 100)
 		in = th.DelayEach(in, 1*time.Second)
 
-		Discard(in, scope) // doesn't block
-
-		time.Sleep(60 * time.Second)
-
-		th.ExpectOpenChan(t, in)
-		th.ExpectActiveContext(t, ctx)
-
-		scope.Wait()
+		stopwatch.Start()
+		Discard(in, opt)
 
 		th.ExpectDrainedChan(t, in)
 		th.ExpectCanceledContext(t, ctx)
+		th.ExpectValue(t, stopwatch.Elapsed(), 0)
 	})
 
-	th.RunSynctest(t, "two scopes", func(t *testing.T) {
+	th.RunSynctest(t, "two contexts", func(t *testing.T) {
+		ctx1, opt1 := WithContext(t.Context())
+		ctx2, opt2 := WithContext(t.Context())
+
 		in := th.FromRange(0, 100)
 		in = th.DelayEach(in, 1*time.Second)
 
-		scope1, ctx1 := NewScope(t.Context())
-		defer scope1.Cancel()
-		scope2, ctx2 := NewScope(t.Context())
-		defer scope2.Cancel()
-
-		Discard(in, scope1, scope2) // doesn't block
-
-		th.ExpectActiveContext(t, ctx1)
-		th.ExpectActiveContext(t, ctx2)
-
-		scope1.Wait()
+		Discard(in, opt1, opt2)
 
 		th.ExpectDrainedChan(t, in)
 		th.ExpectCanceledContext(t, ctx1)
-		th.ExpectActiveContext(t, ctx2)
-
-		scope2.Wait()
 		th.ExpectCanceledContext(t, ctx2)
 	})
 
-	th.RunSynctest(t, "closed", func(t *testing.T) {
-		in := make(chan int)
-		close(in)
-		Discard(in)
-		th.ExpectDrainedChan(t, in)
-	})
-
 	th.RunSynctest(t, "closed w context", func(t *testing.T) {
-		scope, ctx := NewScope(t.Context())
-		defer scope.Cancel()
+		ctx, opt := WithContext(t.Context())
 
 		in := make(chan int)
 		close(in)
 
-		Discard(in, scope)
-
-		th.ExpectDrainedChan(t, in)
-		th.ExpectActiveContext(t, ctx)
-
-		scope.Wait() // should not leak
+		Discard(in, opt)
 
 		th.ExpectCanceledContext(t, ctx)
+	})
+
+	th.RunSynctest(t, "hooks", func(t *testing.T) {
+		var appliedCnt, outcomeKnownCnt, settledCnt atomic.Int32
+
+		opt := sinkOptionFunc(func(options *sinkOptions) {
+			appliedCnt.Add(1)
+			options.onOutcomeKnown = append(options.onOutcomeKnown, func() {
+				outcomeKnownCnt.Add(1)
+			})
+			options.onSettled = append(options.onSettled, func() {
+				settledCnt.Add(1)
+			})
+		})
+
+		// Closed input, instant settlement
+		in1 := make(chan int)
+		close(in1)
+
+		Discard(in1, opt)
+		th.ExpectValue(t, appliedCnt.Load(), 1)
+		th.ExpectValue(t, outcomeKnownCnt.Load(), 1)
+		th.ExpectValue(t, settledCnt.Load(), 1)
+
+		time.Sleep(10 * time.Second)
+		synctest.Wait()
+		th.ExpectValue(t, settledCnt.Load(), 1)
+
+		// The same option twice on another sink: each occurrence is applied
+		// Settlement after 10s
+		in2 := th.FromRange(0, 10)
+		in2 = th.DelayEach(in2, 1*time.Second)
+
+		Discard(in2, opt, opt)
+		th.ExpectValue(t, appliedCnt.Load(), 3)
+		th.ExpectValue(t, outcomeKnownCnt.Load(), 3)
+		th.ExpectValue(t, settledCnt.Load(), 1)
+
+		time.Sleep(10 * time.Second)
+		synctest.Wait()
+		th.ExpectValue(t, settledCnt.Load(), 3)
 	})
 }
 

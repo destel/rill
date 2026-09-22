@@ -77,12 +77,10 @@ func FromSlice[A any](slice []A, err error) <-chan Try[A] {
 	return out
 }
 
-// ToSlice collects the stream's values into a slice. When ToSlice
-// encounters an error, it immediately returns that error along with the
-// partial slice. Otherwise, it consumes the stream to the end and
-// returns a slice of all values.
+// ToSlice collects the stream's values into a slice. It returns the prefix
+// of the stream up to the first error, along with the error if any.
 //
-// See the [rill] package documentation for the full contract shared by all sinks.
+// See the [rill] package documentation for the contract shared by all sinks.
 func ToSlice[A any](in <-chan Try[A], options ...SinkOption) ([]A, error) {
 	defer Discard(in, options...)
 
