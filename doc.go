@@ -88,7 +88,7 @@
 //		return process(ctx, u)
 //	}, scope)
 //
-//	// Nothing is running anymore
+//	// Nothing is running anymore and ctx is canceled
 //
 // Draining and callback suppression still apply, even though the sink no
 // longer returns early.
