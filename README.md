@@ -8,46 +8,44 @@ go get -u github.com/destel/rill
 ```
 
 
-## Goals
+## Features
 
-- **Make common tasks easier.**  
-Rill provides a cleaner and safer way of solving common concurrency problems, such as parallel job execution or
-real-time event processing.
-It removes boilerplate and abstracts away the complexities of goroutine, channel, and error management.
-At the same time, developers retain full control over the concurrency level of all operations.
+- **Not a framework.**  
+  Rill is a collection of functions over plain channels. They can be used
+  on their own or composed into multi-stage pipelines. Either way, they are
+  compatible with existing channel-based code. There's no lock-in: custom functions
+  are easy to write.
 
-- **Make concurrent code composable and clean.**  
-Most functions in the library take Go channels as inputs and return new, transformed channels as outputs.
-This allows them to be chained in various ways to build reusable pipelines from simpler parts,
-similar to Unix pipes.
-As a result, concurrent programs become clear sequences of reusable operations.
+- **Explicit concurrency.**  
+  Every concurrent function takes an *n* argument that bounds how many of its
+  callbacks run at once.
 
-- **Centralize error handling.**  
-Errors are automatically propagated through a pipeline and can be handled in a single place at the end.
-For more complex scenarios, Rill also provides tools to intercept and handle errors at any point in a pipeline.
+- **Centralized error handling.**  
+  Errors travel downstream along with values and are handled at the end of
+  the pipeline. They can also be intercepted mid-pipeline when needed.
 
-- **Simplify stream processing.**    
-Thanks to Go channels, built-in functions can handle potentially infinite streams, processing items as they arrive.
-This makes Rill a convenient tool for real-time processing or handling large datasets that don't fit in memory.
+- **Context and structured concurrency.**  
+  Rill can manage a context and automatically cancel it on the first error,
+  then block until nothing is running anymore, giving pipelines errgroup-style semantics.
 
-- **Provide solutions for advanced tasks.**  
-Beyond basic operations, the library includes ready-to-use functions for batching, ordered fan-in, map-reduce, 
-stream splitting, merging, and more. Pipelines, while usually linear, can have any cycle-free topology (DAG).
+- **Streaming.**  
+  Functions process items as they arrive, so rill can handle
+  infinite streams and datasets larger than memory, with Go's natural
+  backpressure between stages.
 
-- **Support custom extensions.**  
-Since Rill operates on standard Go channels, it's easy to write custom functions compatible with the library.
+- **Advanced building blocks.**  
+  Batching, order preservation, streaming non-commutative reduction, map-reduce,
+  splitting and merging are built in. Pipelines can form any cycle-free topology.
 
-- **Keep it lightweight.**  
-Rill has a small, type-safe, channel-based API, and zero dependencies, making it straightforward to integrate into existing projects.
-It's also lightweight in terms of resource usage, ensuring that the number of memory allocations and goroutines
-does not grow with the input size.
+- **Lightweight.**  
+  No per-item allocations or goroutines. Small, type-safe API. Zero dependencies.
 
 
 ## Quick Start
 Let's look at a practical example: fetch users from an API, activate them, and save the changes back. 
 It shows how to control concurrency at each step, and how to handle errors from both operations in one place. 
 On the first error it encounters, **ForEach** cancels the context, waits until nothing is running anymore, and returns
-that error. This behavior should be familiar to errgroup users.
+that error.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/xN_1zaBzfkq)
 ```go
