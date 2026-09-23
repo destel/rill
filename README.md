@@ -4,7 +4,7 @@ Rill is a toolkit that brings composable concurrency to Go, making it easier to 
 It reduces boilerplate while preserving Go's natural channel-based model and backpressure behavior.
 
 ```bash
-go get -u github.com/destel/rill
+go get github.com/destel/rill
 ```
 
 
