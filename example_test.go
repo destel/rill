@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/destel/rill"
-	"github.com/destel/rill/mockapi"
+	api "github.com/destel/rill/mockapi"
 )
 
 // --- Package examples ---
@@ -32,20 +32,20 @@ func Example() {
 
 	// Read users from the API.
 	// Concurrency = 3
-	users := rill.Map(ids, 3, func(id int) (*mockapi.User, error) {
-		return mockapi.GetUser(ctx, id)
+	users := rill.Map(ids, 3, func(id int) (*api.User, error) {
+		return api.GetUser(ctx, id)
 	})
 
 	// Activate users.
 	// Concurrency = 2
-	err := rill.ForEach(users, 2, func(u *mockapi.User) error {
+	err := rill.ForEach(users, 2, func(u *api.User) error {
 		if u.IsActive {
 			fmt.Printf("User %d is already active\n", u.ID)
 			return nil
 		}
 
 		u.IsActive = true
-		err := mockapi.SaveUser(ctx, u)
+		err := api.SaveUser(ctx, u)
 		if err != nil {
 			return err
 		}
@@ -75,8 +75,8 @@ func Example_batching() {
 
 	// Bulk fetch users from the API
 	// Concurrency = 3
-	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*mockapi.User, error) {
-		return mockapi.GetUsers(ctx, ids)
+	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*api.User, error) {
+		return api.GetUsers(ctx, ids)
 	})
 
 	// Transform the stream of batches back into a flat stream of users
@@ -84,14 +84,14 @@ func Example_batching() {
 
 	// Activate users.
 	// Concurrency = 2
-	err := rill.ForEach(users, 2, func(u *mockapi.User) error {
+	err := rill.ForEach(users, 2, func(u *api.User) error {
 		if u.IsActive {
 			fmt.Printf("User %d is already active\n", u.ID)
 			return nil
 		}
 
 		u.IsActive = true
-		err := mockapi.SaveUser(ctx, u)
+		err := api.SaveUser(ctx, u)
 		if err != nil {
 			return err
 		}
@@ -190,7 +190,7 @@ func Example_ordering() {
 	matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
 		fmt.Println("Downloading:", url)
 
-		content, err := mockapi.DownloadFile(ctx, url)
+		content, err := api.DownloadFile(ctx, url)
 		if err != nil {
 			return false, err
 		}
@@ -219,24 +219,24 @@ func Example_parallelStreaming() {
 
 	// Stream users from all departments concurrently.
 	// At most 3 departments at the same time.
-	users := rill.FlatMap(departments, 3, func(department string) <-chan rill.Try[*mockapi.User] {
-		return StreamUsers(ctx, &mockapi.UserQuery{Department: department})
+	users := rill.FlatMap(departments, 3, func(department string) <-chan rill.Try[*api.User] {
+		return StreamUsers(ctx, &api.UserQuery{Department: department})
 	})
 
 	// Print the users from the combined stream
-	err := rill.ForEach(users, 1, func(user *mockapi.User) error {
+	err := rill.ForEach(users, 1, func(user *api.User) error {
 		fmt.Printf("%+v\n", user)
 		return nil
 	}, scope)
 	fmt.Println("Error:", err)
 }
 
-// StreamUsers is a reusable streaming wrapper around the mockapi.ListUsers function.
+// StreamUsers is a reusable streaming wrapper around the api.ListUsers function.
 // It iterates through all listing pages and uses [Generate] to simplify sending users and errors to the resulting stream.
 // This function is useful both on its own and as part of larger pipelines.
-func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[*mockapi.User] {
-	return rill.Generate(func(send func(*mockapi.User), sendError func(error)) {
-		var currentQuery mockapi.UserQuery
+func StreamUsers(ctx context.Context, query *api.UserQuery) <-chan rill.Try[*api.User] {
+	return rill.Generate(func(send func(*api.User), sendError func(error)) {
+		var currentQuery api.UserQuery
 		if query != nil {
 			currentQuery = *query
 		}
@@ -244,7 +244,7 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 		for page := 0; ; page++ {
 			currentQuery.Page = page
 
-			users, err := mockapi.ListUsers(ctx, &currentQuery)
+			users, err := api.ListUsers(ctx, &currentQuery)
 			if err != nil {
 				sendError(err)
 				return
@@ -359,7 +359,7 @@ func ExampleErr() {
 	ctx := context.Background()
 
 	// Convert a slice of users into a stream
-	users := rill.FromSlice([]*mockapi.User{
+	users := rill.FromSlice([]*api.User{
 		{ID: 1, Name: "foo", Age: 25},
 		{ID: 2, Name: "bar", Age: 30},
 		{ID: 3}, // empty username is invalid
@@ -370,8 +370,8 @@ func ExampleErr() {
 
 	// Save users. Use struct{} as a result type
 	// Concurrency = 2
-	results := rill.Map(users, 2, func(user *mockapi.User) (struct{}, error) {
-		return struct{}{}, mockapi.SaveUser(ctx, user)
+	results := rill.Map(users, 2, func(user *api.User) (struct{}, error) {
+		return struct{}{}, api.SaveUser(ctx, user)
 	})
 
 	// We only need to know if all users were saved successfully
@@ -725,8 +725,8 @@ func ExampleToSeq2() {
 	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
 	// Read users from the API.
-	users := rill.Map(ids, 1, func(id int) (*mockapi.User, error) {
-		return mockapi.GetUser(ctx, id)
+	users := rill.Map(ids, 1, func(id int) (*api.User, error) {
+		return api.GetUser(ctx, id)
 	})
 
 	for user, err := range rill.ToSeq2(users, scope) {

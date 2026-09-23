@@ -45,34 +45,36 @@ does not grow with the input size.
 
 ## Quick Start
 Let's look at a practical example: fetch users from an API, activate them, and save the changes back. 
-It shows how to control concurrency at each step and how to handle errors: 
-**ForEach** returns the first error it encounters
-
+It shows how to control concurrency at each step, and how to handle errors from both operations in one place. 
+On the first error it encounters, **ForEach** cancels the context, waits until nothing is running anymore, and returns
+that error. This behavior should be familiar to errgroup users.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/xN_1zaBzfkq)
 ```go
+ctx, scope := rill.WithContext(ctx)
+
 // Convert a slice into a channel
 ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
 // Read users from the API with concurrency = 3
-users := rill.Map(ids, 3, func(id int) (*mockapi.User, error) {
-  return mockapi.GetUser(ctx, id)
+users := rill.Map(ids, 3, func(id int) (*api.User, error) {
+  return api.GetUser(ctx, id)
 })
 
 // Process users with concurrency = 2
-err := rill.ForEach(users, 2, func(u *mockapi.User) error {
+err := rill.ForEach(users, 2, func(u *api.User) error {
   if u.IsActive {
     return nil
   }
   u.IsActive = true
-  return mockapi.SaveUser(ctx, u)
-})
+  return api.SaveUser(ctx, u)
+}, scope)
 
-// Handle errors
+// Nothing is running, the context is canceled.
+// Handle the error (if any)
 fmt.Println("Error:", err)
 ```
 
-In rill errors are handled in one place no matter where they occur. Pipeline stages are connected by plain Go channels that carry both values and errors, so an error from any stage travels downstream to the sink (the last stage) that reports it to the caller.
 
 
 
@@ -90,6 +92,8 @@ to fetch multiple users in a single call, instead of making individual `GetUser`
 
 [Try in Go playground ↗](https://goplay.tools/snippet/fpltOjeX-Le)
 ```go
+ctx, scope := rill.WithContext(ctx)
+
 // Convert a slice of user IDs into a channel
 ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7,..., 38, 39, 40,}, nil)
 
@@ -97,21 +101,21 @@ ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7,..., 38, 39, 40,}, nil)
 idBatches := rill.Batch(ids, 5, -1)
 
 // Bulk fetch users from the API with concurrency = 3
-userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*mockapi.User, error) {
-  return mockapi.GetUsers(ctx, ids)
+userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*api.User, error) {
+  return api.GetUsers(ctx, ids)
 })
 
 // Transform the stream of batches back into a flat stream of users
 users := rill.Unbatch(userBatches)
 
 // Same as above, process users with concurrency = 2
-err := rill.ForEach(users, 2, func(u *mockapi.User) error {
+err := rill.ForEach(users, 2, func(u *api.User) error {
   if u.IsActive {
     return nil
   }
   u.IsActive = true
-  return mockapi.SaveUser(ctx, u)
-})
+  return api.SaveUser(ctx, u)
+}, scope)
 
 // Handle errors
 fmt.Println("Error:", err)
@@ -131,8 +135,6 @@ Waiting for a full batch to accumulate can take a long time if calls to `UpdateU
 We can limit this wait and process partial batches using a timeout argument.
 Using a small value, like _50ms_, allows us to benefit from bulk queries when there are many concurrent updates, while
 introducing at most _50ms_ of additional latency when the stream of updates is sparse.
-
-(todo: clear the code; fix casing in the request struct)
 
 [Try in Go playground ↗](https://goplay.tools/snippet/w0xsLilX1ca)
 
@@ -194,275 +196,92 @@ type request struct {
 var queue = make(chan request)
 ```
 
-## Context and Structured Concurrency
-
-In rill, the sink returns as soon as the pipeline's outcome is known. **ForEach**, for example, returns the first error it encounters without waiting for the calls still in flight in other stages. This is a deliberate choice: control returns to the caller as early as possible.
-
-In cases when the caller needs more control over a pipeline's lifetime and cancellation, rill provides **Scope**. Think of it as errgroup for pipelines: by the time `Wait` returns, the context is canceled and nothing is running anymore, which is what structured concurrency means here. The main difference from errgroup is that in rill the outcome comes from the sink, not from `Wait`.
-
-- `rill.NewScope` derives a cancellable context, like `errgroup.WithContext`
-- Pipeline stages capture that context and watch it
-- The scope is passed to the sink, which covers every stage behind it
-- The sink returns the outcome
-- `scope.Wait` cancels the context and waits until the pipeline settles (nothing is running anymore)
-
-Let's modify the quick start example, adding scope to it:
-
-```go
-scope, ctx := rill.NewScope(ctx)
-
-// Convert a slice into a stream
-ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
-
-// Read users from the API with concurrency = 3
-users := rill.Map(ids, 3, func(id int) (*mockapi.User, error) {
-	return mockapi.GetUser(ctx, id)
-})
-
-// Process users with concurrency = 2
-err := rill.ForEach(users, 2, func(u *mockapi.User) error {
-	if u.IsActive {
-		return nil
-	}
-	u.IsActive = true
-	return mockapi.SaveUser(ctx, u)
-}, scope) // The scope is passed as an option
-
-// Handle the error (outcome known)
-fmt.Println("Error:", err)
-
-// Cancel the context and wait for the pipeline to settle
-scope.Wait()
-
-// Settled: safe to close the API client, observe side effects, etc.
-```
-
-
-
-Depending on the use case, `Wait` can be called before or after handling the outcome. It can also be
-  deferred so that the enclosing function returns only after the pipeline has settled.
-
-```go
-scope, ctx := rill.NewScope(ctx)
-defer scope.Wait()
-```
-
-
-
-Scope is optional. When you don't need to wait for settlement and the surrounding code already owns cancellation, the pipeline can use the existing context directly, as the earlier examples do. A request context, for instance, is canceled when its handler returns, and any work depending on that context stops with it.
-
-
-
-
-> [!NOTE]
-> After a sink returns early, it keeps draining its input to prevent upstream stages from blocking and leaking their goroutines. This also enables seamless composition of stages: each stage just sends more values and errors to its output, always knowing there's a live consumer somewhere downstream. Draining handles the channels but does not stop the work; that is what the context is for.
-
-A scope can be shared by several sinks. When a pipeline is branched with [Tee](https://pkg.go.dev/github.com/destel/rill#example-Tee) and each branch ends with its own sink, `scope.Wait`, called once every sink has returned, waits for all branches.
-
-
-
-
-
-
-
-## Errors, Termination and Contexts
-Error handling can be non-trivial in concurrent applications. Rill simplifies this by providing a structured approach to the problem.
-Pipelines typically consist of a sequence of non-blocking channel transformations, followed by a blocking stage that returns a final result and an error.
-The general rule is: any error occurring anywhere in a pipeline is propagated down to the final stage,
-where it's caught by some blocking function and returned to the caller.
-
-Rill provides a wide selection of blocking functions. Here are some commonly used ones:
-
-- **ForEach:** Concurrently applies a user function to each item in the stream.
-  [Example](https://pkg.go.dev/github.com/destel/rill#example-ForEach)
-- **ToSlice:** Collects all stream items into a slice.
-  [Example](https://pkg.go.dev/github.com/destel/rill#example-ToSlice)
-- **First:** Returns the first item or error encountered in the stream and discards the rest
-  [Example](https://pkg.go.dev/github.com/destel/rill#example-First)
-- **Reduce:** Concurrently reduces the stream to a single value, using a user provided reducer function.
-  [Example](https://pkg.go.dev/github.com/destel/rill#example-Reduce)
-- **All:** Concurrently checks if all items in the stream satisfy a user provided condition.
-  [Example](https://pkg.go.dev/github.com/destel/rill#example-All)
-- **Err:** Returns the first error encountered in the stream or nil, and discards the rest of the stream.
-  [Example](https://pkg.go.dev/github.com/destel/rill#example-Err) 
-
-
-All blocking functions share a common behavior. When they terminate early (before reaching the end of the input stream or when an error occurs),
-they return immediately but spawn a background goroutine that discards the remaining items from the input channel. This prevents goroutine leaks by ensuring that
-all goroutines feeding the stream are allowed to complete.
-
-Rill is context-agnostic, meaning that it does not enforce any specific context usage.
-However, it's recommended to make user-defined pipeline stages context-aware.
-This is especially important for the initial stage, as it allows to stop feeding the pipeline with new items after the context cancellation.
-In practice the first stage is often naturally context-aware through Go's standard APIs for databases, HTTP clients, and other external sources. 
-
-In the example below the `CheckAllUsersExist` function uses several concurrent workers to check if all users  
-from the given list exist. When an error occurs (like a non-existent user), the function returns that error  
-and cancels the context, which in turn stops all remaining user fetches.
-
-[Try in Go playground ↗](https://goplay.tools/snippet/AVigyK2JFLC)
-```go
-func main() {
-	ctx := context.Background()
-
-	// ID 999 doesn't exist, so fetching will stop after hitting it.
-	err := CheckAllUsersExist(ctx, 3, []int{1, 2, 3, 4, 5, 999, 7, 8, 9, 10, 11, 12, 13, 14, 15})
-	fmt.Printf("Check result: %v\n", err)
-}
-
-// CheckAllUsersExist uses several concurrent workers to check if all users with given IDs exist.
-func CheckAllUsersExist(ctx context.Context, concurrency int, ids []int) error {
-	// Create new context that will be canceled when this function returns
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	// Convert the slice into a stream
-	idsStream := rill.FromSlice(ids, nil)
-
-	// Fetch users concurrently.
-	users := rill.Map(idsStream, concurrency, func(id int) (*mockapi.User, error) {
-		u, err := mockapi.GetUser(ctx, id)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch user %d: %w", id, err)
-		}
-
-		fmt.Printf("Fetched user %d\n", id)
-		return u, nil
-	})
-
-	// Return the first error (if any) and cancel remaining fetches via context
-	return rill.Err(users)
-}
-```
-
-In the example above only the second stage (`mockapi.GetUser`) of the pipeline is context-aware.
-**FromSlice** works well here since the input is small, iteration is fast and context cancellation prevents expensive API calls regardless.
-The following code demonstrates how to replace **FromSlice** with **Generate** when full context awareness becomes important.
-
-```go
-idsStream := rill.Generate(func(send func(int), sendErr func(error)) {
-	for _, id := range ids {
-		if ctx.Err() != nil {
-			return
-		}
-		send(id)
-	}
-})
-```
-
-
-
 ## Order Preservation (Ordered Fan-In)
-Concurrent processing can boost performance, but since tasks take different amounts of time to complete,
-the results' order usually differs from the input order. While out-of-order results are acceptable in many scenarios, 
-some cases require preserving the original order. This seemingly simple problem is deceptively challenging to solve correctly.
+Regular concurrent code writes its results as soon as they're ready, in completion order. That order
+depends on how the Go runtime schedules goroutines and on the time it takes to produce each result.
 
-To address this, Rill provides ordered versions of its core functions, such as **OrderedMap** or **OrderedFilter**.
-These functions perform additional synchronization under the hood to ensure that if value **x** precedes value **y** in the input stream,
-then **f(x)** will precede **f(y)** in the output.
+For cases where the input order must be preserved, rill provides ordered
+functions, such as **OrderedMap** or **OrderedFilter**. They stay concurrent, but
+each worker holds its result until all earlier results are sent, so the
+output order matches the input order at the cost of some latency. This
+ordering guarantee holds for both values and errors.
 
-Here's a practical example: finding the first occurrence of a specific string among 1000 large files hosted online.
-Downloading all files at once would consume too much memory, processing them sequentially would be too slow,
-and traditional concurrency patterns do not preserve the order of files, making it challenging to find the first match.
 
-The combination of **OrderedFilter** and **First** functions solves this elegantly,
-while downloading and keeping in memory at most 5 files at a time. **First** returns on the first match,
-this triggers the context cancellation via defer, stopping URL generation and file downloads.
+Here's a practical example: check 1000 large files hosted online and find the first one containing a given string.
+Downloading files sequentially is slow, while traditional concurrency patterns do not preserve the order of files, 
+making it challenging to find the first match.
+
+The combination of **OrderedFilter** and **First** functions solves this,
+while downloading and keeping in memory at most 5 files at a time. Before returning,
+**First** cancels the context and waits until nothing is running anymore.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/UuuV2t5xbN2)
 
 ```go
-func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+ctx, scope := rill.WithContext(ctx)
 
-	// The string to search for in the downloaded files
-	needle := []byte("26")
+// The string to search for in the downloaded files
+needle := []byte("26")
 
-	// Generate a stream of URLs from https://example.com/file-0.txt 
-	// to https://example.com/file-999.txt
-	// Stop generating URLs if the context is canceled
-	urls := rill.Generate(func(send func(string), sendErr func(error)) {
-		for i := 0; i < 1000 && ctx.Err() == nil; i++ {
-			send(fmt.Sprintf("https://example.com/file-%d.txt", i))
-		}
-	})
+// Generate a stream of URLs from file-0.txt to file-999.txt.
+// Stop generating URLs when the context is canceled
+urls := rill.Generate(func(send func(string), sendError func(error)) {
+	for i := 0; i < 1000 && ctx.Err() == nil; i++ {
+		send(fmt.Sprintf("https://example.com/file-%d.txt", i))
+	}
+})
 
-	// Download and process the files
-	// At most 5 files are downloaded and held in memory at the same time
-	matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
-		fmt.Println("Downloading:", url)
-
-		content, err := mockapi.DownloadFile(ctx, url)
-		if err != nil {
-			return false, err
-		}
-
-		// keep only URLs of files that contain the needle
-		return bytes.Contains(content, needle), nil
-	})
-
-	// Find the first matched URL
-	firstMatchedUrl, found, err := rill.First(matchedUrls)
+// Download and process the files. Concurrency = 5
+matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
+	content, err := api.DownloadFile(ctx, url)
 	if err != nil {
-		fmt.Println("Error:", err)
-		return
+		return false, err
 	}
 
-	// Print the result
-	if found {
-		fmt.Println("Found in:", firstMatchedUrl)
-	} else {
-		fmt.Println("Not found")
-	}
-}
+	// keep only URLs of files that contain the needle
+	return bytes.Contains(content, needle), nil
+})
+
+// Return the first matched URL
+firstMatchedUrl, found, err := rill.First(matchedUrls, scope)
+
+// Print the result
+fmt.Println("Result:", firstMatchedUrl, found, err)
 ```
 
 
 ## Parallel Streaming and FlatMap
 Sometimes operations that appear inherently sequential can be parallelized by partitioning the problem space. 
-This can dramatically speed up data processing by allowing multiple streams to work concurrently instead of waiting 
-for each to complete sequentially.
-
-**FlatMap** is particularly powerful for this pattern. It transforms each input item into its own stream, then merges 
-all these streams together, giving you full control over the level of concurrency. 
-
-In the example below, **FlatMap** transforms each department into a stream of users, then merges these streams into one.
-Like other Rill functions, **FlatMap** gives full control over concurrency. 
-In this particular case the concurrency level is 3, meaning that users are fetched from at most 3 departments at the same time. 
-
-Additionally, this example demonstrates how to write a reusable streaming wrapper over paginated API calls - the `StreamUsers` function.
-This wrapper can be useful both on its own and as part of larger pipelines.
+Suppose we want to get a stream of all users, but the API is slow and paginated. We can use **FlatMap** to
+stream users from individual departments concurrently and combine those smaller streams into a single one.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/ckenCrDV3eN)
 ```go
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx, scope := rill.WithContext(context.Background())
 
 	// Start with a stream of department names
 	departments := rill.FromSlice([]string{"IT", "Finance", "Marketing", "Support", "Engineering"}, nil)
 
 	// Stream users from all departments concurrently.
 	// At most 3 departments at the same time.
-	users := rill.FlatMap(departments, 3, func(department string) <-chan rill.Try[*mockapi.User] {
-		return StreamUsers(ctx, &mockapi.UserQuery{Department: department})
+	users := rill.FlatMap(departments, 3, func(department string) <-chan rill.Try[*api.User] {
+		return StreamUsers(ctx, &api.UserQuery{Department: department})
 	})
 
 	// Print the users from the combined stream
-	err := rill.ForEach(users, 1, func(user *mockapi.User) error {
+	err := rill.ForEach(users, 1, func(user *api.User) error {
 		fmt.Printf("%+v\n", user)
 		return nil
-	})
+	}, scope)
+
 	fmt.Println("Error:", err)
 }
 
-// StreamUsers is a reusable streaming wrapper around the mockapi.ListUsers function.
-// It iterates through all listing pages and uses [Generate] to simplify sending users and errors to the resulting stream.
-// This function is useful both on its own and as part of larger pipelines.
-func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[*mockapi.User] {
-	return rill.Generate(func(send func(*mockapi.User), sendErr func(error)) {
-		var currentQuery mockapi.UserQuery
+// StreamUsers streams users from a paginated API.
+func StreamUsers(ctx context.Context, query *api.UserQuery) <-chan rill.Try[*api.User] {
+	return rill.Generate(func(send func(*api.User), sendError func(error)) {
+		var currentQuery api.UserQuery
 		if query != nil {
 			currentQuery = *query
 		}
@@ -470,9 +289,9 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 		for page := 0; ; page++ {
 			currentQuery.Page = page
 
-			users, err := mockapi.ListUsers(ctx, &currentQuery)
+			users, err := api.ListUsers(ctx, &currentQuery)
 			if err != nil {
-				sendErr(err)
+				sendError(err)
 				return
 			}
 
@@ -488,62 +307,54 @@ func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[
 }
 ```
 
-**Note:** Starting from Go 1.24, thanks to generic type aliases, the return type of the `StreamUsers` function 
-can optionally be simplified to `rill.Stream[*mockapi.User]`
+This example also shows how to write a reusable streaming wrapper over paginated API calls - the
+`StreamUsers` function. Such a wrapper is useful both on its own or as part of larger pipelines. 
+Thanks to generic type aliases, its return type can optionally be simplified to `rill.Stream[*api.User]`
 
 ```go
-func StreamUsers(ctx context.Context, query *mockapi.UserQuery) rill.Stream[*mockapi.User] {
+func StreamUsers(ctx context.Context, query *api.UserQuery) rill.Stream[*api.User] {
     ...
 }
 ```
 
 
-## Go 1.23 Iterators
-Starting from Go 1.23, the language added *range-over-function* feature, allowing users to define custom iterators 
-for use in for-range loops. This feature enables Rill to integrate seamlessly with existing iterator-based functions
-in the standard library and third-party packages.
+## Streaming Non-Commutative Reduction
 
-Rill provides **FromSeq** and **FromSeq2** functions to convert an iterator into a stream, 
-and **ToSeq2** function to convert a stream back into an iterator.
+Rill ships a concurrent, streaming **Reduce** function. It combines values using a user-supplied associative,
+but not necessarily commutative, reducer. Under the hood, the function builds a reduction tree.
 
-**ToSeq2** can be a good alternative to **ForEach** when concurrency is not needed. 
-It gives more control and performs all necessary cleanup and draining, even if the loop is terminated early using *break* or *return*.
+The demo below uses string concatenation, a simple non-commutative operation.
+The sleep makes the reduction cost and the concurrency gain visible.
 
-[Try in Go playground ↗](https://goplay.tools/snippet/M8B0xJj8btk)
-
+[Try in Go playground ↗](link)
 ```go
-func main() {
-	// Convert a slice of numbers into a stream
-	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+// A stream of 62 single-character strings
+str := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+letters := rill.FromSlice(strings.Split(str, ""), nil)
 
-	// Transform each number
-	// Concurrency = 3
-	squares := rill.Map(numbers, 3, func(x int) (int, error) {
-		return square(x), nil
-	})
+// Reassemble the original string
+start := time.Now()
+res, _, _ := rill.Reduce(letters, 4, func(x, y string) (string, error) {
+	time.Sleep(1 * time.Millisecond)
+	return x + y, nil
+})
 
-	// Convert the stream into an iterator and use for-range to print the results
-	for val, err := range rill.ToSeq2(squares) {
-		if err != nil {
-			fmt.Println("Error:", err)
-			break // cleanup is done regardless of early exit
-		}
-		fmt.Printf("%+v\n", val)
-	}
-}
+fmt.Printf("Duration: %v (vs sequential %v)\n", time.Since(start), time.Duration(len(str)-1)*time.Millisecond)
+fmt.Println("Result:", res)
 ```
 
 
 ## Testing Strategy
-Rill's concurrency-sensitive tests use Go's [testing/synctest](https://pkg.go.dev/testing/synctest): virtual time makes timing assertions exact,
-while goroutine scheduling stays nondeterministic, so repeated runs exercise different valid interleavings and assertions must hold for all of them.
-With coverage above 95%, testing focuses on:
+Rill's concurrency-sensitive tests use Go's [testing/synctest](https://pkg.go.dev/testing/synctest): virtual time makes 
+timing assertions exact, while goroutine scheduling stays nondeterministic, so repeated runs exercise different valid 
+interleavings and assertions must hold for all of them.
+
+With coverage above 99%, testing focuses on:
 - **Correctness**: functions produce accurate results at different levels of concurrency
 - **Concurrency**: operations reach the requested callback concurrency under load
 - **Ordering**: ordered versions preserve the input order, while basic versions do not
-- **Leaks**: synctest-wrapped cases detect unexpected durably blocked goroutines, with explicit assertions for intentionally blocking behavior
-- **Early exit**: after an error or short-circuit, blocking functions return immediately; finite upstreams drain in the background, and tests bound extra callback work
-
+- **Lifecycle**: return and cancellation happen as early as they can, and nothing runs longer than it should
+- **Leaks**: goroutines are not leaked (every synctest bubble is also a leak check)
 
 ## Blog Posts
 Technical articles exploring different aspects and applications of Rill's concurrency patterns:
