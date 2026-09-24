@@ -53,12 +53,12 @@ ctx, scope := rill.WithContext(ctx)
 // Convert a slice into a channel
 ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-// Read users from the API with concurrency = 3
+// Read users from the API. Concurrency = 3
 users := rill.Map(ids, 3, func(id int) (*api.User, error) {
   return api.GetUser(ctx, id)
 })
 
-// Process users with concurrency = 2
+// Process users. Concurrency = 2
 err := rill.ForEach(users, 2, func(u *api.User) error {
   if u.IsActive {
     return nil
@@ -67,7 +67,7 @@ err := rill.ForEach(users, 2, func(u *api.User) error {
   return api.SaveUser(ctx, u)
 }, scope)
 
-// Nothing is running, the context is canceled.
+// Nothing is running anymore; the context is canceled.
 // Handle the error (if any)
 fmt.Println("Error:", err)
 ```
@@ -97,7 +97,7 @@ ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7,..., 38, 39, 40,}, nil)
 // Group IDs into batches of 5
 idBatches := rill.Batch(ids, 5, -1)
 
-// Bulk fetch users from the API with concurrency = 3
+// Bulk fetch users from the API. Concurrency = 3
 userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*api.User, error) {
   return api.GetUsers(ctx, ids)
 })
@@ -105,7 +105,7 @@ userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*api.User, error) {
 // Transform the stream of batches back into a flat stream of users
 users := rill.Unbatch(userBatches)
 
-// Same as above, process users with concurrency = 2
+// Same as above, process users. Concurrency = 2
 err := rill.ForEach(users, 2, func(u *api.User) error {
   if u.IsActive {
     return nil
@@ -114,7 +114,7 @@ err := rill.ForEach(users, 2, func(u *api.User) error {
   return api.SaveUser(ctx, u)
 }, scope)
 
-// Handle errors
+// Handle the error
 fmt.Println("Error:", err)
 ```
 
@@ -163,7 +163,7 @@ func updateUserTimestampWorker() {
 	// Group requests into batches with timeout
 	requestBatches := rill.Batch(requests, 100, 50*time.Millisecond)
 
-	// Send bulk updates to DB with concurrency = 2
+	// Send bulk updates to DB. Concurrency = 2
 	_ = rill.ForEach(requestBatches, 2, func(batch []request) error {
 		// Create a slice of user IDs
 		ids := make([]int, len(batch))
@@ -235,7 +235,7 @@ matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
 		return false, err
 	}
 
-	// keep only URLs of files that contain the needle
+	// Keep only URLs of files that contain the needle
 	return bytes.Contains(content, needle), nil
 })
 
@@ -329,7 +329,7 @@ The sleep makes the reduction cost and the concurrency gain visible.
 str := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 letters := rill.FromSlice(strings.Split(str, ""), nil)
 
-// Reassemble the original string
+// Reassemble the original string. Concurrency = 4
 start := time.Now()
 res, _, _ := rill.Reduce(letters, 4, func(x, y string) (string, error) {
 	time.Sleep(1 * time.Millisecond)
@@ -352,6 +352,7 @@ With coverage above 99%, testing focuses on:
 - **Ordering**: ordered versions preserve the input order, while basic versions do not
 - **Lifecycle**: return and cancellation happen as early as they can, and nothing runs longer than it should
 - **Leaks**: goroutines are not leaked (every synctest bubble is also a leak check)
+
 
 ## Blog Posts
 Technical articles exploring different aspects and applications of Rill's concurrency patterns:
