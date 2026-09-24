@@ -1,7 +1,7 @@
 # Rill [![GoDoc](https://pkg.go.dev/badge/github.com/destel/rill)](https://pkg.go.dev/github.com/destel/rill#pkg-overview) [![Go Report Card](https://goreportcard.com/badge/github.com/destel/rill)](https://goreportcard.com/report/github.com/destel/rill) [![codecov](https://codecov.io/gh/destel/rill/graph/badge.svg?token=252K8OQ7E1)](https://codecov.io/gh/destel/rill) [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go) 
 
 Rill is a composable concurrency toolkit for Go: it makes it easier to build concurrent programs from simple, reusable parts.
-The result is less boilerplate, without giving up Go's natural channel-based model.
+The result is less boilerplate, with Go's natural channel-based model preserved.
 
 ```bash
 go get github.com/destel/rill
@@ -29,9 +29,8 @@ go get github.com/destel/rill
   then block until nothing is running anymore, giving pipelines errgroup-style semantics.
 
 - **Streaming.**  
-  Functions process items as they arrive, so the same code can handle a small
-  slice, an input larger than memory, or an infinite stream, with Go's natural
-  backpressure between stages.
+  Functions process items as they arrive, with natural backpressure, so the same code 
+  can handle a small slice, an input larger than memory, or an infinite stream.
 
 - **Advanced building blocks.**  
   Batching, order preservation, streaming non-commutative reduction, map-reduce,
@@ -162,7 +161,7 @@ func updateUserTimestampWorker() {
 	requests := rill.FromChan(queue, nil)
 
 	// Group requests into batches with timeout
-	requestBatches := rill.Batch(requests, 100, 50*time.Millisecond))
+	requestBatches := rill.Batch(requests, 100, 50*time.Millisecond)
 
 	// Send bulk updates to DB with concurrency = 2
 	_ = rill.ForEach(requestBatches, 2, func(batch []request) error {
