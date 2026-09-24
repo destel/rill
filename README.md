@@ -1,7 +1,7 @@
 # Rill [![GoDoc](https://pkg.go.dev/badge/github.com/destel/rill)](https://pkg.go.dev/github.com/destel/rill) [![Go Report Card](https://goreportcard.com/badge/github.com/destel/rill)](https://goreportcard.com/report/github.com/destel/rill) [![codecov](https://codecov.io/gh/destel/rill/graph/badge.svg?token=252K8OQ7E1)](https://codecov.io/gh/destel/rill) [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go) 
 
-Rill is a toolkit that brings composable concurrency to Go, making it easier to build concurrent programs from simple, reusable parts.
-It reduces boilerplate while preserving Go's natural channel-based model and backpressure behavior.
+Rill is a composable concurrency toolkit for Go: it makes it easier to build concurrent programs from simple, reusable parts.
+The result is less boilerplate, without giving up Go's natural channel-based model.
 
 ```bash
 go get github.com/destel/rill
@@ -13,8 +13,8 @@ go get github.com/destel/rill
 - **Not a framework.**  
   Rill is a collection of functions over plain channels. They can be used
   on their own or composed into multi-stage pipelines. Either way, they are
-  compatible with existing channel-based code. There's no lock-in: custom functions
-  are easy to write.
+  compatible with existing channel-based code. There's no lock-in: custom
+  functions are easy to write.
 
 - **Explicit concurrency.**  
   Every concurrent function takes an *n* argument that bounds how many of its
@@ -29,8 +29,8 @@ go get github.com/destel/rill
   then block until nothing is running anymore, giving pipelines errgroup-style semantics.
 
 - **Streaming.**  
-  Functions process items as they arrive, so rill can handle
-  infinite streams and datasets larger than memory, with Go's natural
+  Functions process items as they arrive, so the same code can handle a small
+  slice, an input larger than memory, or an infinite stream, with Go's natural
   backpressure between stages.
 
 - **Advanced building blocks.**  
