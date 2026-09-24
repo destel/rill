@@ -55,16 +55,16 @@ ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
 // Read users from the API. Concurrency = 3
 users := rill.Map(ids, 3, func(id int) (*api.User, error) {
-  return api.GetUser(ctx, id)
+	return api.GetUser(ctx, id)
 })
 
 // Process users. Concurrency = 2
 err := rill.ForEach(users, 2, func(u *api.User) error {
-  if u.IsActive {
-    return nil
-  }
-  u.IsActive = true
-  return api.SaveUser(ctx, u)
+	if u.IsActive {
+		return nil
+	}
+	u.IsActive = true
+	return api.SaveUser(ctx, u)
 }, scope)
 
 // Nothing is running anymore; the context is canceled.
@@ -99,7 +99,7 @@ idBatches := rill.Batch(ids, 5, -1)
 
 // Bulk fetch users from the API. Concurrency = 3
 userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*api.User, error) {
-  return api.GetUsers(ctx, ids)
+	return api.GetUsers(ctx, ids)
 })
 
 // Transform the stream of batches back into a flat stream of users
@@ -107,11 +107,11 @@ users := rill.Unbatch(userBatches)
 
 // Same as above, process users. Concurrency = 2
 err := rill.ForEach(users, 2, func(u *api.User) error {
-  if u.IsActive {
-    return nil
-  }
-  u.IsActive = true
-  return api.SaveUser(ctx, u)
+	if u.IsActive {
+		return nil
+	}
+	u.IsActive = true
+	return api.SaveUser(ctx, u)
 }, scope)
 
 // Handle the error
@@ -310,7 +310,7 @@ Thanks to generic type aliases, its return type can optionally be simplified to 
 
 ```go
 func StreamUsers(ctx context.Context, query *api.UserQuery) rill.Stream[*api.User] {
-    ...
+	...
 }
 ```
 
@@ -323,7 +323,7 @@ but not necessarily commutative, reducer. Under the hood, the function builds a 
 The demo below uses string concatenation, a simple non-commutative operation.
 The sleep makes the reduction cost and the concurrency gain visible.
 
-[Try in Go playground ↗](link)
+[Try in Go playground ↗](https://goplay.tools/snippet/H4LHA5AHjz)
 ```go
 // A stream of 62 single-character strings
 str := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
