@@ -61,6 +61,11 @@
 // suppression is best effort: when the sink runs callbacks concurrently, a few
 // extra calls can start after the early return.
 //
+// An early return lets the caller cancel its own context right away, for
+// example with a deferred cancel, and cooperatively stop the remaining
+// background work. This gives early cancellation, but not structured
+// concurrency.
+//
 // # Context and structured concurrency
 //
 // Rill can manage the context and give the pipeline structured
