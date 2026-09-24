@@ -598,15 +598,18 @@ func ExampleMerge() {
 }
 
 func ExampleReduce() {
-	// Convert a slice of numbers into a stream
-	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+	// A stream of 62 single-character strings
+	str := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	letters := rill.FromSlice(strings.Split(str, ""), nil)
 
-	// Sum all numbers
-	sum, ok, err := rill.Reduce(numbers, 3, func(a, b int) (int, error) {
-		return a + b, nil
+	// Reassemble the original string. Concurrency = 4
+	// String concatenation is a simple non-commutative operation
+	// and is used here for demonstration only.
+	res, ok, err := rill.Reduce(letters, 4, func(x, y string) (string, error) {
+		return x + y, nil
 	})
 
-	fmt.Println("Result:", sum, ok)
+	fmt.Println("Result:", res, ok)
 	fmt.Println("Error:", err)
 }
 
