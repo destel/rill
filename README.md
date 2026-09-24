@@ -346,7 +346,7 @@ Rill's concurrency-sensitive tests use Go's [testing/synctest](https://pkg.go.de
 timing assertions exact, while goroutine scheduling stays nondeterministic, so repeated runs exercise different valid 
 interleavings and assertions must hold for all of them.
 
-With coverage above 99%, testing focuses on:
+With coverage above 95%, testing focuses on:
 - **Correctness**: functions produce accurate results at different levels of concurrency
 - **Concurrency**: operations reach the requested callback concurrency under load
 - **Ordering**: ordered versions preserve the input order, while basic versions do not
