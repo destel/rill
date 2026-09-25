@@ -1,7 +1,7 @@
 # Rill [![GoDoc](https://pkg.go.dev/badge/github.com/destel/rill)](https://pkg.go.dev/github.com/destel/rill#pkg-overview) [![Go Report Card](https://goreportcard.com/badge/github.com/destel/rill)](https://goreportcard.com/report/github.com/destel/rill) [![codecov](https://codecov.io/gh/destel/rill/graph/badge.svg?token=252K8OQ7E1)](https://codecov.io/gh/destel/rill) [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go) 
 
-Rill is a composable concurrency toolkit for Go: it makes it easier to build concurrent programs from simple, reusable parts.
-The result is less boilerplate, with Go's natural channel-based model preserved.
+Rill is a composable concurrency toolkit for Go that makes it easier to build concurrent programs from simple, reusable parts.
+It reduces boilerplate while preserving Go's natural channel-based model.
 
 ```bash
 go get github.com/destel/rill
@@ -10,11 +10,11 @@ go get github.com/destel/rill
 
 ## Features
 
-- **Not a framework.** 
+- **Not a framework.**
   Rill is a collection of functions over plain channels. They can be used
-  on their own or composed into multi-stage pipelines. Either way, they are
-  compatible with existing channel-based code. There's no lock-in: custom
-  functions are easy to write.
+  on their own or composed into multi-stage pipelines. Either way, it's
+  straightforward to integrate Rill into existing projects and to write
+  custom pipeline stages.
 
 - **Explicit concurrency.** 
   Every concurrent function takes an *n* argument that bounds how many of its
@@ -25,8 +25,8 @@ go get github.com/destel/rill
   the pipeline. They can also be intercepted mid-pipeline when needed.
 
 - **Context and structured concurrency.** 
-  Rill can manage a context and automatically cancel it on the first error,
-  then block until nothing is running anymore, giving pipelines errgroup-style semantics.
+  Rill can manage a context, giving pipelines errgroup-style cancellation and waiting.
+  It cancels the context on the first error, then waits until nothing is running anymore.
 
 - **Streaming.** 
   Functions process items as they arrive, with natural backpressure, so the same code 
@@ -34,7 +34,8 @@ go get github.com/destel/rill
 
 - **Advanced building blocks.** 
   Batching, order preservation, streaming non-commutative reduction, map-reduce,
-  splitting and merging are built in. Pipelines can form any cycle-free topology.
+  splitting and merging are built in. Pipelines, while usually linear,
+  can form any cycle-free topology.
 
 - **Lightweight.** 
   No per-item allocations or goroutines. Small, type-safe API. Zero dependencies.
