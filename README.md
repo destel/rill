@@ -10,33 +10,33 @@ go get github.com/destel/rill
 
 ## Features
 
-- **Not a framework.**  
+- **Not a framework.** 
   Rill is a collection of functions over plain channels. They can be used
   on their own or composed into multi-stage pipelines. Either way, they are
   compatible with existing channel-based code. There's no lock-in: custom
   functions are easy to write.
 
-- **Explicit concurrency.**  
+- **Explicit concurrency.** 
   Every concurrent function takes an *n* argument that bounds how many of its
   callbacks run at once.
 
-- **Centralized error handling.**  
+- **Centralized error handling.** 
   Errors travel downstream along with values and are handled at the end of
   the pipeline. They can also be intercepted mid-pipeline when needed.
 
-- **Context and structured concurrency.**  
+- **Context and structured concurrency.** 
   Rill can manage a context and automatically cancel it on the first error,
   then block until nothing is running anymore, giving pipelines errgroup-style semantics.
 
-- **Streaming.**  
+- **Streaming.** 
   Functions process items as they arrive, with natural backpressure, so the same code 
   can handle a small slice, an input larger than memory, or an infinite stream.
 
-- **Advanced building blocks.**  
+- **Advanced building blocks.** 
   Batching, order preservation, streaming non-commutative reduction, map-reduce,
   splitting and merging are built in. Pipelines can form any cycle-free topology.
 
-- **Lightweight.**  
+- **Lightweight.** 
   No per-item allocations or goroutines. Small, type-safe API. Zero dependencies.
 
 
