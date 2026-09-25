@@ -120,6 +120,60 @@ fmt.Println("Error:", err)
 ```
 
 
+## Order Preservation (Ordered Fan-In)
+Regular concurrent code writes its results as soon as they're ready, in completion order. That order
+depends on how the Go runtime schedules goroutines and on the time it takes to produce each result.
+
+For cases where the input order must be preserved, rill provides ordered
+functions, such as **OrderedMap** or **OrderedFilter**. They stay concurrent, but
+each worker holds its result until all earlier results are sent, so the
+output order matches the input order at the cost of some latency. This
+ordering guarantee holds for both values and errors.
+
+
+Here's a practical example: check 1000 large files hosted online and find the first one containing a given string.
+Downloading files sequentially is slow, while traditional concurrency patterns do not preserve the order of files, 
+making it challenging to find the first match.
+
+The combination of **OrderedFilter** and **First** functions solves this,
+while downloading and keeping in memory at most 5 files at a time. Before returning,
+**First** cancels the context and waits until nothing is running anymore.
+
+[Try in Go playground ↗](https://goplay.tools/snippet/UuuV2t5xbN2)
+
+```go
+ctx, scope := rill.WithContext(ctx)
+
+// The string to search for in the downloaded files
+needle := []byte("26")
+
+// Generate a stream of URLs from file-0.txt to file-999.txt.
+// Stop generating URLs when the context is canceled
+urls := rill.Generate(func(send func(string), sendError func(error)) {
+	for i := 0; i < 1000 && ctx.Err() == nil; i++ {
+		send(fmt.Sprintf("https://example.com/file-%d.txt", i))
+	}
+})
+
+// Download and process the files. Concurrency = 5
+matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
+	content, err := api.DownloadFile(ctx, url)
+	if err != nil {
+		return false, err
+	}
+
+	// Keep only URLs of files that contain the needle
+	return bytes.Contains(content, needle), nil
+})
+
+// Return the first matched URL
+firstMatchedUrl, found, err := rill.First(matchedUrls, scope)
+
+// Print the result
+fmt.Println("Result:", firstMatchedUrl, found, err)
+```
+
+
 ## Real-Time Batching
 Rill’s **Batch** function can also be used to batch independent operations happening in real time across an application.
 For example, HTTP request handlers may need to update users’ `last_active_at` timestamps and have these independent
@@ -193,60 +247,6 @@ type request struct {
 // This is the queue of user IDs to update.
 var queue = make(chan request)
 ```
-
-## Order Preservation (Ordered Fan-In)
-Regular concurrent code writes its results as soon as they're ready, in completion order. That order
-depends on how the Go runtime schedules goroutines and on the time it takes to produce each result.
-
-For cases where the input order must be preserved, rill provides ordered
-functions, such as **OrderedMap** or **OrderedFilter**. They stay concurrent, but
-each worker holds its result until all earlier results are sent, so the
-output order matches the input order at the cost of some latency. This
-ordering guarantee holds for both values and errors.
-
-
-Here's a practical example: check 1000 large files hosted online and find the first one containing a given string.
-Downloading files sequentially is slow, while traditional concurrency patterns do not preserve the order of files, 
-making it challenging to find the first match.
-
-The combination of **OrderedFilter** and **First** functions solves this,
-while downloading and keeping in memory at most 5 files at a time. Before returning,
-**First** cancels the context and waits until nothing is running anymore.
-
-[Try in Go playground ↗](https://goplay.tools/snippet/UuuV2t5xbN2)
-
-```go
-ctx, scope := rill.WithContext(ctx)
-
-// The string to search for in the downloaded files
-needle := []byte("26")
-
-// Generate a stream of URLs from file-0.txt to file-999.txt.
-// Stop generating URLs when the context is canceled
-urls := rill.Generate(func(send func(string), sendError func(error)) {
-	for i := 0; i < 1000 && ctx.Err() == nil; i++ {
-		send(fmt.Sprintf("https://example.com/file-%d.txt", i))
-	}
-})
-
-// Download and process the files. Concurrency = 5
-matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
-	content, err := api.DownloadFile(ctx, url)
-	if err != nil {
-		return false, err
-	}
-
-	// Keep only URLs of files that contain the needle
-	return bytes.Contains(content, needle), nil
-})
-
-// Return the first matched URL
-firstMatchedUrl, found, err := rill.First(matchedUrls, scope)
-
-// Print the result
-fmt.Println("Result:", firstMatchedUrl, found, err)
-```
-
 
 ## Parallel Streaming and FlatMap
 Sometimes operations that appear inherently sequential can be parallelized by partitioning the problem space. 
