@@ -66,7 +66,7 @@ err := rill.ForEach(users, 2, func(u *api.User) error {
 	}
 	u.IsActive = true
 	return api.SaveUser(ctx, u)
-}, scope)
+}, scope) // scope is a functional option
 
 // Nothing is running anymore; the context is canceled.
 // Handle the error (if any)
