@@ -13,7 +13,7 @@ go get github.com/destel/rill
 - **Not a framework.**
   Rill is a collection of functions over plain channels. They can be used
   on their own or composed into multi-stage pipelines. Either way, it's
-  straightforward to integrate Rill into existing projects and to write
+  straightforward to integrate rill into existing projects and to write
   custom pipeline stages.
 
 - **Explicit concurrency.** 
@@ -345,14 +345,14 @@ With coverage above 95%, testing focuses on:
 
 
 ## Blog Posts
-Technical articles exploring different aspects and applications of Rill's concurrency patterns:
+Technical articles exploring different aspects and applications of rill's concurrency patterns:
 - [Preserving Order in Concurrent Go Apps](https://destel.dev/blog/preserving-order-in-concurrent-go?ref=rill-readme)
 - [Real-Time Batching in Go](https://destel.dev/blog/real-time-batching-in-go?ref=rill-readme)
 - [Parallel Streaming Pattern in Go: How to Scan Large S3 or GCS Buckets Significantly Faster](https://destel.dev/blog/fast-listing-of-files-from-s3-gcs-and-other-object-storages?ref=rill-readme)
 
 
 ## Contributing
-Thank you for your interest in improving Rill! Before submitting your pull request, please consider:
+Thank you for your interest in improving rill! Before submitting your pull request, please consider:
 
 - Focus on generic, widely applicable solutions
 - Consider use cases. Try to avoid highly specialized features that could be separate packages
