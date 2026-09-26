@@ -175,50 +175,38 @@ fmt.Println("Result:", firstMatchedUrl, found, err)
 
 
 ## Real-Time Batching
-Rill’s **Batch** function can also be used to batch independent operations happening in real time across an application.
-For example, HTTP request handlers may need to update users’ `last_active_at` timestamps and have these independent
-updates automatically combined into bulk database queries.
+Rill’s **Batch** function is also useful for batching independent operations happening in real time 
+across an application. In the example below, the `UpdateUserTimestamp` function updates 
+users’ `last_active_at` timestamps. The function looks normal at the call site: 
+it takes a user ID, waits for the database to respond, and returns an error. 
+Under the hood, a background worker uses rill to combine concurrent calls into bulk updates and 
+send results back to the corresponding callers.
 
-`UpdateUserTimestamp` looks normal at the call site: it's context aware, takes a user ID, blocks waiting for the result,
-then returns nil or an error. But under the hood, a background worker combines individual calls into bulk database updates. 
-The query errors (if any) are then sent back to the corresponding callers.
-
-Waiting for a full batch to accumulate can take a long time if calls to `UpdateUserTimestamp` are rare.
-We can limit this wait and process partial batches using a timeout argument.
-Using a small value, like _50ms_, allows us to benefit from bulk queries when there are many concurrent updates, while
-introducing at most _50ms_ of additional latency when the stream of updates is sparse.
+Since calls happen at unpredictable times, waiting for a full batch can take arbitrarily long. 
+To avoid this, **Batch** takes a timeout argument that limits how long each batch waits to fill. 
+When the timeout expires, a partial batch is emitted.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/w0xsLilX1ca)
 
 ```go
-func UpdateUserTimestamp(ctx context.Context, userID int) error {
+func UpdateUserTimestamp(userID int) error {
 	// Prepare a request to the worker.
-	req := request{userID:  userID, ReplyTo: make(chan error, 1)}
+	req := request{userID: userID, replyTo: make(chan error, 1)}
 
-	// Send request to the worker
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case queue <- req:
-	}
-
-	// Block and wait for the result 
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case err := <-req.ReplyTo:
-		return err
-	}
+	// Send the request and wait for a reply.
+	queue <- req
+	err := <-req.replyTo
+	return err
 }
 
 func updateUserTimestampWorker() {
 	// Start with a stream of update requests
 	requests := rill.FromChan(queue, nil)
 
-	// Group requests into batches with timeout
-	requestBatches := rill.Batch(requests, 100, 50*time.Millisecond)
+	// Group up to 10 requests; when requests are sparse, add at most 20ms of latency
+	requestBatches := rill.Batch(requests, 10, 20*time.Millisecond)
 
-	// Send bulk updates to DB. Concurrency = 2
+	// Send bulk updates to DB. At most 2 concurrent DB queries
 	_ = rill.ForEach(requestBatches, 2, func(batch []request) error {
 		// Create a slice of user IDs
 		ids := make([]int, len(batch))
@@ -226,14 +214,15 @@ func updateUserTimestampWorker() {
 			ids[i] = req.userID
 		}
 
-		// Execute batched update
+		// Do bulk update
 		err := sendQueryToDB("UPDATE users SET last_active_at = NOW() WHERE id IN (?)", ids)
 
 		// Send result back to all callers in this batch
 		for _, req := range batch {
-			req.ReplyTo <- err
-			close(req.ReplyTo)
+			req.replyTo <- err
 		}
+
+		// Keep the pipeline running
 		return nil
 	})
 }
@@ -241,10 +230,10 @@ func updateUserTimestampWorker() {
 // This type represents a single request to the worker
 type request struct {
 	userID  int
-	ReplyTo chan error
+	replyTo chan error
 }
 
-// This is the queue of user IDs to update.
+// Queue of update requests
 var queue = make(chan request)
 ```
 
