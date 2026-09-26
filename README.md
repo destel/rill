@@ -45,7 +45,7 @@ go get github.com/destel/rill
 Let's look at a practical example: fetch users from an API, activate them, and save the changes back. 
 It shows how to control concurrency at each step, and how to handle errors from both operations in one place. 
 On the first error it encounters, **ForEach** cancels the context, waits until nothing is running anymore, and returns
-that error.
+that error. The package documentation explains this behavior in detail.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/xN_1zaBzfkq)
 ```go
