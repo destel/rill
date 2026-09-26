@@ -73,7 +73,12 @@ err := rill.ForEach(users, 2, func(u *api.User) error {
 fmt.Println("Error:", err)
 ```
 
+To get the users back as a slice instead of processing them, we can just replace
+**ForEach** with **ToSlice**:
 
+```go
+res, err := rill.ToSlice(users, scope)
+```
 
 
 ## Batching
