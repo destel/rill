@@ -220,11 +220,9 @@ func Example_orderPreservation() {
 	fmt.Println("Result:", firstMatchedUrl, found, err)
 }
 
-// This example demonstrates the parallel streaming pattern: [FlatMap] turns each
-// department into its own stream of users and merges these streams into one,
-// fetching from several departments concurrently.
-// Additionally, it demonstrates how to write a reusable streaming wrapper over paginated API calls -
-// the StreamUsers function.
+// This example demonstrates how [FlatMap] can remove a slow-source bottleneck. The API is slow and
+// paginated, so users are streamed from several departments concurrently and merged into a single
+// stream. There can be any number of departments, while FlatMap streams at most 3 at a time.
 func Example_parallelStreaming() {
 	ctx, scope := rill.WithContext(context.Background())
 
@@ -242,12 +240,14 @@ func Example_parallelStreaming() {
 		fmt.Printf("%+v\n", user)
 		return nil
 	}, scope)
+
+	// Nothing is running anymore; the context is canceled.
+	// Handle the error
 	fmt.Println("Error:", err)
 }
 
-// StreamUsers is a reusable streaming wrapper around the api.ListUsers function.
-// It iterates through all listing pages and uses [Generate] to simplify sending users and errors to the resulting stream.
-// This function is useful both on its own and as part of larger pipelines.
+// StreamUsers streams users from a paginated API. It's a reusable streaming wrapper, useful both
+// on its own and as part of larger pipelines.
 func StreamUsers(ctx context.Context, query api.UserQuery) <-chan rill.Try[*api.User] {
 	return rill.Generate(func(send func(*api.User), sendError func(error)) {
 		for page := 0; ; page++ {
