@@ -95,8 +95,8 @@
 //
 //	// Nothing is running anymore and ctx is canceled
 //
-// Draining and callback suppression still apply, even though the sink no
-// longer returns early.
+// Draining and callback suppression still apply, but they happen before the
+// sink returns instead of after.
 //
 // # Ordered stages
 //
