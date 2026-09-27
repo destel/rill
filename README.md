@@ -142,7 +142,7 @@ making it challenging to find the first match.
 
 The combination of **OrderedFilter** and **First** functions solves this,
 while downloading and keeping in memory at most 5 files at a time.
-On receiving the first match or error, **First**, just like **ForEach**, 
+On the first match or error, **First**, just like **ForEach**, 
 cancels the context and waits for the pipeline to finish.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/UuuV2t5xbN2)
