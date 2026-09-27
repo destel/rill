@@ -757,29 +757,30 @@ func ExampleToSeq2() {
 }
 
 func ExampleWithContext() {
+	// ctx is captured by the callbacks below.
+	// scope is a functional option passed to ForEach.
 	ctx, scope := rill.WithContext(context.Background())
 
-	// The source is an infinite, context-aware stream of natural numbers starting from 114
-	numbers := rill.Generate(func(send func(int), sendError func(error)) {
-		for i := 114; ctx.Err() == nil; i++ {
-			send(i)
-		}
+	// Convert a slice into a channel
+	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Read users from the API. Concurrency = 3
+	users := rill.Map(ids, 3, func(id int) (*api.User, error) {
+		return api.GetUser(ctx, id)
 	})
 
-	// Keep only the primes. Concurrency = 3; Ordered
-	// The check is context-aware: it gives up as soon as the context is canceled
-	primes := rill.OrderedFilter(numbers, 3, func(x int) (bool, error) {
-		if err := simulateWorkContext(ctx, 500*time.Millisecond); err != nil {
-			return false, err
+	// Process users. Concurrency = 2
+	err := rill.ForEach(users, 2, func(u *api.User) error {
+		if u.IsActive {
+			return nil
 		}
-		fmt.Println("Checked:", x)
-		return isPrime(x), nil
-	})
+		u.IsActive = true
+		return api.SaveUser(ctx, u)
+	}, scope)
 
-	// Finding the first prime cancels the context, which stops the source and the remaining checks.
-	// First returns once nothing is running anymore.
-	first, ok, err := rill.First(primes, scope)
-	fmt.Println("First prime:", first, ok, err) // prints 127
+	// Nothing is running anymore; the context is canceled.
+	// Handle the error (if any)
+	fmt.Println("Error:", err)
 }
 
 // --- Helpers ---
@@ -818,13 +819,4 @@ func printStream[A any](stream <-chan rill.Try[A]) {
 
 func simulateWork(max time.Duration) {
 	time.Sleep(time.Duration(rand.Intn(int(max))))
-}
-
-func simulateWorkContext(ctx context.Context, max time.Duration) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(time.Duration(rand.Intn(int(max)))):
-		return nil
-	}
 }
