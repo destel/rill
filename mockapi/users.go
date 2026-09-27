@@ -109,16 +109,12 @@ type UserQuery struct {
 }
 
 // ListUsers returns a paginated list of users optionally filtered by department.
-func ListUsers(ctx context.Context, query *UserQuery) ([]*User, error) {
+func ListUsers(ctx context.Context, query UserQuery) ([]*User, error) {
 	if err := simulateWork(ctx, 1000*time.Millisecond); err != nil {
 		return nil, err
 	}
 
 	const pageSize = 10
-	if query == nil {
-		query = &UserQuery{}
-	}
-
 	offset := query.Page * pageSize
 
 	mu.RLock()

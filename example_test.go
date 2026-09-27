@@ -220,7 +220,7 @@ func Example_parallelStreaming() {
 	// Stream users from all departments concurrently.
 	// At most 3 departments at the same time.
 	users := rill.FlatMap(departments, 3, func(department string) <-chan rill.Try[*api.User] {
-		return StreamUsers(ctx, &api.UserQuery{Department: department})
+		return StreamUsers(ctx, api.UserQuery{Department: department})
 	})
 
 	// Print the users from the combined stream
@@ -234,17 +234,12 @@ func Example_parallelStreaming() {
 // StreamUsers is a reusable streaming wrapper around the api.ListUsers function.
 // It iterates through all listing pages and uses [Generate] to simplify sending users and errors to the resulting stream.
 // This function is useful both on its own and as part of larger pipelines.
-func StreamUsers(ctx context.Context, query *api.UserQuery) <-chan rill.Try[*api.User] {
+func StreamUsers(ctx context.Context, query api.UserQuery) <-chan rill.Try[*api.User] {
 	return rill.Generate(func(send func(*api.User), sendError func(error)) {
-		var currentQuery api.UserQuery
-		if query != nil {
-			currentQuery = *query
-		}
-
 		for page := 0; ; page++ {
-			currentQuery.Page = page
+			query.Page = page
 
-			users, err := api.ListUsers(ctx, &currentQuery)
+			users, err := api.ListUsers(ctx, query)
 			if err != nil {
 				sendError(err)
 				return

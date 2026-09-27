@@ -262,7 +262,7 @@ func main() {
 	// Stream users from all departments concurrently.
 	// At most 3 departments at the same time.
 	users := rill.FlatMap(departments, 3, func(department string) <-chan rill.Try[*api.User] {
-		return StreamUsers(ctx, &api.UserQuery{Department: department})
+		return StreamUsers(ctx, api.UserQuery{Department: department})
 	})
 
 	// Print the users from the combined stream
@@ -276,17 +276,12 @@ func main() {
 }
 
 // StreamUsers streams users from a paginated API.
-func StreamUsers(ctx context.Context, query *api.UserQuery) <-chan rill.Try[*api.User] {
+func StreamUsers(ctx context.Context, query api.UserQuery) <-chan rill.Try[*api.User] {
 	return rill.Generate(func(send func(*api.User), sendError func(error)) {
-		var currentQuery api.UserQuery
-		if query != nil {
-			currentQuery = *query
-		}
-
 		for page := 0; ; page++ {
-			currentQuery.Page = page
+			query.Page = page
 
-			users, err := api.ListUsers(ctx, &currentQuery)
+			users, err := api.ListUsers(ctx, query)
 			if err != nil {
 				sendError(err)
 				return
@@ -309,7 +304,7 @@ This example also shows how to write a reusable streaming wrapper over paginated
 Thanks to generic type aliases, its return type can optionally be simplified to `rill.Stream[*api.User]`
 
 ```go
-func StreamUsers(ctx context.Context, query *api.UserQuery) rill.Stream[*api.User] {
+func StreamUsers(ctx context.Context, query api.UserQuery) rill.Stream[*api.User] {
 	...
 }
 ```
