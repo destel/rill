@@ -19,25 +19,22 @@ import (
 
 // --- Package examples ---
 
-// This example demonstrates a rill pipeline that fetches users from an API,
-// updates their status to active, and saves them back.
-// Both operations are performed concurrently, and errors are handled in one place at the end.
+// This example demonstrates a rill pipeline that fetches users from an API, activates them, and saves
+// the changes back. Each step runs concurrently with its own concurrency limit, and errors from both
+// are handled in one place. On the first error, [ForEach] cancels the context, waits until nothing is
+// running anymore, and returns that error.
 func Example() {
-	// The context is canceled on the first error or when ForEach returns,
-	// whichever occurs first.
 	ctx, scope := rill.WithContext(context.Background())
 
-	// Convert a slice of user IDs into a stream
+	// Convert a slice into a channel
 	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Read users from the API.
-	// Concurrency = 3
+	// Read users from the API. Concurrency = 3
 	users := rill.Map(ids, 3, func(id int) (*api.User, error) {
 		return api.GetUser(ctx, id)
 	})
 
-	// Activate users.
-	// Concurrency = 2
+	// Process users. Concurrency = 2
 	err := rill.ForEach(users, 2, func(u *api.User) error {
 		if u.IsActive {
 			fmt.Printf("User %d is already active\n", u.ID)
@@ -52,9 +49,10 @@ func Example() {
 
 		fmt.Printf("User saved: %+v\n", u)
 		return nil
-	}, scope)
+	}, scope) // scope is a functional option
 
-	// Nothing is running anymore. Handle errors:
+	// Nothing is running anymore; the context is canceled.
+	// Handle the error (if any)
 	fmt.Println("Error:", err)
 }
 
