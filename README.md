@@ -221,7 +221,7 @@ func updateUserTimestampWorker() {
 		}
 
 		// Do bulk update
-		err := sendQueryToDB("UPDATE users SET last_active_at = NOW() WHERE id IN (?)", ids)
+		err := executeQuery("UPDATE users SET last_active_at = NOW() WHERE id IN (?)", ids)
 
 		// Send result back to all callers in this batch
 		for _, req := range batch {

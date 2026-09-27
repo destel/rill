@@ -104,61 +104,86 @@ func Example_batching() {
 	fmt.Println("Error:", err)
 }
 
-// This example demonstrates how batching can be used to group similar concurrent database updates into a single query.
-// The UpdateUserTimestamp function is used to update the last_active_at column in the users table. Updates are not
-// executed immediately but are instead queued and then sent to the database in batches of up to 5.
+// This example demonstrates how [Batch] can group independent operations happening in real time.
+// The main function makes 100 concurrent calls to the UpdateUserTimestamp function, which looks
+// normal at the call site: it takes a user ID, waits for the database to respond, and returns an
+// error. Under the hood, a background worker uses rill to combine concurrent calls into bulk updates
+// and send results back to the corresponding callers.
 //
-// When updates are sparse, it can take some time to collect a full batch. In this case, the [Batch] function
-// emits partial batches, ensuring that updates are delayed by at most 100ms.
-//
-// For simplicity, this example does not include retries, error handling, or synchronization.
-// A more complete version of this pattern, with context support, error handling, and
-// synchronization, is described at https://destel.dev/blog/real-time-batching-in-go.
-func Example_batchingRealTime() {
-	// Start the background worker that processes the updates
+// Since calls happen at unpredictable times, waiting for a full batch can take arbitrarily long.
+// To avoid this, [Batch] takes a timeout argument that limits how long each batch waits to fill.
+// When the timeout expires, a partial batch is emitted.
+func Example_realTimeBatching() {
+	// Start the background worker
 	go updateUserTimestampWorker()
 
-	// Do some updates. They'll be automatically grouped into
-	// batches: [1,2,3,4,5], [6,7], [8]
-	UpdateUserTimestamp(1)
-	UpdateUserTimestamp(2)
-	UpdateUserTimestamp(3)
-	UpdateUserTimestamp(4)
-	UpdateUserTimestamp(5)
-	UpdateUserTimestamp(6)
-	UpdateUserTimestamp(7)
-	time.Sleep(500 * time.Millisecond) // simulate sparse updates
-	UpdateUserTimestamp(8)
-
-	// Wait for the updates to be processed
-	// In real-world application, different synchronization mechanisms would be used.
-	time.Sleep(1 * time.Second)
+	// Make 100 concurrent calls
+	var wg sync.WaitGroup
+	for id := 1; id <= 100; id++ {
+		wg.Go(func() {
+			if err := UpdateUserTimestamp(id); err != nil {
+				fmt.Println("Error:", err)
+			}
+		})
+	}
+	wg.Wait()
 }
 
-// This is the queue of user IDs to update.
-var userIDsToUpdate = make(chan int)
+func UpdateUserTimestamp(userID int) error {
+	// Prepare a request to the worker.
+	req := request{userID: userID, replyTo: make(chan error, 1)}
 
-// UpdateUserTimestamp is the public API for updating the last_active_at column in the users table.
-func UpdateUserTimestamp(userID int) {
-	userIDsToUpdate <- userID
+	// Send the request and wait for a reply.
+	queue <- req
+	err := <-req.replyTo
+	return err
 }
 
-// This is a background worker that sends queued updates to the database in batches.
-// For simplicity, this worker does not include retries, error handling, or synchronization.
 func updateUserTimestampWorker() {
-	// convert the channel of user IDs into a stream
-	ids := rill.FromChan(userIDsToUpdate, nil)
+	// Start with a stream of update requests
+	requests := rill.FromChan(queue, nil)
 
-	// Group IDs into batches of 5 for bulk processing
-	// In case of sparse updates, we want to send them to the database no later than 100ms after they were queued.
-	idBatches := rill.Batch(ids, 5, 100*time.Millisecond)
+	// Group up to 10 requests; when requests are sparse, add at most 20ms of latency
+	requestBatches := rill.Batch(requests, 10, 20*time.Millisecond)
 
-	// Send updates to the database
-	// Concurrency = 1 (this controls max number of concurrent updates)
-	_ = rill.ForEach(idBatches, 1, func(batch []int) error {
-		fmt.Printf("Executed: UPDATE users SET last_active_at = NOW() WHERE id IN (%v)\n", batch)
+	// Send bulk updates to DB. At most 2 concurrent DB queries
+	_ = rill.ForEach(requestBatches, 2, func(batch []request) error {
+		// Create a slice of user IDs
+		ids := make([]int, len(batch))
+		for i, req := range batch {
+			ids[i] = req.userID
+		}
+
+		// Do bulk update
+		err := executeQuery("UPDATE users SET last_active_at = NOW() WHERE id IN (?)", ids)
+
+		// Send result back to all callers in this batch
+		for _, req := range batch {
+			req.replyTo <- err
+		}
+
+		// Keep the pipeline running
 		return nil
 	})
+}
+
+// This type represents a single request to the worker
+type request struct {
+	userID  int
+	replyTo chan error
+}
+
+// Queue of update requests
+var queue = make(chan request)
+
+// executeQuery simulates a database query
+func executeQuery(query string, args ...any) error {
+	simulateWork(100 * time.Millisecond)
+	for _, arg := range args {
+		query = strings.Replace(query, "?", fmt.Sprint(arg), 1)
+	}
+	fmt.Println("Executed:", query)
+	return nil
 }
 
 // This example demonstrates how to find the first file containing a specific string among 1000 large files
