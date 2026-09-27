@@ -56,23 +56,19 @@ func Example() {
 	fmt.Println("Error:", err)
 }
 
-// This example demonstrates a rill pipeline that fetches users from an API,
-// updates their status to active, and saves them back.
-// Users are fetched concurrently and in batches to reduce the number of API calls.
+// This example demonstrates a rill pipeline that fetches users from an API in batches, activates
+// them, and saves the changes back. [Batch] groups individual IDs into slices, so users are fetched
+// with one bulk API call per batch instead of one call per user.
 func Example_batching() {
 	ctx, scope := rill.WithContext(context.Background())
 
-	// Convert a slice of user IDs into a stream
-	ids := rill.FromSlice([]int{
-		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-		21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-	}, nil)
+	// Convert a slice of user IDs into a channel
+	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}, nil)
 
 	// Group IDs into batches of 5
 	idBatches := rill.Batch(ids, 5, -1)
 
-	// Bulk fetch users from the API
-	// Concurrency = 3
+	// Bulk fetch users from the API. Concurrency = 3
 	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*api.User, error) {
 		return api.GetUsers(ctx, ids)
 	})
@@ -80,8 +76,7 @@ func Example_batching() {
 	// Transform the stream of batches back into a flat stream of users
 	users := rill.Unbatch(userBatches)
 
-	// Activate users.
-	// Concurrency = 2
+	// Process users. Concurrency = 2
 	err := rill.ForEach(users, 2, func(u *api.User) error {
 		if u.IsActive {
 			fmt.Printf("User %d is already active\n", u.ID)
@@ -98,7 +93,8 @@ func Example_batching() {
 		return nil
 	}, scope)
 
-	// Handle errors
+	// Nothing is running anymore; the context is canceled.
+	// Handle the error
 	fmt.Println("Error:", err)
 }
 

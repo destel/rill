@@ -98,7 +98,7 @@ calls.
 ctx, scope := rill.WithContext(ctx)
 
 // Convert a slice of user IDs into a channel
-ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7,..., 38, 39, 40}, nil)
+ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}, nil)
 
 // Group IDs into batches of 5
 idBatches := rill.Batch(ids, 5, -1)
