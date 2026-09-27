@@ -125,7 +125,7 @@ fmt.Println("Error:", err)
 ```
 
 
-## Order Preservation (Ordered Fan-In)
+## Order Preservation
 Regular concurrent code writes its results as soon as they're ready, in completion order. That order
 depends on how the Go runtime schedules goroutines and on the time it takes to produce each result.
 
