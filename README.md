@@ -87,7 +87,7 @@ Processing items in batches rather than individually can significantly improve p
 particularly when working with external services or databases. Batching reduces the number of queries and API calls, 
 increases throughput, and typically lowers costs.
 
-To demonstrate batching, let's improve the previous example by using the API's bulk fetching capability. 
+Let's improve the previous example by using the API's bulk fetching capability. 
 The **Batch** function transforms a stream of individual IDs into a stream of slices. This enables the use of `GetUsers` API 
 to fetch multiple users in a single call, instead of making individual `GetUser` calls.
 
@@ -98,7 +98,7 @@ to fetch multiple users in a single call, instead of making individual `GetUser`
 ctx, scope := rill.WithContext(ctx)
 
 // Convert a slice of user IDs into a channel
-ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7,..., 38, 39, 40,}, nil)
+ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7,..., 38, 39, 40}, nil)
 
 // Group IDs into batches of 5
 idBatches := rill.Batch(ids, 5, -1)
@@ -180,7 +180,7 @@ fmt.Println("Result:", firstMatchedUrl, found, err)
 
 
 ## Real-Time Batching
-Rill’s **Batch** function is also useful for batching independent operations happening in real time 
+Rill’s **Batch** function is also useful for grouping independent operations happening in real time 
 across an application. In the example below, the `UpdateUserTimestamp` function updates 
 users’ `last_active_at` timestamps. The function looks normal at the call site: 
 it takes a user ID, waits for the database to respond, and returns an error. 
