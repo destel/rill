@@ -247,9 +247,15 @@ var queue = make(chan request)
 ```
 
 ## Parallel Streaming and FlatMap
-Sometimes operations that appear inherently sequential can be parallelized by partitioning the problem space. 
-Suppose we want to get a stream of all users, but the API is slow and paginated. We can use **FlatMap** to
-stream users from individual departments concurrently and combine those smaller streams into a single one.
+
+Concurrent processing doesn't help when the source itself is slow. If the source can be partitioned 
+(and often it can), **FlatMap** can remove this bottleneck by streaming the partitions concurrently and merging them into a single stream.
+
+> This technique can significantly speed up scans of large S3 buckets, as described in one of the blog posts below.
+
+In the example below, we retrieve users from a slow, paginated API by partitioning them by department. 
+Each department is streamed page by page. There can be arbitrarily many departments, while **FlatMap**’s 
+concurrency argument caps how many are streamed at once.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/ckenCrDV3eN)
 ```go
