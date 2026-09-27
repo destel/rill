@@ -1,7 +1,8 @@
 # Rill [![GoDoc](https://pkg.go.dev/badge/github.com/destel/rill)](https://pkg.go.dev/github.com/destel/rill#pkg-overview) [![codecov](https://codecov.io/gh/destel/rill/graph/badge.svg?token=252K8OQ7E1)](https://codecov.io/gh/destel/rill) [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go) 
 
-Rill is a composable concurrency toolkit for Go that makes it easier to build concurrent programs from simple, reusable parts.
-It reduces boilerplate while preserving Go's natural channel-based model.
+Rill is a composable concurrency toolkit for Go that makes it easier to build concurrent programs
+from simple, reusable parts. It reduces boilerplate while preserving Go's natural channel-based
+model.
 
 ```bash
 go get github.com/destel/rill
@@ -11,41 +12,39 @@ go get github.com/destel/rill
 ## Features
 
 - **Not a framework.**
-  Rill is a collection of functions over plain channels. They can be used
-  on their own or composed into multi-stage pipelines. Either way, it's
-  straightforward to integrate rill into existing projects and to write
-  custom pipeline stages.
+  Rill is a collection of functions over plain channels. They can be used on their own or composed
+  into multi-stage pipelines. Either way, it's straightforward to integrate rill into existing
+  projects and to write custom pipeline stages.
 
 - **Explicit concurrency.** 
-  Every concurrent function takes an *n* argument that bounds how many of its
-  callbacks run at once.
+  Every concurrent function takes an *n* argument that bounds how many of its callbacks run at once.
 
 - **Centralized error handling.** 
-  Errors travel downstream along with values and are handled at the end of
-  the pipeline. They can also be intercepted mid-pipeline when needed.
+  Errors travel downstream along with values and are handled at the end of the pipeline. They can
+  also be intercepted mid-pipeline when needed.
 
 - **Context and structured concurrency.** 
-  Rill can manage a context, giving pipelines errgroup-style cancellation and waiting.
-  It cancels the context on the first error, then waits until nothing is running anymore.
+  Rill can manage a context, giving pipelines errgroup-style cancellation and waiting. It cancels
+  the context on the first error, then waits until nothing is running anymore.
 
 - **Streaming.** 
-  Functions process items as they arrive, with natural backpressure, so the same code 
-  can handle a small slice, an input larger than memory, or an infinite stream.
+  Functions process items as they arrive, with natural backpressure, so the same code can handle a
+  small slice, an input larger than memory, or an infinite stream.
 
 - **Advanced building blocks.** 
-  Batching, order preservation, streaming non-commutative reduction, map-reduce,
-  splitting and merging are built in. Pipelines, while usually linear,
-  can form any cycle-free topology.
+  Batching, order preservation, streaming non-commutative reduction, map-reduce, splitting and
+  merging are built in. Pipelines, while usually linear, can form any cycle-free topology.
 
 - **Lightweight.** 
   No per-item allocations or goroutines. Small, type-safe API. Zero dependencies.
 
 
 ## Quick Start
-Let's look at a practical example: fetch users from an API, activate them, and save the changes back. 
-It shows how to control concurrency at each step, and how to handle errors from both operations in one place. 
-On the first error it encounters, **ForEach** cancels the context, waits until nothing is running anymore, and returns
-that error. The package documentation explains this behavior in detail.
+Let's look at a practical example: fetch users from an API, activate them, and save the changes
+back. It shows how to control concurrency at each step, and how to handle errors from both
+operations in one place. On the first error it encounters, **ForEach** cancels the context,
+waits until nothing is running anymore, and returns that error. The package documentation explains
+this behavior in detail.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/xN_1zaBzfkq)
 ```go
@@ -73,8 +72,8 @@ err := rill.ForEach(users, 2, func(u *api.User) error {
 fmt.Println("Error:", err)
 ```
 
-To get the users back as a slice instead of processing them, just replace
-**ForEach** with **ToSlice**:
+To get the users back as a slice instead of processing them, just replace **ForEach** with
+**ToSlice**:
 
 ```go
 res, err := rill.ToSlice(users, scope)
@@ -83,13 +82,14 @@ res, err := rill.ToSlice(users, scope)
 
 ## Batching
 
-Processing items in batches rather than individually can significantly improve performance in many scenarios, 
-particularly when working with external services or databases. Batching reduces the number of queries and API calls, 
-increases throughput, and typically lowers costs.
+Processing items in batches rather than individually can significantly improve performance in many
+scenarios, particularly when working with external services or databases. Batching reduces the
+number of queries and API calls, increases throughput, and typically lowers costs.
 
-Let's improve the previous example by using the API's bulk fetching capability. 
-The **Batch** function transforms a stream of individual IDs into a stream of slices. This enables the use of `GetUsers` API 
-to fetch multiple users in a single call, instead of making individual `GetUser` calls.
+Let's improve the previous example by using the API's bulk fetching capability. The **Batch**
+function transforms a stream of individual IDs into a stream of slices. This enables the use of
+`GetUsers` API to fetch multiple users in a single call, instead of making individual `GetUser`
+calls.
 
 
 
@@ -129,21 +129,19 @@ fmt.Println("Error:", err)
 Regular concurrent code writes its results as soon as they're ready, in completion order. That order
 depends on how the Go runtime schedules goroutines and on the time it takes to produce each result.
 
-For cases where the input order must be preserved, rill provides ordered
-functions, such as **OrderedMap** or **OrderedFilter**. They stay concurrent, but
-each worker holds its result until all earlier results are sent, so the
-output order matches the input order at the cost of some latency. This
-ordering guarantee holds for both values and errors.
+For cases where the input order must be preserved, rill provides ordered functions, such as
+**OrderedMap** or **OrderedFilter**. They stay concurrent, but each worker holds its result until
+all earlier results are sent, so the output order matches the input order at the cost of some
+latency. This ordering guarantee holds for both values and errors.
 
 
-Here's a practical example: check 1000 large files hosted online and find the first one containing a given string.
-Downloading files sequentially is slow, while traditional concurrency patterns do not preserve the order of files, 
-making it challenging to find the first match.
+Here's a practical example: check 1000 large files hosted online and find the first one containing a
+given string. Downloading files sequentially is slow, while traditional concurrency patterns do not
+preserve the order of files, making it challenging to find the first match.
 
-The combination of **OrderedFilter** and **First** functions solves this,
-while downloading and keeping in memory at most 5 files at a time.
-On the first match or error, **First**, just like **ForEach**, 
-cancels the context and waits for the pipeline to finish.
+The combination of **OrderedFilter** and **First** functions solves this, while downloading and
+keeping in memory at most 5 files at a time. On the first match or error, **First**, just like
+**ForEach**, cancels the context and waits for the pipeline to finish.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/UuuV2t5xbN2)
 
@@ -185,11 +183,10 @@ fmt.Println("Result:", firstMatchedUrl, found, err)
 Rill’s **Batch** function is also useful for grouping independent operations happening in real time 
 across an application. 
 
-In the example below, `UpdateUserTimestamp` can be called on every user action 
-to update the `last_active_at` column. The function looks normal at the call site: 
-it takes a user ID, waits for the database to respond, and returns an error. 
-Under the hood, a background worker uses rill to combine concurrent calls into bulk updates and 
-send results back to the corresponding callers.
+In the example below, `UpdateUserTimestamp` can be called on every user action to update the
+`last_active_at` column. The function looks normal at the call site: it takes a user ID, waits for
+the database to respond, and returns an error. Under the hood, a background worker uses rill to
+combine concurrent calls into bulk updates and send results back to the corresponding callers.
 
 Since calls happen at unpredictable times, waiting for a full batch can take arbitrarily long. 
 To avoid this, **Batch** takes a timeout argument that limits how long each batch waits to fill. 
@@ -248,14 +245,15 @@ var queue = make(chan request)
 
 ## Parallel Streaming and FlatMap
 
-Concurrent processing doesn't help when the source itself is slow. If the source can be partitioned 
-(and often it can), **FlatMap** can remove this bottleneck by streaming the partitions concurrently and merging them into a single stream.
+Concurrent processing doesn't help when the source itself is slow. If the source can be partitioned
+(and often it can), **FlatMap** can remove this bottleneck by streaming the partitions concurrently
+and merging them into a single stream.
 
 > This technique can significantly speed up scans of large S3 buckets, as described in one of the blog posts below.
 
-In the example below, we retrieve users from a slow, paginated API by partitioning them by department. 
-Each department is streamed page by page. There can be arbitrarily many departments, while **FlatMap**’s 
-concurrency argument caps how many are streamed at once.
+In the example below, we retrieve users from a slow, paginated API by partitioning them by
+department. Each department is streamed page by page. There can be arbitrarily many departments,
+while **FlatMap**’s concurrency argument caps how many are streamed at once.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/ckenCrDV3eN)
 ```go
@@ -306,8 +304,9 @@ func StreamUsers(ctx context.Context, query api.UserQuery) <-chan rill.Try[*api.
 ```
 
 This example also shows how to write a reusable streaming wrapper over paginated API calls - the
-`StreamUsers` function. Such a wrapper is useful both on its own or as part of larger pipelines. 
-Thanks to generic type aliases, its return type can optionally be simplified to `rill.Stream[*api.User]`
+`StreamUsers` function. Such a wrapper is useful both on its own or as part of larger
+pipelines. Thanks to generic type aliases, its return type can optionally be simplified to
+`rill.Stream[*api.User]`
 
 ```go
 func StreamUsers(ctx context.Context, query api.UserQuery) rill.Stream[*api.User] {
@@ -318,11 +317,12 @@ func StreamUsers(ctx context.Context, query api.UserQuery) rill.Stream[*api.User
 
 ## Streaming Non-Commutative Reduction
 
-Rill ships a concurrent, streaming **Reduce** function. It combines values using a user-supplied associative,
-but not necessarily commutative, reducer. Under the hood, the function builds a reduction tree.
+Rill ships a concurrent, streaming **Reduce** function. It combines values using a user-supplied
+associative, but not necessarily commutative, reducer. Under the hood, the function builds a
+reduction tree.
 
-The demo below uses string concatenation, a simple non-commutative operation.
-The sleep makes the reduction cost and the concurrency gain visible.
+The demo below uses string concatenation, a simple non-commutative operation. The sleep makes the
+reduction cost and the concurrency gain visible.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/H4LHA5AHjz)
 ```go
@@ -343,9 +343,9 @@ fmt.Println("Result:", res)
 
 
 ## Testing Strategy
-Rill's concurrency-sensitive tests use Go's [testing/synctest](https://pkg.go.dev/testing/synctest): virtual time makes 
-timing assertions exact, while goroutine scheduling stays nondeterministic, so repeated runs exercise different valid 
-interleavings and assertions must hold for all of them.
+Rill's concurrency-sensitive tests use Go's [testing/synctest](https://pkg.go.dev/testing/synctest):
+virtual time makes timing assertions exact, while goroutine scheduling stays nondeterministic,
+so repeated runs exercise different valid interleavings and assertions must hold for all of them.
 
 With coverage above 95%, testing focuses on:
 - **Correctness**: functions produce accurate results at different levels of concurrency
@@ -373,4 +373,5 @@ Thank you for your interest in improving rill! Before submitting your pull reque
 - Add tests and documentation
 - For major changes, prefer opening an issue first to discuss the approach
 
-For bug reports and feature requests, please include a clear description and minimal example when possible.
+For bug reports and feature requests, please include a clear description and minimal example when
+possible.
