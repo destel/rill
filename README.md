@@ -141,8 +141,9 @@ Downloading files sequentially is slow, while traditional concurrency patterns d
 making it challenging to find the first match.
 
 The combination of **OrderedFilter** and **First** functions solves this,
-while downloading and keeping in memory at most 5 files at a time. Before returning,
-**First** cancels the context and waits until nothing is running anymore.
+while downloading and keeping in memory at most 5 files at a time.
+On receiving the first match or error, **First**, just like **ForEach**, 
+cancels the context and waits for the pipeline to finish.
 
 [Try in Go playground ↗](https://goplay.tools/snippet/UuuV2t5xbN2)
 
@@ -171,10 +172,11 @@ matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
 	return bytes.Contains(content, needle), nil
 })
 
-// Return the first matched URL
+// Get the first matched URL or error
 firstMatchedUrl, found, err := rill.First(matchedUrls, scope)
 
-// Print the result
+// Nothing is running anymore; the context is canceled.
+// Handle the result
 fmt.Println("Result:", firstMatchedUrl, found, err)
 ```
 
@@ -269,6 +271,7 @@ func main() {
 		return nil
 	}, scope)
 
+	// Handle the error
 	fmt.Println("Error:", err)
 }
 
