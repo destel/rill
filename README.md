@@ -181,8 +181,10 @@ fmt.Println("Result:", firstMatchedUrl, found, err)
 
 ## Real-Time Batching
 Rill’s **Batch** function is also useful for grouping independent operations happening in real time 
-across an application. In the example below, the `UpdateUserTimestamp` function updates 
-users’ `last_active_at` timestamps. The function looks normal at the call site: 
+across an application. 
+
+In the example below, `UpdateUserTimestamp` can be called on every user action 
+to update the `last_active_at` column. The function looks normal at the call site: 
 it takes a user ID, waits for the database to respond, and returns an error. 
 Under the hood, a background worker uses rill to combine concurrent calls into bulk updates and 
 send results back to the corresponding callers.
