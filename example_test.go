@@ -180,32 +180,26 @@ func executeQuery(query string, args ...any) error {
 	return nil
 }
 
-// This example demonstrates how to find the first file containing a specific string among 1000 large files
-// hosted online.
-//
-// Downloading all files at once would consume too much memory, while processing
-// them one by one would take too long. Traditional concurrency patterns do not preserve the order of files
-// and would make it challenging to find the first match.
-//
-// The combination of the [OrderedFilter] and [First] functions solves the problem
-// while downloading and holding in memory at most 5 files at the same time.
-func Example_ordering() {
+// This example demonstrates how to find the first file containing a given string among 1000 large
+// files hosted online. Downloading files one by one is slow, while traditional concurrency patterns
+// don't preserve the order. [OrderedFilter] and [First] solve this while downloading and keeping in
+// memory at most 5 files at a time. On the first match or error, [First] cancels the context, waits
+// until nothing is running anymore, and returns the result.
+func Example_orderPreservation() {
 	ctx, scope := rill.WithContext(context.Background())
 
 	// The string to search for in the downloaded files
 	needle := []byte("26")
 
-	// Generate a stream of URLs from https://example.com/file-0.txt
-	// to https://example.com/file-999.txt
-	// Stop generating URLs if the context is canceled
+	// Generate a stream of URLs from file-0.txt to file-999.txt.
+	// Stop generating URLs when the context is canceled
 	urls := rill.Generate(func(send func(string), sendError func(error)) {
 		for i := 0; i < 1000 && ctx.Err() == nil; i++ {
 			send(fmt.Sprintf("https://example.com/file-%d.txt", i))
 		}
 	})
 
-	// Download and process the files
-	// At most 5 files are downloaded and held in memory at the same time
+	// Download and process the files. Concurrency = 5
 	matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
 		fmt.Println("Downloading:", url)
 
@@ -214,15 +208,16 @@ func Example_ordering() {
 			return false, err
 		}
 
-		// keep only URLs of files that contain the needle
+		// Keep only URLs of files that contain the needle
 		return bytes.Contains(content, needle), nil
 	})
 
-	// Find the first matched URL.
-	// The match cancels the context, which stops the URL generation and the
-	// downloads in flight; First returns once they have.
+	// Get the first matched URL or error
 	firstMatchedUrl, found, err := rill.First(matchedUrls, scope)
-	fmt.Println("First matched URL:", firstMatchedUrl, found, err)
+
+	// Nothing is running anymore; the context is canceled.
+	// Handle the result
+	fmt.Println("Result:", firstMatchedUrl, found, err)
 }
 
 // This example demonstrates the parallel streaming pattern: [FlatMap] turns each
