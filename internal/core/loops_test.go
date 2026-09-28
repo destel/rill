@@ -95,6 +95,25 @@ func TestLoop(t *testing.T) {
 				}
 			})
 
+			th.RunSynctest(t, "settlement", func(t *testing.T) {
+				in := th.FromRange(0, 20)
+				done := make(chan struct{})
+
+				var state int64
+
+				universalLoop(ord, in, done, n, func(_ int, canWrite <-chan struct{}) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
+					<-canWrite
+					atomic.AddInt64(&state, 1)
+				})
+
+				<-done
+
+				th.ExpectNoRace(state)
+				th.ExpectValue(t, state, 20)
+				th.ExpectDrainedChan(t, in)
+			})
+
 		})
 	})
 }
