@@ -67,7 +67,7 @@ err := rill.ForEach(users, 2, func(u *api.User) error {
 	return api.SaveUser(ctx, u)
 }, scope) // scope is a functional option
 
-// Nothing is running anymore; the context is canceled.
+// Nothing is running anymore; the context is canceled
 // Handle the error (if any)
 fmt.Println("Error:", err)
 ```
@@ -173,7 +173,7 @@ matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
 // Get the first matched URL or error
 firstMatchedUrl, found, err := rill.First(matchedUrls, scope)
 
-// Nothing is running anymore; the context is canceled.
+// Nothing is running anymore; the context is canceled
 // Handle the result
 fmt.Println("Result:", firstMatchedUrl, found, err)
 ```

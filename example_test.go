@@ -51,7 +51,7 @@ func Example() {
 		return nil
 	}, scope) // scope is a functional option
 
-	// Nothing is running anymore; the context is canceled.
+	// Nothing is running anymore; the context is canceled
 	// Handle the error (if any)
 	fmt.Println("Error:", err)
 }
@@ -93,7 +93,7 @@ func Example_batching() {
 		return nil
 	}, scope)
 
-	// Nothing is running anymore; the context is canceled.
+	// Nothing is running anymore; the context is canceled
 	// Handle the error
 	fmt.Println("Error:", err)
 }
@@ -215,7 +215,7 @@ func Example_orderPreservation() {
 	// Get the first matched URL or error
 	firstMatchedUrl, found, err := rill.First(matchedUrls, scope)
 
-	// Nothing is running anymore; the context is canceled.
+	// Nothing is running anymore; the context is canceled
 	// Handle the result
 	fmt.Println("Result:", firstMatchedUrl, found, err)
 }
@@ -241,7 +241,7 @@ func Example_parallelStreaming() {
 		return nil
 	}, scope)
 
-	// Nothing is running anymore; the context is canceled.
+	// Nothing is running anymore; the context is canceled
 	// Handle the error
 	fmt.Println("Error:", err)
 }
@@ -778,7 +778,7 @@ func ExampleWithContext() {
 		return api.SaveUser(ctx, u)
 	}, scope)
 
-	// Nothing is running anymore; the context is canceled.
+	// Nothing is running anymore; the context is canceled
 	// Handle the error (if any)
 	fmt.Println("Error:", err)
 }
