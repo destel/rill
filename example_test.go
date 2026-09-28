@@ -609,12 +609,12 @@ func ExampleMerge() {
 func ExampleReduce() {
 	// A stream of 62 single-character strings
 	str := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	letters := rill.FromSlice(strings.Split(str, ""), nil)
+	chars := rill.FromSlice(strings.Split(str, ""), nil)
 
 	// Reassemble the original string. Concurrency = 4
 	// String concatenation is a simple non-commutative operation
 	// and is used here for demonstration only.
-	res, ok, err := rill.Reduce(letters, 4, func(x, y string) (string, error) {
+	res, ok, err := rill.Reduce(chars, 4, func(x, y string) (string, error) {
 		return x + y, nil
 	})
 
