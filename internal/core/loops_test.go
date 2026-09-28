@@ -35,6 +35,21 @@ func TestLoop(t *testing.T) {
 				})
 			})
 
+			th.RunSynctest(t, "empty", func(t *testing.T) {
+				in := th.FromSlice([]int{})
+				done := make(chan struct{})
+
+				var cnt atomic.Int64
+
+				universalLoop(ord, in, done, n, func(_ int, canWrite <-chan struct{}) {
+					<-canWrite
+					cnt.Add(1)
+				})
+
+				<-done
+				th.ExpectValue(t, cnt.Load(), 0)
+			})
+
 			th.RunSynctest(t, "correctness", func(t *testing.T) {
 				in := th.FromRange(0, 20)
 				done := make(chan struct{})
@@ -93,6 +108,25 @@ func TestLoop(t *testing.T) {
 				} else {
 					th.ExpectUnsorted(t, outSlice)
 				}
+			})
+
+			th.RunSynctest(t, "settlement", func(t *testing.T) {
+				in := th.FromRange(0, 20)
+				done := make(chan struct{})
+
+				var state int64
+
+				universalLoop(ord, in, done, n, func(_ int, canWrite <-chan struct{}) {
+					th.SimulateWork(1*time.Second, 2*time.Second)
+					<-canWrite
+					atomic.AddInt64(&state, 1)
+				})
+
+				<-done
+
+				th.ExpectNoRace(state)
+				th.ExpectValue(t, state, 20)
+				th.ExpectDrainedChan(t, in)
 			})
 
 		})
