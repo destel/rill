@@ -46,7 +46,7 @@ operations in one place. On the first error it encounters, **ForEach** cancels t
 waits until nothing is running anymore, and returns that error. The package documentation explains
 this behavior in detail.
 
-[Try in Go playground ↗](https://goplay.tools/snippet/xN_1zaBzfkq)
+[Try in Go playground ↗](https://goplay.tools/snippet/2imZwnaQ06G)
 ```go
 ctx, scope := rill.WithContext(ctx)
 
@@ -67,8 +67,8 @@ err := rill.ForEach(users, 2, func(u *api.User) error {
 	return api.SaveUser(ctx, u)
 }, scope) // scope is a functional option
 
-// Nothing is running anymore; the context is canceled
-// Handle the error (if any)
+// Nothing is running anymore; the context is canceled.
+// Handle the error (if any).
 fmt.Println("Error:", err)
 ```
 
@@ -93,7 +93,7 @@ calls.
 
 
 
-[Try in Go playground ↗](https://goplay.tools/snippet/fpltOjeX-Le)
+[Try in Go playground ↗](https://goplay.tools/snippet/9Vc525EwKO-)
 ```go
 ctx, scope := rill.WithContext(ctx)
 
@@ -143,7 +143,7 @@ The combination of **OrderedFilter** and **First** functions solves this, while 
 keeping in memory at most 5 files at a time. On the first match or error, **First**, just like
 **ForEach**, cancels the context and waits for the pipeline to finish.
 
-[Try in Go playground ↗](https://goplay.tools/snippet/UuuV2t5xbN2)
+[Try in Go playground ↗](https://goplay.tools/snippet/vaNEsBQ3Aip)
 
 ```go
 ctx, scope := rill.WithContext(ctx)
@@ -173,8 +173,8 @@ matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
 // Get the first matched URL or error
 firstMatchedUrl, found, err := rill.First(matchedUrls, scope)
 
-// Nothing is running anymore; the context is canceled
-// Handle the result
+// Nothing is running anymore; the context is canceled.
+// Handle the result.
 fmt.Println("Result:", firstMatchedUrl, found, err)
 ```
 
@@ -192,7 +192,7 @@ Since calls happen at unpredictable times, waiting for a full batch can take arb
 To avoid this, **Batch** takes a timeout argument that limits how long each batch waits to fill. 
 When the timeout expires, a partial batch is emitted.
 
-[Try in Go playground ↗](https://goplay.tools/snippet/w0xsLilX1ca)
+[Try in Go playground ↗](https://goplay.tools/snippet/TLTNq4JmJ3i)
 
 ```go
 func UpdateUserTimestamp(userID int) error {
@@ -255,7 +255,7 @@ In the example below, we retrieve users from a slow, paginated API by partitioni
 department. Each department is streamed page by page. There can be arbitrarily many departments,
 while **FlatMap**’s concurrency argument caps how many are streamed at once.
 
-[Try in Go playground ↗](https://goplay.tools/snippet/ckenCrDV3eN)
+[Try in Go playground ↗](https://goplay.tools/snippet/mgkq1wC73or)
 ```go
 func main() {
 	ctx, scope := rill.WithContext(context.Background())
@@ -324,7 +324,7 @@ reduction tree.
 The demo below uses string concatenation, a simple non-commutative operation. The sleep makes the
 reduction cost and the concurrency gain visible.
 
-[Try in Go playground ↗](https://goplay.tools/snippet/H4LHA5AHjz)
+[Try in Go playground ↗](https://goplay.tools/snippet/lHXTzDNtxOe)
 ```go
 // A stream of 62 single-character strings
 str := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
