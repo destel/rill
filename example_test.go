@@ -180,11 +180,11 @@ func executeQuery(query string, args ...any) error {
 	return nil
 }
 
-// This example demonstrates how to find the first file containing a given string among 1000 large
-// files hosted online. Downloading files one by one is slow, while traditional concurrency patterns
-// don't preserve the order. [OrderedFilter] and [First] solve this while downloading and keeping in
-// memory at most 5 files at a time. On the first match or error, [First] cancels the context, waits
-// until nothing is running anymore, and returns the result.
+// This example demonstrates how to check 1000 large files and find the first file containing a
+// given string. Downloading files one by one is slow, while traditional concurrency patterns find
+// the fastest match instead of the first one. [OrderedFilter] and [First] solve this while
+// downloading and keeping in memory at most 5 files at a time. On the first match or error, [First]
+// cancels the context, waits until nothing is running anymore, and returns the result.
 func Example_orderPreservation() {
 	ctx, scope := rill.WithContext(context.Background())
 

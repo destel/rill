@@ -1,6 +1,6 @@
 # Rill [![GoDoc](https://pkg.go.dev/badge/github.com/destel/rill)](https://pkg.go.dev/github.com/destel/rill#pkg-overview) [![codecov](https://codecov.io/gh/destel/rill/graph/badge.svg?token=252K8OQ7E1)](https://codecov.io/gh/destel/rill) [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go) 
 
-Rill is a composable concurrency toolkit for Go that makes it easier to build concurrent programs
+Rill is a composable concurrency toolkit for Go, making it easier to build concurrent programs
 from simple, reusable parts. It reduces boilerplate while preserving Go's natural channel-based
 model.
 
@@ -24,8 +24,8 @@ go get github.com/destel/rill
   also be intercepted mid-pipeline when needed.
 
 - **Context and structured concurrency.** 
-  Rill can manage a context, giving pipelines errgroup-style cancellation and waiting. It cancels
-  the context on the first error, then waits until nothing is running anymore.
+  Rill can manage a context, giving pipelines errgroup-style cancellation and waiting: cancel on
+  the first error, wait until nothing is running anymore.
 
 - **Streaming.** 
   Functions process items as they arrive, with natural backpressure, so the same code can handle a
@@ -136,8 +136,8 @@ latency. This ordering guarantee holds for both values and errors.
 
 
 Here's a practical example: check 1000 large files hosted online and find the first one containing a
-given string. Downloading files sequentially is slow, while traditional concurrency patterns do not
-preserve the order of files, making it challenging to find the first match.
+given string. Downloading files sequentially is slow, while traditional concurrency patterns find
+the fastest match instead of the first one.
 
 The combination of **OrderedFilter** and **First** functions solves this, while downloading and
 keeping in memory at most 5 files at a time. On the first match or error, **First**, just like
