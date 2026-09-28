@@ -324,15 +324,15 @@ reduction tree.
 The demo below uses string concatenation, a simple non-commutative operation. The sleep makes the
 reduction cost and the concurrency gain visible.
 
-[Try in Go playground ↗](https://goplay.tools/snippet/lHXTzDNtxOe)
+[Try in Go playground ↗](https://goplay.tools/snippet/cDm-2y2gy_E)
 ```go
 // A stream of 62 single-character strings
 str := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-letters := rill.FromSlice(strings.Split(str, ""), nil)
+chars := rill.FromSlice(strings.Split(str, ""), nil)
 
 // Reassemble the original string. Concurrency = 4
 start := time.Now()
-res, _, _ := rill.Reduce(letters, 4, func(x, y string) (string, error) {
+res, _, _ := rill.Reduce(chars, 4, func(x, y string) (string, error) {
 	time.Sleep(1 * time.Millisecond)
 	return x + y, nil
 })
