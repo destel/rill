@@ -32,7 +32,7 @@ go get github.com/destel/rill
   small slice, an input larger than memory, or an infinite stream.
 
 - **Advanced building blocks.** 
-  Batching, order preservation, streaming non-commutative reduction, map-reduce, splitting and
+  Batching, order preservation, non-commutative streaming reduction, map-reduce, splitting and
   merging are built in. Pipelines, while usually linear, can form any cycle-free topology.
 
 - **Lightweight.** 
@@ -315,7 +315,7 @@ func StreamUsers(ctx context.Context, query api.UserQuery) rill.Stream[*api.User
 ```
 
 
-## Streaming Non-Commutative Reduction
+## Non-Commutative Streaming Reduction
 
 Rill ships a concurrent, streaming **Reduce** function. It combines values using a user-supplied
 associative, but not necessarily commutative, reducer. Under the hood, the function builds a
