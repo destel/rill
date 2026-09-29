@@ -343,9 +343,9 @@ fmt.Println("Result:", res)
 
 
 ## Testing Strategy
-Rill's concurrency-sensitive tests use Go's [testing/synctest](https://pkg.go.dev/testing/synctest):
-virtual time makes timing assertions exact, while goroutine scheduling stays nondeterministic,
-so repeated runs exercise different valid interleavings and assertions must hold for all of them.
+Rill's concurrency-sensitive tests use Go's [testing/synctest](https://pkg.go.dev/testing/synctest) to construct
+the goroutine interleavings they need (still randomized) instead of hoping the scheduler produces them.
+Timing, ordering and lifecycle assertions are exact rather than probabilistic.
 
 With coverage above 95%, testing focuses on:
 - **Correctness**: functions produce accurate results at different levels of concurrency
