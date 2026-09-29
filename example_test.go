@@ -14,84 +14,77 @@ import (
 	"time"
 
 	"github.com/destel/rill"
-	"github.com/destel/rill/mockapi"
+	api "github.com/destel/rill/mockapi"
 )
 
 // --- Package examples ---
 
-// This example demonstrates a rill pipeline that fetches users from an API,
-// updates their status to active, and saves them back.
-// Both operations are performed concurrently, and errors are handled in one place at the end.
+// This example demonstrates a rill pipeline that fetches users from an API, activates them, and saves
+// the changes back. Each step runs concurrently with its own concurrency limit, and errors from both
+// are handled in one place. On the first error, [ForEach] cancels the context, waits until nothing is
+// running anymore, and returns that error.
 func Example() {
-	// The context is canceled on the first error or when ForEach returns,
-	// whichever occurs first.
 	ctx, scope := rill.WithContext(context.Background())
 
-	// Convert a slice of user IDs into a stream
+	// Convert a slice into a channel
 	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
-	// Read users from the API.
-	// Concurrency = 3
-	users := rill.Map(ids, 3, func(id int) (*mockapi.User, error) {
-		return mockapi.GetUser(ctx, id)
+	// Read users from the API. Concurrency = 3
+	users := rill.Map(ids, 3, func(id int) (*api.User, error) {
+		return api.GetUser(ctx, id)
 	})
 
-	// Activate users.
-	// Concurrency = 2
-	err := rill.ForEach(users, 2, func(u *mockapi.User) error {
+	// Process users. Concurrency = 2
+	err := rill.ForEach(users, 2, func(u *api.User) error {
 		if u.IsActive {
 			fmt.Printf("User %d is already active\n", u.ID)
 			return nil
 		}
 
 		u.IsActive = true
-		err := mockapi.SaveUser(ctx, u)
+		err := api.SaveUser(ctx, u)
 		if err != nil {
 			return err
 		}
 
 		fmt.Printf("User saved: %+v\n", u)
 		return nil
-	}, scope)
+	}, scope) // scope is a functional option
 
-	// Nothing is running anymore. Handle errors:
+	// Nothing is running anymore; the context is canceled.
+	// Handle the error (if any).
 	fmt.Println("Error:", err)
 }
 
-// This example demonstrates a rill pipeline that fetches users from an API,
-// updates their status to active, and saves them back.
-// Users are fetched concurrently and in batches to reduce the number of API calls.
+// This example demonstrates a rill pipeline that fetches users from an API in batches, activates
+// them, and saves the changes back. [Batch] groups individual IDs into slices, so users are fetched
+// with one bulk API call per batch instead of one call per user.
 func Example_batching() {
 	ctx, scope := rill.WithContext(context.Background())
 
-	// Convert a slice of user IDs into a stream
-	ids := rill.FromSlice([]int{
-		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
-		21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-	}, nil)
+	// Convert a slice of user IDs into a channel
+	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}, nil)
 
 	// Group IDs into batches of 5
 	idBatches := rill.Batch(ids, 5, -1)
 
-	// Bulk fetch users from the API
-	// Concurrency = 3
-	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*mockapi.User, error) {
-		return mockapi.GetUsers(ctx, ids)
+	// Bulk fetch users from the API. Concurrency = 3
+	userBatches := rill.Map(idBatches, 3, func(ids []int) ([]*api.User, error) {
+		return api.GetUsers(ctx, ids)
 	})
 
 	// Transform the stream of batches back into a flat stream of users
 	users := rill.Unbatch(userBatches)
 
-	// Activate users.
-	// Concurrency = 2
-	err := rill.ForEach(users, 2, func(u *mockapi.User) error {
+	// Process users. Concurrency = 2
+	err := rill.ForEach(users, 2, func(u *api.User) error {
 		if u.IsActive {
 			fmt.Printf("User %d is already active\n", u.ID)
 			return nil
 		}
 
 		u.IsActive = true
-		err := mockapi.SaveUser(ctx, u)
+		err := api.SaveUser(ctx, u)
 		if err != nil {
 			return err
 		}
@@ -100,117 +93,136 @@ func Example_batching() {
 		return nil
 	}, scope)
 
-	// Handle errors
+	// Nothing is running anymore; the context is canceled.
+	// Handle the error.
 	fmt.Println("Error:", err)
 }
 
-// This example demonstrates how batching can be used to group similar concurrent database updates into a single query.
-// The UpdateUserTimestamp function is used to update the last_active_at column in the users table. Updates are not
-// executed immediately but are instead queued and then sent to the database in batches of up to 5.
+// This example demonstrates how [Batch] can group independent operations happening in real time.
+// The main function makes 100 concurrent calls to the UpdateUserTimestamp function, which looks
+// normal at the call site: it takes a user ID, waits for the database to respond, and returns an
+// error. Under the hood, a background worker uses rill to combine concurrent calls into bulk updates
+// and send results back to the corresponding callers.
 //
-// When updates are sparse, it can take some time to collect a full batch. In this case, the [Batch] function
-// emits partial batches, ensuring that updates are delayed by at most 100ms.
-//
-// For simplicity, this example does not include retries, error handling, or synchronization.
-// A more complete version of this pattern, with context support, error handling, and
-// synchronization, is described at https://destel.dev/blog/real-time-batching-in-go.
-func Example_batchingRealTime() {
-	// Start the background worker that processes the updates
+// Since calls happen at unpredictable times, waiting for a full batch can take arbitrarily long.
+// To avoid this, [Batch] takes a timeout argument that limits how long each batch waits to fill.
+// When the timeout expires, a partial batch is emitted.
+func Example_realTimeBatching() {
+	// Start the background worker
 	go updateUserTimestampWorker()
 
-	// Do some updates. They'll be automatically grouped into
-	// batches: [1,2,3,4,5], [6,7], [8]
-	UpdateUserTimestamp(1)
-	UpdateUserTimestamp(2)
-	UpdateUserTimestamp(3)
-	UpdateUserTimestamp(4)
-	UpdateUserTimestamp(5)
-	UpdateUserTimestamp(6)
-	UpdateUserTimestamp(7)
-	time.Sleep(500 * time.Millisecond) // simulate sparse updates
-	UpdateUserTimestamp(8)
-
-	// Wait for the updates to be processed
-	// In real-world application, different synchronization mechanisms would be used.
-	time.Sleep(1 * time.Second)
+	// Make 100 concurrent calls
+	var wg sync.WaitGroup
+	for id := 1; id <= 100; id++ {
+		wg.Go(func() {
+			if err := UpdateUserTimestamp(id); err != nil {
+				fmt.Println("Error:", err)
+			}
+		})
+	}
+	wg.Wait()
 }
 
-// This is the queue of user IDs to update.
-var userIDsToUpdate = make(chan int)
+func UpdateUserTimestamp(userID int) error {
+	// Prepare a request to the worker.
+	req := request{userID: userID, replyTo: make(chan error, 1)}
 
-// UpdateUserTimestamp is the public API for updating the last_active_at column in the users table.
-func UpdateUserTimestamp(userID int) {
-	userIDsToUpdate <- userID
+	// Send the request and wait for a reply.
+	queue <- req
+	err := <-req.replyTo
+	return err
 }
 
-// This is a background worker that sends queued updates to the database in batches.
-// For simplicity, this worker does not include retries, error handling, or synchronization.
 func updateUserTimestampWorker() {
-	// convert the channel of user IDs into a stream
-	ids := rill.FromChan(userIDsToUpdate, nil)
+	// Start with a stream of update requests
+	requests := rill.FromChan(queue, nil)
 
-	// Group IDs into batches of 5 for bulk processing
-	// In case of sparse updates, we want to send them to the database no later than 100ms after they were queued.
-	idBatches := rill.Batch(ids, 5, 100*time.Millisecond)
+	// Group up to 10 requests; when requests are sparse, add at most 20ms of latency
+	requestBatches := rill.Batch(requests, 10, 20*time.Millisecond)
 
-	// Send updates to the database
-	// Concurrency = 1 (this controls max number of concurrent updates)
-	_ = rill.ForEach(idBatches, 1, func(batch []int) error {
-		fmt.Printf("Executed: UPDATE users SET last_active_at = NOW() WHERE id IN (%v)\n", batch)
+	// Send bulk updates to DB. At most 2 concurrent DB queries
+	_ = rill.ForEach(requestBatches, 2, func(batch []request) error {
+		// Create a slice of user IDs
+		ids := make([]int, len(batch))
+		for i, req := range batch {
+			ids[i] = req.userID
+		}
+
+		// Do bulk update
+		err := executeQuery("UPDATE users SET last_active_at = NOW() WHERE id IN (?)", ids)
+
+		// Send result back to all callers in this batch
+		for _, req := range batch {
+			req.replyTo <- err
+		}
+
+		// Keep the pipeline running
 		return nil
 	})
 }
 
-// This example demonstrates how to find the first file containing a specific string among 1000 large files
-// hosted online.
-//
-// Downloading all files at once would consume too much memory, while processing
-// them one by one would take too long. Traditional concurrency patterns do not preserve the order of files
-// and would make it challenging to find the first match.
-//
-// The combination of the [OrderedFilter] and [First] functions solves the problem
-// while downloading and holding in memory at most 5 files at the same time.
-func Example_ordering() {
+// This type represents a single request to the worker
+type request struct {
+	userID  int
+	replyTo chan error
+}
+
+// Queue of update requests
+var queue = make(chan request)
+
+// executeQuery simulates a database query
+func executeQuery(query string, args ...any) error {
+	simulateWork(100 * time.Millisecond)
+	for _, arg := range args {
+		query = strings.Replace(query, "?", fmt.Sprint(arg), 1)
+	}
+	fmt.Println("Executed:", query)
+	return nil
+}
+
+// This example demonstrates how to check 1000 large files and find the first file containing a
+// given string. Downloading files one by one is slow, while traditional concurrency patterns find
+// the fastest match instead of the first one. [OrderedFilter] and [First] solve this while
+// downloading and keeping in memory at most 5 files at a time. On the first match or error, [First]
+// cancels the context, waits until nothing is running anymore, and returns the result.
+func Example_orderPreservation() {
 	ctx, scope := rill.WithContext(context.Background())
 
 	// The string to search for in the downloaded files
 	needle := []byte("26")
 
-	// Generate a stream of URLs from https://example.com/file-0.txt
-	// to https://example.com/file-999.txt
-	// Stop generating URLs if the context is canceled
+	// Generate a stream of URLs from file-0.txt to file-999.txt.
+	// Stop generating URLs when the context is canceled
 	urls := rill.Generate(func(send func(string), sendError func(error)) {
 		for i := 0; i < 1000 && ctx.Err() == nil; i++ {
 			send(fmt.Sprintf("https://example.com/file-%d.txt", i))
 		}
 	})
 
-	// Download and process the files
-	// At most 5 files are downloaded and held in memory at the same time
+	// Download and process the files. Concurrency = 5
 	matchedUrls := rill.OrderedFilter(urls, 5, func(url string) (bool, error) {
 		fmt.Println("Downloading:", url)
 
-		content, err := mockapi.DownloadFile(ctx, url)
+		content, err := api.DownloadFile(ctx, url)
 		if err != nil {
 			return false, err
 		}
 
-		// keep only URLs of files that contain the needle
+		// Keep only URLs of files that contain the needle
 		return bytes.Contains(content, needle), nil
 	})
 
-	// Find the first matched URL.
-	// The match cancels the context, which stops the URL generation and the
-	// downloads in flight; First returns once they have.
+	// Get the first matched URL or error
 	firstMatchedUrl, found, err := rill.First(matchedUrls, scope)
-	fmt.Println("First matched URL:", firstMatchedUrl, found, err)
+
+	// Nothing is running anymore; the context is canceled.
+	// Handle the result.
+	fmt.Println("Result:", firstMatchedUrl, found, err)
 }
 
-// This example demonstrates the parallel streaming pattern: [FlatMap] turns each
-// department into its own stream of users and merges these streams into one,
-// fetching from several departments concurrently.
-// Additionally, it demonstrates how to write a reusable streaming wrapper over paginated API calls -
-// the StreamUsers function.
+// This example demonstrates how [FlatMap] can remove a slow-source bottleneck. The API is slow and
+// paginated, so users are streamed from several departments concurrently and merged into a single
+// stream. There can be any number of departments, while FlatMap streams at most 3 at a time.
 func Example_parallelStreaming() {
 	ctx, scope := rill.WithContext(context.Background())
 
@@ -219,32 +231,29 @@ func Example_parallelStreaming() {
 
 	// Stream users from all departments concurrently.
 	// At most 3 departments at the same time.
-	users := rill.FlatMap(departments, 3, func(department string) <-chan rill.Try[*mockapi.User] {
-		return StreamUsers(ctx, &mockapi.UserQuery{Department: department})
+	users := rill.FlatMap(departments, 3, func(department string) <-chan rill.Try[*api.User] {
+		return StreamUsers(ctx, api.UserQuery{Department: department})
 	})
 
 	// Print the users from the combined stream
-	err := rill.ForEach(users, 1, func(user *mockapi.User) error {
+	err := rill.ForEach(users, 1, func(user *api.User) error {
 		fmt.Printf("%+v\n", user)
 		return nil
 	}, scope)
+
+	// Nothing is running anymore; the context is canceled.
+	// Handle the error.
 	fmt.Println("Error:", err)
 }
 
-// StreamUsers is a reusable streaming wrapper around the mockapi.ListUsers function.
-// It iterates through all listing pages and uses [Generate] to simplify sending users and errors to the resulting stream.
-// This function is useful both on its own and as part of larger pipelines.
-func StreamUsers(ctx context.Context, query *mockapi.UserQuery) <-chan rill.Try[*mockapi.User] {
-	return rill.Generate(func(send func(*mockapi.User), sendError func(error)) {
-		var currentQuery mockapi.UserQuery
-		if query != nil {
-			currentQuery = *query
-		}
-
+// StreamUsers streams users from a paginated API. It's a reusable streaming wrapper, useful both
+// on its own and as part of larger pipelines.
+func StreamUsers(ctx context.Context, query api.UserQuery) <-chan rill.Try[*api.User] {
+	return rill.Generate(func(send func(*api.User), sendError func(error)) {
 		for page := 0; ; page++ {
-			currentQuery.Page = page
+			query.Page = page
 
-			users, err := mockapi.ListUsers(ctx, &currentQuery)
+			users, err := api.ListUsers(ctx, query)
 			if err != nil {
 				sendError(err)
 				return
@@ -359,7 +368,7 @@ func ExampleErr() {
 	ctx := context.Background()
 
 	// Convert a slice of users into a stream
-	users := rill.FromSlice([]*mockapi.User{
+	users := rill.FromSlice([]*api.User{
 		{ID: 1, Name: "foo", Age: 25},
 		{ID: 2, Name: "bar", Age: 30},
 		{ID: 3}, // empty username is invalid
@@ -370,8 +379,8 @@ func ExampleErr() {
 
 	// Save users. Use struct{} as a result type
 	// Concurrency = 2
-	results := rill.Map(users, 2, func(user *mockapi.User) (struct{}, error) {
-		return struct{}{}, mockapi.SaveUser(ctx, user)
+	results := rill.Map(users, 2, func(user *api.User) (struct{}, error) {
+		return struct{}{}, api.SaveUser(ctx, user)
 	})
 
 	// We only need to know if all users were saved successfully
@@ -598,15 +607,18 @@ func ExampleMerge() {
 }
 
 func ExampleReduce() {
-	// Convert a slice of numbers into a stream
-	numbers := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+	// A stream of 62 single-character strings
+	str := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	chars := rill.FromSlice(strings.Split(str, ""), nil)
 
-	// Sum all numbers
-	sum, ok, err := rill.Reduce(numbers, 3, func(a, b int) (int, error) {
-		return a + b, nil
+	// Reassemble the original string. Concurrency = 4
+	// String concatenation is a simple non-commutative operation
+	// and is used here for demonstration only.
+	res, ok, err := rill.Reduce(chars, 4, func(x, y string) (string, error) {
+		return x + y, nil
 	})
 
-	fmt.Println("Result:", sum, ok)
+	fmt.Println("Result:", res, ok)
 	fmt.Println("Error:", err)
 }
 
@@ -725,8 +737,8 @@ func ExampleToSeq2() {
 	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
 
 	// Read users from the API.
-	users := rill.Map(ids, 1, func(id int) (*mockapi.User, error) {
-		return mockapi.GetUser(ctx, id)
+	users := rill.Map(ids, 1, func(id int) (*api.User, error) {
+		return api.GetUser(ctx, id)
 	})
 
 	for user, err := range rill.ToSeq2(users, scope) {
@@ -745,29 +757,30 @@ func ExampleToSeq2() {
 }
 
 func ExampleWithContext() {
+	// ctx is captured by the callbacks below.
+	// scope is a functional option passed to ForEach.
 	ctx, scope := rill.WithContext(context.Background())
 
-	// The source is an infinite, context-aware stream of natural numbers starting from 114
-	numbers := rill.Generate(func(send func(int), sendError func(error)) {
-		for i := 114; ctx.Err() == nil; i++ {
-			send(i)
-		}
+	// Convert a slice into a channel
+	ids := rill.FromSlice([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, nil)
+
+	// Read users from the API. Concurrency = 3
+	users := rill.Map(ids, 3, func(id int) (*api.User, error) {
+		return api.GetUser(ctx, id)
 	})
 
-	// Keep only the primes. Concurrency = 3; Ordered
-	// The check is context-aware: it gives up as soon as the context is canceled
-	primes := rill.OrderedFilter(numbers, 3, func(x int) (bool, error) {
-		if err := simulateWorkContext(ctx, 500*time.Millisecond); err != nil {
-			return false, err
+	// Process users. Concurrency = 2
+	err := rill.ForEach(users, 2, func(u *api.User) error {
+		if u.IsActive {
+			return nil
 		}
-		fmt.Println("Checked:", x)
-		return isPrime(x), nil
-	})
+		u.IsActive = true
+		return api.SaveUser(ctx, u)
+	}, scope)
 
-	// Finding the first prime cancels the context, which stops the source and the remaining checks.
-	// First returns once nothing is running anymore.
-	first, ok, err := rill.First(primes, scope)
-	fmt.Println("First prime:", first, ok, err) // prints 127
+	// Nothing is running anymore; the context is canceled.
+	// Handle the error (if any).
+	fmt.Println("Error:", err)
 }
 
 // --- Helpers ---
@@ -806,13 +819,4 @@ func printStream[A any](stream <-chan rill.Try[A]) {
 
 func simulateWork(max time.Duration) {
 	time.Sleep(time.Duration(rand.Intn(int(max))))
-}
-
-func simulateWorkContext(ctx context.Context, max time.Duration) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(time.Duration(rand.Intn(int(max)))):
-		return nil
-	}
 }

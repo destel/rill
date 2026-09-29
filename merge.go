@@ -108,18 +108,10 @@ func OrderedSplit2[A any](in <-chan Try[A], n int, f func(A) (bool, error)) (out
 	return
 }
 
-// Tee duplicates the input: it returns two channels that both carry every
-// item from the input, forwarded as it arrives. Both outputs are closed
-// once the input is exhausted. They must be consumed concurrently to avoid
-// a deadlock.
-//
-// If deep copying of values is needed, use [Map] on one or both
-// outputs:
-//
-//	out1, out2 := rill.Tee(in)
-//	out2 = rill.Map(out2, 1, func(x A) (A, error) {
-//		return deepCopy(x), nil
-//	})
+// Tee returns two channels and forwards every item from the input to both of
+// them. Both outputs are closed once the input is exhausted. Tee doesn't
+// proceed to the next item until the current one is sent to both outputs, so
+// the caller must consume the outputs concurrently to avoid a deadlock.
 func Tee[A any](in <-chan A) (<-chan A, <-chan A) {
 	if in == nil {
 		return nil, nil
